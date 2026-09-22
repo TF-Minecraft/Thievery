@@ -54,6 +54,8 @@ public class DoorManager implements Listener {
         this.lockPickManager = lockPickManager;
     }
 
+    // Keep the existing legacy text representation, formatting, and exact-string comparisons.
+    @SuppressWarnings("deprecation")
     @EventHandler(priority = EventPriority.HIGH)
     public void onPlayerInteract(PlayerInteractEvent event) {
         if (event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
@@ -146,6 +148,8 @@ public class DoorManager implements Listener {
         }
     }
 
+    // Keep the existing legacy text representation, formatting, and exact-string comparisons.
+    @SuppressWarnings("deprecation")
     @EventHandler
     public void onBlockBreak(BlockBreakEvent event) {
         Block block = event.getBlock();
@@ -312,6 +316,8 @@ public class DoorManager implements Listener {
         lockPickManager.startDoorSession(player, canonical, effectiveStrength, dexterity, lockpickStrength);
     }
 
+    // Keep the existing legacy text representation, formatting, and exact-string comparisons.
+    @SuppressWarnings("deprecation")
     private void handleSelectResult(Player player, LockPickManager.SelectResult result, Location canonical) {
         int dexterity = RiskCalculator.getDexterity(player);
         double lockpickStrength = ToolResolver.getLockpickStrength(player.getInventory().getItemInMainHand());

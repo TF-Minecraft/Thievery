@@ -46,6 +46,8 @@ public class InventoryManager implements Listener {
         renderLoadout(player, 0, true);
     }
 
+    // Update the active legacy inventory title; opening a new view or reading its original component title changes behavior.
+    @SuppressWarnings({"deprecation"})
     private void renderLoadout(Player player, int page, boolean open) {
         LoadoutSession session = sessions.get(player.getUniqueId());
         if (session == null) return;
@@ -124,6 +126,8 @@ public class InventoryManager implements Listener {
         }
     }
 
+    // Keep the existing legacy text representation, formatting, and exact-string comparisons.
+    @SuppressWarnings("deprecation")
     private ItemStack createFiller() {
         ItemStack item = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
         ItemMeta meta = item.getItemMeta();
@@ -134,6 +138,8 @@ public class InventoryManager implements Listener {
         return item;
     }
 
+    // Keep the existing legacy text representation, formatting, and exact-string comparisons.
+    @SuppressWarnings("deprecation")
     private ItemStack createButton(Material material, String name, String loreLine) {
         ItemStack item = new ItemStack(material);
         ItemMeta meta = item.getItemMeta();

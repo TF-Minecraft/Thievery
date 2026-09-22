@@ -21,6 +21,8 @@ public final class ClueChecker {
         return ClueGiver.isClueItem(item);
     }
 
+    // Keep the existing legacy text representation, formatting, and exact-string comparisons.
+    @SuppressWarnings("deprecation")
     public static void sendInsufficientCluesMessage(Player player) {
         net.tfminecraft.rpcharacters.objects.PlayerData pd = PlayerManager.get(player);
         if (pd == null || !pd.hasActiveCharacter()) {

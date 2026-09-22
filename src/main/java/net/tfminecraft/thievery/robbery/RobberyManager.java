@@ -7,6 +7,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.event.HoverEvent;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
+
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
@@ -265,20 +270,17 @@ public class RobberyManager implements Listener {
     }
 
     private void sendAcceptMessage(Player victim, Player robber) {
-        net.md_5.bungee.api.chat.TextComponent message = new net.md_5.bungee.api.chat.TextComponent(
+        Component message = LegacyComponentSerializer.legacySection().deserialize(
                 ThieveryTexts.msg(ThieveryTexts.CRITICAL + robber.getName() + ThieveryTexts.WARN
                         + " wants to rob you. Click "));
-        net.md_5.bungee.api.chat.TextComponent accept = new net.md_5.bungee.api.chat.TextComponent(
-                ThieveryTexts.msg(ThieveryTexts.SUCCESS + "[ACCEPT]"));
-        accept.setClickEvent(new net.md_5.bungee.api.chat.ClickEvent(
-                net.md_5.bungee.api.chat.ClickEvent.Action.RUN_COMMAND, "/robbery accept"));
-        accept.setHoverEvent(new net.md_5.bungee.api.chat.HoverEvent(
-                net.md_5.bungee.api.chat.HoverEvent.Action.SHOW_TEXT,
-                new net.md_5.bungee.api.chat.hover.content.Text(new net.md_5.bungee.api.chat.ComponentBuilder("Accept the robbery request").create())));
-        message.addExtra(accept);
-        message.addExtra(ThieveryTexts.msg(ThieveryTexts.WARN + " within "
-                + RobberyLoader.getAcceptTimeoutSeconds() + " seconds."));
-        victim.spigot().sendMessage(message);
+        Component accept = LegacyComponentSerializer.legacySection()
+                .deserialize(ThieveryTexts.msg(ThieveryTexts.SUCCESS + "[ACCEPT]"))
+                .clickEvent(ClickEvent.runCommand("/robbery accept"))
+                .hoverEvent(HoverEvent.showText(Component.text("Accept the robbery request")));
+        Component timeout = LegacyComponentSerializer.legacySection().deserialize(
+                ThieveryTexts.msg(ThieveryTexts.WARN + " within "
+                        + RobberyLoader.getAcceptTimeoutSeconds() + " seconds."));
+        victim.sendMessage(Component.empty().append(message).append(accept).append(timeout));
     }
 
     private RobberySession findPendingSessionForVictim(UUID victimId) {
