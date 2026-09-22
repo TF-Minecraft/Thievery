@@ -274,7 +274,7 @@ public class RobberyManager implements Listener {
                 net.md_5.bungee.api.chat.ClickEvent.Action.RUN_COMMAND, "/robbery accept"));
         accept.setHoverEvent(new net.md_5.bungee.api.chat.HoverEvent(
                 net.md_5.bungee.api.chat.HoverEvent.Action.SHOW_TEXT,
-                new net.md_5.bungee.api.chat.ComponentBuilder("Accept the robbery request").create()));
+                new net.md_5.bungee.api.chat.hover.content.Text(new net.md_5.bungee.api.chat.ComponentBuilder("Accept the robbery request").create())));
         message.addExtra(accept);
         message.addExtra(ThieveryTexts.msg(ThieveryTexts.WARN + " within "
                 + RobberyLoader.getAcceptTimeoutSeconds() + " seconds."));

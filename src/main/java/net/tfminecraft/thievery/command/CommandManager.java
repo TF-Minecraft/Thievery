@@ -48,6 +48,8 @@ public class CommandManager implements CommandExecutor, TabCompleter {
         sender.sendMessage(ThieveryTexts.msg(raw));
     }
 
+    // Existing configuration identifies offline profiles by player name, not UUID.
+    @SuppressWarnings("deprecation")
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (args.length >= 1 && args[0].equalsIgnoreCase("dismissfactionlock")) {

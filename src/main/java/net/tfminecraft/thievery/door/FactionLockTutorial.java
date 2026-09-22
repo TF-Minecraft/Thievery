@@ -56,14 +56,14 @@ public final class FactionLockTutorial {
         gotIt.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/thievery dismissfactionlock"));
         gotIt.setHoverEvent(new HoverEvent(
                 HoverEvent.Action.SHOW_TEXT,
-                new ComponentBuilder("Click to dismiss")
+                new net.md_5.bungee.api.chat.hover.content.Text(new ComponentBuilder("Click to dismiss")
                         .color(ChatColor.GREEN)
                         .bold(true)
                         .append("\n")
                         .color(ChatColor.GRAY)
                         .italic(true)
                         .append("This can show again the next time you set a Faction lock.")
-                        .create()));
+                        .create())));
 
         TextComponent right = new TextComponent(dashes);
         right.setColor(ChatColor.GRAY);
