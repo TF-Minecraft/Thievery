@@ -8,8 +8,8 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import net.coreprotect.CoreProtect;
-import net.coreprotect.CoreProtectAPI;
+import net.tfminecraft.coreprotect.CoreProtect;
+import net.tfminecraft.coreprotect.CoreProtectAPI;
 import net.tfminecraft.thievery.cache.Cache;
 import net.tfminecraft.thievery.command.CommandManager;
 import net.tfminecraft.thievery.command.PickpocketCommand;
@@ -102,7 +102,7 @@ public class Thievery extends JavaPlugin {
         });
 
         getLogger().info("Thievery Plugin Enabled!");
-        if (!net.tfminecraft.AdvancedCrafting.Utils.ThieveryBridge.isPluginReady()) {
+        if (!net.tfminecraft.advancedcrafting.utils.ThieveryBridge.isPluginReady()) {
             getLogger().warning("AdvancedCrafting is not available; AC categories and valuation will be limited.");
         }
     }

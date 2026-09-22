@@ -28,9 +28,9 @@ import org.bukkit.inventory.EntityEquipment;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 
-import net.tfminecraft.RPCharacters.Managers.PlayerManager;
-import net.tfminecraft.RPCharacters.Objects.RPCharacter;
-import net.tfminecraft.RPCharacters.Objects.Trait.Trait;
+import net.tfminecraft.rpcharacters.managers.PlayerManager;
+import net.tfminecraft.rpcharacters.objects.RPCharacter;
+import net.tfminecraft.rpcharacters.objects.trait.Trait;
 import net.tfminecraft.thievery.Thievery;
 import net.tfminecraft.thievery.cache.Cache;
 import net.tfminecraft.thievery.cache.Parameters;
@@ -249,7 +249,7 @@ public class DisplayStealManager implements Listener {
         if (Cache.traits.isEmpty()) {
             return true;
         }
-        net.tfminecraft.RPCharacters.Objects.PlayerData pd = PlayerManager.get(player);
+        net.tfminecraft.rpcharacters.objects.PlayerData pd = PlayerManager.get(player);
         if (pd == null || !pd.hasActiveCharacter()) {
             return false;
         }

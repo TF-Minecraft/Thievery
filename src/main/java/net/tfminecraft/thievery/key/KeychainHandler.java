@@ -15,7 +15,7 @@ import org.bukkit.persistence.PersistentDataType;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
-import me.Plugins.TLibs.TLibs;
+import net.tfminecraft.tlibs.TLibs;
 import net.tfminecraft.thievery.key.KeyDefinition;
 import net.tfminecraft.thievery.loader.KeychainLoader;
 import net.tfminecraft.thievery.utils.Keys;

@@ -6,7 +6,7 @@ import java.util.regex.Pattern;
 
 import org.bukkit.inventory.ItemStack;
 
-import me.Plugins.TLibs.TLibs;
+import net.tfminecraft.tlibs.TLibs;
 
 public final class CategorySlugs {
 

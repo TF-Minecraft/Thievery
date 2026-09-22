@@ -11,15 +11,15 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.inventory.ItemStack;
 
-import net.tfminecraft.InteractibleFurniture;
-import net.tfminecraft.events.FurnitureBreakEvent;
-import net.tfminecraft.events.FurnitureInteractEvent;
-import net.tfminecraft.events.FurniturePlaceEvent;
-import net.tfminecraft.events.FurnitureSlotItemAddEvent;
-import net.tfminecraft.events.FurnitureSlotItemTakeEvent;
-import net.tfminecraft.furniture.Furniture;
-import net.tfminecraft.furniture.PlacedSlot;
-import net.tfminecraft.furniture.SlotDefinition;
+import net.tfminecraft.interactiblefurniture.InteractibleFurniture;
+import net.tfminecraft.interactiblefurniture.events.FurnitureBreakEvent;
+import net.tfminecraft.interactiblefurniture.events.FurnitureInteractEvent;
+import net.tfminecraft.interactiblefurniture.events.FurniturePlaceEvent;
+import net.tfminecraft.interactiblefurniture.events.FurnitureSlotItemAddEvent;
+import net.tfminecraft.interactiblefurniture.events.FurnitureSlotItemTakeEvent;
+import net.tfminecraft.interactiblefurniture.furniture.Furniture;
+import net.tfminecraft.interactiblefurniture.furniture.PlacedSlot;
+import net.tfminecraft.interactiblefurniture.furniture.SlotDefinition;
 import net.tfminecraft.thievery.door.LockState;
 import net.tfminecraft.thievery.utils.ToolResolver;
 

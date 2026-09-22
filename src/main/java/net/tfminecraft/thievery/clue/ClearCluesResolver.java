@@ -17,10 +17,10 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.DoubleChestInventory;
 import org.bukkit.inventory.Inventory;
 
-import me.Plugins.SimpleFactions.Guild.Guild;
-import me.Plugins.SimpleFactions.Managers.FactionManager;
-import net.tfminecraft.RPCharacters.Managers.SpawnedClueManager;
-import net.tfminecraft.RPCharacters.Utils.ClueGiver;
+import net.tfminecraft.simplefactions.guild.Guild;
+import net.tfminecraft.simplefactions.managers.FactionManager;
+import net.tfminecraft.rpcharacters.managers.SpawnedClueManager;
+import net.tfminecraft.rpcharacters.utils.ClueGiver;
 import net.tfminecraft.thievery.door.ContainerData;
 import net.tfminecraft.thievery.door.DoorData;
 import net.tfminecraft.thievery.door.LockState;

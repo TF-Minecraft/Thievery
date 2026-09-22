@@ -3,7 +3,7 @@ package net.tfminecraft.thievery.loader;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.inventory.ItemStack;
 
-import me.Plugins.TLibs.TLibs;
+import net.tfminecraft.tlibs.TLibs;
 
 public final class KeyCopyLoader {
 

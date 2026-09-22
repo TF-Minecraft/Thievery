@@ -5,8 +5,8 @@ import java.util.UUID;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 
-import me.Plugins.SimpleFactions.Guild.Guild;
-import me.Plugins.SimpleFactions.Managers.FactionManager;
+import net.tfminecraft.simplefactions.guild.Guild;
+import net.tfminecraft.simplefactions.managers.FactionManager;
 import net.tfminecraft.thievery.cache.Cache;
 import net.tfminecraft.thievery.cache.LockpickTargetCache;
 import net.tfminecraft.thievery.player.TargetKeyResolver;

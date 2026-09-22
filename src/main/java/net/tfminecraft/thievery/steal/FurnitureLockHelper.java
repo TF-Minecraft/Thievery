@@ -5,8 +5,8 @@ import java.util.UUID;
 
 import org.bukkit.entity.Player;
 
-import net.tfminecraft.InteractibleFurniture;
-import net.tfminecraft.furniture.Furniture;
+import net.tfminecraft.interactiblefurniture.InteractibleFurniture;
+import net.tfminecraft.interactiblefurniture.furniture.Furniture;
 import net.tfminecraft.thievery.cache.Parameters;
 import net.tfminecraft.thievery.door.LockAccess;
 import net.tfminecraft.thievery.door.LockState;

@@ -3,8 +3,8 @@ package net.tfminecraft.thievery.player;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 
-import net.tfminecraft.RPCharacters.Managers.PlayerManager;
-import net.tfminecraft.RPCharacters.Objects.RPCharacter;
+import net.tfminecraft.rpcharacters.managers.PlayerManager;
+import net.tfminecraft.rpcharacters.objects.RPCharacter;
 import net.tfminecraft.thievery.Thievery;
 import net.tfminecraft.thievery.player.PlayerData;
 import net.tfminecraft.thievery.database.Database;
@@ -24,7 +24,7 @@ public final class PickpocketVictimAlerter {
         thiefData.applyRiskDecay(dexterity);
         double risk = thiefData.getRisk();
 
-        net.tfminecraft.RPCharacters.Objects.PlayerData rpData = PlayerManager.get(thief);
+        net.tfminecraft.rpcharacters.objects.PlayerData rpData = PlayerManager.get(thief);
         if (rpData != null && rpData.hasActiveCharacter()) {
             RPCharacter character = rpData.getActiveCharacter();
             double criticalChance = RiskCalculator.computeCritical(risk, dexterity, LOCKPICK_STRENGTH);

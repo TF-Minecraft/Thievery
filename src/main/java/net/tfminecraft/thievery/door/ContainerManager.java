@@ -43,9 +43,9 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 
-import net.tfminecraft.RPCharacters.Managers.PlayerManager;
-import net.tfminecraft.RPCharacters.Objects.RPCharacter;
-import net.tfminecraft.RPCharacters.Objects.Trait.Trait;
+import net.tfminecraft.rpcharacters.managers.PlayerManager;
+import net.tfminecraft.rpcharacters.objects.RPCharacter;
+import net.tfminecraft.rpcharacters.objects.trait.Trait;
 import net.tfminecraft.thievery.Thievery;
 import net.tfminecraft.thievery.cache.Cache;
 import net.tfminecraft.thievery.cache.Parameters;
@@ -56,7 +56,7 @@ import net.tfminecraft.thievery.player.LockpickDefinition;
 import net.tfminecraft.thievery.player.RiskSource;
 import net.tfminecraft.thievery.database.Database;
 import net.tfminecraft.thievery.steal.StealGuiHolder;
-import net.tfminecraft.RPCharacters.grave.GraveManager;
+import net.tfminecraft.rpcharacters.grave.GraveManager;
 import net.tfminecraft.thievery.steal.ChestStealReference;
 import net.tfminecraft.thievery.steal.StealManager;
 import net.tfminecraft.thievery.clue.ClueChecker;
@@ -690,7 +690,7 @@ public class ContainerManager implements Listener {
         event.setCancelled(true);
 
         if(Cache.traits.size() > 0) {
-            net.tfminecraft.RPCharacters.Objects.PlayerData pd = PlayerManager.get(player);
+            net.tfminecraft.rpcharacters.objects.PlayerData pd = PlayerManager.get(player);
             if(!pd.hasActiveCharacter()) return;
             RPCharacter character = pd.getActiveCharacter();
 

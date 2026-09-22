@@ -8,17 +8,17 @@ import java.util.stream.Collectors;
 
 import org.bukkit.inventory.ItemStack;
 
-import me.Plugins.TLibs.TLibs;
-import me.Plugins.TLibs.Objects.API.SubAPI.StringFormatter;
+import net.tfminecraft.tlibs.TLibs;
+import net.tfminecraft.tlibs.objects.api.subapi.StringFormatter;
 import net.Indyuce.mmoitems.MMOItems;
 import net.Indyuce.mmoitems.api.Type;
-import net.tfminecraft.AdvancedCrafting.Objects.Alloys.Alloy;
-import net.tfminecraft.AdvancedCrafting.Objects.Crafting.CraftingRecipe;
-import net.tfminecraft.AdvancedCrafting.Objects.Data.CraftProvenance;
-import net.tfminecraft.AdvancedCrafting.Objects.Ingredients.Ingredient;
-import net.tfminecraft.AdvancedCrafting.Objects.Ingredients.IngredientType;
-import net.tfminecraft.AdvancedCrafting.Objects.Stats.StatTemplate;
-import net.tfminecraft.AdvancedCrafting.Utils.ThieveryBridge;
+import net.tfminecraft.advancedcrafting.objects.alloys.Alloy;
+import net.tfminecraft.advancedcrafting.objects.crafting.CraftingRecipe;
+import net.tfminecraft.advancedcrafting.objects.data.CraftProvenance;
+import net.tfminecraft.advancedcrafting.objects.ingredients.Ingredient;
+import net.tfminecraft.advancedcrafting.objects.ingredients.IngredientType;
+import net.tfminecraft.advancedcrafting.objects.stats.StatTemplate;
+import net.tfminecraft.advancedcrafting.utils.ThieveryBridge;
 import net.tfminecraft.thievery.category.CategorySlugs.SlugSpecificity;
 import net.tfminecraft.thievery.category.ItemCategory.CategoryItemEntry;
 import net.tfminecraft.thievery.player.PlayerData;

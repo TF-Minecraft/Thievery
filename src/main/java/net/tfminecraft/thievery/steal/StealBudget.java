@@ -2,7 +2,7 @@ package net.tfminecraft.thievery.steal;
 
 import org.bukkit.inventory.ItemStack;
 
-import net.tfminecraft.RPCharacters.Utils.ClueGiver;
+import net.tfminecraft.rpcharacters.utils.ClueGiver;
 import net.tfminecraft.thievery.category.CategoryHandler;
 
 public final class StealBudget {
