@@ -1,7 +1,7 @@
 main: net.tfminecraft.thievery.Thievery
 api-version: 1.20
 name: Thievery
-version: 1.0
+version: ${project.version}
 author: Drefvelin
 
 depend: [MMOCore, TLibs, RPCharacters]

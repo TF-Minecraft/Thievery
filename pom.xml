@@ -12,15 +12,6 @@
         <tlibs.version>1.1.0</tlibs.version>
         <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <tfmc.refs>D:/Dokumenter/My Plugins/Reference Libs</tfmc.refs>
-        <tfmc.builds>D:/Dokumenter/My Plugins/TFMC/Thievery</tfmc.builds>
-
-        <tfmc.ac>D:/Dokumenter/My Plugins/TFMC/AdvancedCrafting</tfmc.ac>
-        <tfmc.if>D:/Dokumenter/My Plugins/TFMC/InteractibleFurniture</tfmc.if>
-        <tfmc.plugins>D:/Dokumenter/My Plugins/TFMC/DenarEconomy</tfmc.plugins>
-        <tfmc.coreprotect>D:/Dokumenter/My Plugins/TFMC/TFMC Update/plugins</tfmc.coreprotect>
-        <tfmc.sf>D:/Dokumenter/My Plugins/TFMC/SimpleFactions</tfmc.sf>
-        <tfmc.rpcharacters>D:/Dokumenter/My Plugins/TFMC/RPCharacters</tfmc.rpcharacters>
     </properties>
 
     <dependencies>
@@ -29,49 +20,49 @@
             <artifactId>Luckperms</artifactId>
             <version>5.4</version>
             <scope>system</scope>
-            <systemPath>${tfmc.refs}/api-5.4.jar</systemPath>
+            <systemPath>${project.basedir}/libs/api-5.4.jar</systemPath>
         </dependency>
         <dependency>
             <groupId>local</groupId>
             <artifactId>gson</artifactId>
             <version>2.10.1</version>
             <scope>system</scope>
-            <systemPath>${tfmc.refs}/gson-2.10.1.jar</systemPath>
+            <systemPath>${project.basedir}/libs/gson-2.10.1.jar</systemPath>
         </dependency>
         <dependency>
             <groupId>local</groupId>
             <artifactId>spigot-api</artifactId>
             <version>1.21.8</version>
             <scope>system</scope>
-            <systemPath>${tfmc.refs}/spigot-api.jar</systemPath>
+            <systemPath>${project.basedir}/libs/spigot-api.jar</systemPath>
         </dependency>
         <dependency>
             <groupId>local</groupId>
             <artifactId>MMOCore</artifactId>
             <version>1.13.1</version>
             <scope>system</scope>
-            <systemPath>${tfmc.refs}/MMOCore-1.13.1.jar</systemPath>
+            <systemPath>${project.basedir}/libs/MMOCore-1.13.1.jar</systemPath>
         </dependency>
         <dependency>
             <groupId>local</groupId>
             <artifactId>MMOItems</artifactId>
             <version>6.10</version>
             <scope>system</scope>
-            <systemPath>${tfmc.refs}/MMOItems-6.10.jar</systemPath>
+            <systemPath>${project.basedir}/libs/MMOItems-6.10.jar</systemPath>
         </dependency>
         <dependency>
             <groupId>local</groupId>
             <artifactId>MythicLib</artifactId>
             <version>1.7</version>
             <scope>system</scope>
-            <systemPath>${tfmc.refs}/MythicLib-1.7.jar</systemPath>
+            <systemPath>${project.basedir}/libs/MythicLib-1.7.jar</systemPath>
         </dependency>
         <dependency>
             <groupId>local</groupId>
             <artifactId>AdvancedCrafting</artifactId>
-            <version>1.1.7</version>
+            <version>1.2.1</version>
             <scope>system</scope>
-            <systemPath>${tfmc.ac}/advancedcrafting-1.1.7.jar</systemPath>
+            <systemPath>${project.basedir}/libs/advancedcrafting-1.2.1.jar</systemPath>
         </dependency>
         <dependency>
             <groupId>me.plugins</groupId>
@@ -86,71 +77,65 @@
         <dependency>
             <groupId>local</groupId>
             <artifactId>RPCharacters</artifactId>
-            <version>1.1.6</version>
+            <version>1.1.7</version>
             <scope>system</scope>
-            <systemPath>${tfmc.rpcharacters}/rpcharacters-1.1.6.jar</systemPath>
+            <systemPath>${project.basedir}/libs/rpcharacters-1.1.7.jar</systemPath>
         </dependency>
         <dependency>
             <groupId>local</groupId>
             <artifactId>Bungeecord</artifactId>
             <version>1.0</version>
             <scope>system</scope>
-            <systemPath>${tfmc.refs}/BungeeCord.jar</systemPath>
+            <systemPath>${project.basedir}/libs/BungeeCord.jar</systemPath>
         </dependency>
         <dependency>
             <groupId>local</groupId>
             <artifactId>simplefactions</artifactId>
             <version>2.8.7</version>
             <scope>system</scope>
-            <systemPath>${tfmc.sf}/simplefactions-2.8.7.jar</systemPath>
+            <systemPath>${project.basedir}/libs/simplefactions-2.8.7.jar</systemPath>
         </dependency>
         <dependency>
             <groupId>local</groupId>
             <artifactId>InteractibleFurniture</artifactId>
             <version>0.1.3-BETA</version>
             <scope>system</scope>
-            <systemPath>${tfmc.if}/interactiblefurniture-0.1.3-BETA.jar</systemPath>
+            <systemPath>${project.basedir}/libs/interactiblefurniture-0.1.3-BETA.jar</systemPath>
         </dependency>
         <dependency>
             <groupId>local</groupId>
             <artifactId>DenarEconomy</artifactId>
-            <version>0.1.7</version>
+            <version>0.1.8</version>
             <scope>system</scope>
-            <systemPath>${tfmc.plugins}/denareconomy-0.1.7.jar</systemPath>
+            <systemPath>${project.basedir}/libs/denareconomy-0.1.8.jar</systemPath>
         </dependency>
         <dependency>
             <groupId>local</groupId>
             <artifactId>coreprotect</artifactId>
-            <version>21.3</version>
+            <version>24.0</version>
             <scope>system</scope>
-            <systemPath>${tfmc.coreprotect}/CoreProtect-21.3.jar</systemPath>
+            <systemPath>${project.basedir}/libs/CoreProtect-24.0.jar</systemPath>
         </dependency>
     </dependencies>
 
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+                <includes><include>plugin.yml</include></includes>
+            </resource>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>false</filtering>
+                <excludes><exclude>plugin.yml</exclude></excludes>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.14.1</version>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-antrun-plugin</artifactId>
-                <version>3.1.0</version>
-                <executions>
-                    <execution>
-                        <phase>package</phase>
-                        <goals><goal>run</goal></goals>
-                        <configuration>
-                            <target>
-                                <mkdir dir="${tfmc.builds}"/>
-                                <copy file="${project.build.directory}/${project.build.finalName}.jar"
-                                    tofile="${tfmc.builds}/${project.build.finalName}.jar"/>
-                            </target>
-                        </configuration>
-                    </execution>
-                </executions>
             </plugin>
         </plugins>
     </build>
