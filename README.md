@@ -1,41 +1,22 @@
-# thievery
+# Thievery
 
-Technical documentation is maintained in [TF-Minecraft/Docs](https://github.com/TF-Minecraft/Docs/blob/main/projects/Thievery/README.md).
+> Locks, theft, and evidence for TF-Minecraft roleplay.
 
-Use that project index for setup, configuration, architecture, integration and testing guides. This repository contains the source and project-specific assets.
+Thievery gives criminal activity and property protection a shared set of game mechanics. Players can secure possessions with locks and keys, attempt to pick locks, steal from eligible targets, and leave clues behind. Character traits, item value, risk, and cooldowns shape what a thief can attempt and take.
 
-## TLibs build dependency
+## Features
 
-TLibs is a versioned Maven `provided` dependency. From this repository, prepare
-it once with the shared installer, then build as usual:
+- **Property locks** — secure supported doors, containers, furniture displays, armour stands, and item frames, with personal, guild, and faction lock rules.
+- **Keys and keychains** — carry several keys together and create key copies through molds or paper copies.
+- **Lockpicking challenges** — use lockpicks in an interactive timing challenge, with tool strength, lock strength, and Dexterity influencing the attempt.
+- **Pickpocketing and robbery** — separate activities provide different targeting, alert, cooldown, and loot-budget rules.
+- **Controlled looting** — theft menus account for item categories and value, including equipment quality and magical properties, when determining what can be taken.
+- **Evidence and risk** — theft and lockpicking can leave clues, with accumulated risk affecting the chance of more revealing evidence.
 
-```sh
-python3 ../tlibs/tools/install-dependency.py --pom pom.xml
-mvn clean verify
-```
+Protection and intrusion both have a place in the system: locks govern access, while theft sessions govern the goods taken after an opportunity opens. Grave and display interactions extend the same mechanics to other parts of TF-Minecraft's world.
 
-See [TLibs dependency setup](https://github.com/TF-Minecraft/TLibs/blob/5da8e77d0e0696bbff7d7064a2644072da9c6428/DEPENDENCIES.md)
-for public release installation, offline builds and rollback.
-Other declared build dependencies still need their usual preparation.
-Use JDK 25 for this TLibs binary; the server must also run Java 25.
+## Documentation
 
-Builds and server runtime require Java 25. Local builds default to [TLibs 1.1.0](https://github.com/TF-Minecraft/TLibs/releases/tag/v1.1.0); CI resolves the latest published stable TLibs release for each build, verifies its checksum, and uses its exact version throughout that job.
+[Project documentation](https://github.com/TF-Minecraft/Docs/blob/main/projects/Thievery/README.md)
 
-## Shared plugin dependencies
-
-Build and release workflows install checksum-verified plugin releases through
-[TLibs' shared installer](https://github.com/TF-Minecraft/TLibs/blob/main/DEPENDENCIES.md).
-CI selects the latest published versions; local builds use the explicit Maven
-version properties. Shared plugins use `provided` scope and remain separate
-server plugins. Each build records exact versions and checksums in
-`.build/plugin-dependencies.json` alongside its JAR.
-
-From this checkout, with the TLibs repository next to it:
-
-```sh
-python3 ../tlibs/tools/install-plugins.py --pom pom.xml
-```
-
-Prepare any remaining third-party inputs with `.github/scripts/prepare-release.sh`
-before running Maven. Any source-unavailable inputs remain private and checksum-pinned wherever declared; see the installer
-documentation for authentication and reproducible rebuilds.
+Technical documentation is maintained in [TF-Minecraft/Docs](https://github.com/TF-Minecraft/Docs).
