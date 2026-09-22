@@ -75,6 +75,8 @@ public class CooldownResetService {
         }
     }
 
+    // Existing configuration identifies offline profiles by player name, not UUID.
+    @SuppressWarnings("deprecation")
     public static String resolveTargetName(String arg) {
         if (arg.equalsIgnoreCase("all")) {
             return "all players";
@@ -86,6 +88,8 @@ public class CooldownResetService {
         return arg;
     }
 
+    // Existing configuration identifies offline profiles by player name, not UUID.
+    @SuppressWarnings("deprecation")
     public static UUID resolveTargetId(String arg) {
         if (arg.equalsIgnoreCase("all")) {
             return null;

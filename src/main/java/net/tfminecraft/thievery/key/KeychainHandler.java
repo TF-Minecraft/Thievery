@@ -1,5 +1,7 @@
 package net.tfminecraft.thievery.key;
 
+import net.tfminecraft.thievery.util.LegacyModelData;
+
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.List;
@@ -222,7 +224,7 @@ public final class KeychainHandler {
             lore.add(ThieveryTexts.gui(ThieveryTexts.WHITE + formatKeyName(key)));
         }
         meta.setLore(lore);
-        meta.setCustomModelData(KeychainLoader.resolveModelData(stored.size()));
+        LegacyModelData.set(meta, KeychainLoader.resolveModelData(stored.size()));
         updated.setItemMeta(meta);
         return updated;
     }

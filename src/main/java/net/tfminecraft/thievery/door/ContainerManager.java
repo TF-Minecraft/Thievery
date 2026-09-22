@@ -119,7 +119,7 @@ public class ContainerManager implements Listener {
             ));
             tpButton.setHoverEvent(new net.md_5.bungee.api.chat.HoverEvent(
                     net.md_5.bungee.api.chat.HoverEvent.Action.SHOW_TEXT,
-                    new net.md_5.bungee.api.chat.ComponentBuilder("Click to teleport to thief").create()
+                    new net.md_5.bungee.api.chat.hover.content.Text(new net.md_5.bungee.api.chat.ComponentBuilder("Click to teleport to thief").create())
             ));
 
             // Combine them
@@ -150,7 +150,7 @@ public class ContainerManager implements Listener {
             ));
             tpButton.setHoverEvent(new net.md_5.bungee.api.chat.HoverEvent(
                     net.md_5.bungee.api.chat.HoverEvent.Action.SHOW_TEXT,
-                    new net.md_5.bungee.api.chat.ComponentBuilder("Click to teleport to player").create()
+                    new net.md_5.bungee.api.chat.hover.content.Text(new net.md_5.bungee.api.chat.ComponentBuilder("Click to teleport to player").create())
             ));
 
             message.addExtra(tpButton);
@@ -220,7 +220,7 @@ public class ContainerManager implements Listener {
         ));
         tp.setHoverEvent(new net.md_5.bungee.api.chat.HoverEvent(
                 net.md_5.bungee.api.chat.HoverEvent.Action.SHOW_TEXT,
-                new net.md_5.bungee.api.chat.ComponentBuilder("Click to teleport to thief").create()
+                new net.md_5.bungee.api.chat.hover.content.Text(new net.md_5.bungee.api.chat.ComponentBuilder("Click to teleport to thief").create())
         ));
         return tp;
     }

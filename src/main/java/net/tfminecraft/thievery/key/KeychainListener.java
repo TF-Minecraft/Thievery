@@ -96,18 +96,18 @@ public class KeychainListener implements Listener {
             event.setCurrentItem(result.getKeychain());
         } else {
             consumeOneFromCurrent(event, key);
-            event.setCursor(result.getKeychain());
+            event.getView().setCursor(result.getKeychain());
         }
     }
 
     private void consumeOneFromCursor(InventoryClickEvent event, ItemStack cursor) {
         if (cursor.getAmount() <= 1) {
-            event.setCursor(null);
+            event.getView().setCursor(null);
             return;
         }
         ItemStack remaining = cursor.clone();
         remaining.setAmount(cursor.getAmount() - 1);
-        event.setCursor(remaining);
+        event.getView().setCursor(remaining);
     }
 
     private void consumeOneFromCurrent(InventoryClickEvent event, ItemStack current) {

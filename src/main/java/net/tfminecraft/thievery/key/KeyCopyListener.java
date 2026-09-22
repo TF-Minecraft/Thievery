@@ -170,12 +170,12 @@ public class KeyCopyListener implements Listener {
             return;
         }
         if (cursor.getAmount() <= 1) {
-            event.setCursor(null);
+            event.getView().setCursor(null);
             return;
         }
         ItemStack remaining = cursor.clone();
         remaining.setAmount(cursor.getAmount() - 1);
-        event.setCursor(remaining);
+        event.getView().setCursor(remaining);
     }
 
     private void consumeOneFromCurrent(InventoryClickEvent event) {

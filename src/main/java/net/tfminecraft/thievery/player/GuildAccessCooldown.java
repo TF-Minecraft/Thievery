@@ -21,6 +21,8 @@ public final class GuildAccessCooldown {
 
     private GuildAccessCooldown() {}
 
+    // Existing configuration identifies offline profiles by player name, not UUID.
+    @SuppressWarnings("deprecation")
     public static String getMostRecentGuildAccess(Map<UUID, String> accessMap, Player player) {
         if (accessMap == null || player == null) {
             return null;
@@ -100,6 +102,8 @@ public final class GuildAccessCooldown {
         accessMap.put(attackerUuid, date);
     }
 
+    // Existing configuration identifies offline profiles by player name, not UUID.
+    @SuppressWarnings("deprecation")
     public static long getMostRecentGuildAccessMillis(Map<UUID, String> accessMap, Player player) {
         if (accessMap == null || player == null) {
             return 0L;
