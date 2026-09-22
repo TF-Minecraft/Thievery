@@ -8,6 +8,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.event.HoverEvent;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
+
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.Location;
@@ -108,25 +113,9 @@ public class ContainerManager implements Listener {
             if (!p.hasPermission("thievery.admin")) return;
             if (!feedbackMap.getOrDefault(p.getUniqueId(), false)) return;
 
-            // Create the base message component
-            net.md_5.bungee.api.chat.TextComponent message = new net.md_5.bungee.api.chat.TextComponent(baseMessage);
-
-            // Create the [TP] clickable component
-            net.md_5.bungee.api.chat.TextComponent tpButton = new net.md_5.bungee.api.chat.TextComponent(
-                    ThieveryTexts.msg(ThieveryTexts.INFO + "[TP]"));
-            tpButton.setClickEvent(new net.md_5.bungee.api.chat.ClickEvent(
-                    net.md_5.bungee.api.chat.ClickEvent.Action.RUN_COMMAND, tpCommand
-            ));
-            tpButton.setHoverEvent(new net.md_5.bungee.api.chat.HoverEvent(
-                    net.md_5.bungee.api.chat.HoverEvent.Action.SHOW_TEXT,
-                    new net.md_5.bungee.api.chat.hover.content.Text(new net.md_5.bungee.api.chat.ComponentBuilder("Click to teleport to thief").create())
-            ));
-
-            // Combine them
-            message.addExtra(tpButton);
-
-            // Send as one message
-            p.spigot().sendMessage(message);
+            Component message = LegacyComponentSerializer.legacySection().deserialize(baseMessage);
+            Component tpButton = clickableText("TP", tpCommand);
+            p.sendMessage(Component.empty().append(message).append(tpButton));
         });
     }
 
@@ -141,20 +130,12 @@ public class ContainerManager implements Listener {
             if (!p.hasPermission("thievery.admin")) return;
             if (!feedbackMap.getOrDefault(p.getUniqueId(), false)) return;
 
-            net.md_5.bungee.api.chat.TextComponent message = new net.md_5.bungee.api.chat.TextComponent(baseMessage);
-
-            net.md_5.bungee.api.chat.TextComponent tpButton = new net.md_5.bungee.api.chat.TextComponent(
-                    ThieveryTexts.msg(ThieveryTexts.INFO + "[TP]"));
-            tpButton.setClickEvent(new net.md_5.bungee.api.chat.ClickEvent(
-                    net.md_5.bungee.api.chat.ClickEvent.Action.RUN_COMMAND, tpCommand
-            ));
-            tpButton.setHoverEvent(new net.md_5.bungee.api.chat.HoverEvent(
-                    net.md_5.bungee.api.chat.HoverEvent.Action.SHOW_TEXT,
-                    new net.md_5.bungee.api.chat.hover.content.Text(new net.md_5.bungee.api.chat.ComponentBuilder("Click to teleport to player").create())
-            ));
-
-            message.addExtra(tpButton);
-            p.spigot().sendMessage(message);
+            Component message = LegacyComponentSerializer.legacySection().deserialize(baseMessage);
+            Component tpButton = LegacyComponentSerializer.legacySection()
+                    .deserialize(ThieveryTexts.msg(ThieveryTexts.INFO + "[TP]"))
+                    .clickEvent(ClickEvent.runCommand(tpCommand))
+                    .hoverEvent(HoverEvent.showText(Component.text("Click to teleport to player")));
+            p.sendMessage(Component.empty().append(message).append(tpButton));
         });
     }
 
@@ -212,17 +193,11 @@ public class ContainerManager implements Listener {
         return canAccessLockedDoubleChest(player, left, right, true);
     }
 
-    private net.md_5.bungee.api.chat.TextComponent clickableText(String label, String command) {
-        net.md_5.bungee.api.chat.TextComponent tp = new net.md_5.bungee.api.chat.TextComponent(
-                ThieveryTexts.msg(ThieveryTexts.INFO + "[" + label + "]"));
-        tp.setClickEvent(new net.md_5.bungee.api.chat.ClickEvent(
-                net.md_5.bungee.api.chat.ClickEvent.Action.RUN_COMMAND, command
-        ));
-        tp.setHoverEvent(new net.md_5.bungee.api.chat.HoverEvent(
-                net.md_5.bungee.api.chat.HoverEvent.Action.SHOW_TEXT,
-                new net.md_5.bungee.api.chat.hover.content.Text(new net.md_5.bungee.api.chat.ComponentBuilder("Click to teleport to thief").create())
-        ));
-        return tp;
+    private Component clickableText(String label, String command) {
+        return LegacyComponentSerializer.legacySection()
+                .deserialize(ThieveryTexts.msg(ThieveryTexts.INFO + "[" + label + "]"))
+                .clickEvent(ClickEvent.runCommand(command))
+                .hoverEvent(HoverEvent.showText(Component.text("Click to teleport to thief")));
     }
 
     @EventHandler
@@ -428,6 +403,8 @@ public class ContainerManager implements Listener {
         }
     }
 
+    // Keep the existing legacy text representation, formatting, and exact-string comparisons.
+    @SuppressWarnings("deprecation")
     @EventHandler
     public void onBlockPlace(BlockPlaceEvent event) {
         Block block = event.getBlockPlaced();
@@ -569,6 +546,8 @@ public class ContainerManager implements Listener {
         }
     }
 
+    // Keep the existing legacy text representation, formatting, and exact-string comparisons.
+    @SuppressWarnings("deprecation")
     private void notifyLockStateChange(Player player, LockState lockState) {
         String displayState = formatLockState(lockState);
         player.sendTitle(

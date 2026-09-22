@@ -43,6 +43,8 @@ public final class PickpocketVictimAlerter {
         }
     }
 
+    // Keep the existing legacy text representation, formatting, and exact-string comparisons.
+    @SuppressWarnings("deprecation")
     private static void alertVictim(Player victim, String subtitle) {
         victim.sendTitle("", subtitle, 5, 40, 10);
         victim.playSound(victim.getLocation(), Sound.BLOCK_IRON_TRAPDOOR_OPEN, 1f, 1f);

@@ -127,6 +127,8 @@ public class ItemCategory {
         return Collections.unmodifiableList(items);
     }
 
+    // Keep the existing legacy text representation, formatting, and exact-string comparisons.
+    @SuppressWarnings("deprecation")
     public ItemStack getIconItem(boolean active) {
         ItemStack item = TLibs.getItemAPI().getCreator().getItemFromPath(icon);
         if (item == null) {

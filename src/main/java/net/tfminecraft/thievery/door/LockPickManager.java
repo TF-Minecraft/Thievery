@@ -128,6 +128,8 @@ public class LockPickManager {
         session.position = startPosition;
 
         BukkitRunnable task = new BukkitRunnable() {
+            // Keep the existing legacy text representation, formatting, and exact-string comparisons.
+            @SuppressWarnings("deprecation")
             @Override
             public void run() {
                 if (!player.isOnline()) {
@@ -224,6 +226,8 @@ public class LockPickManager {
         cancelSession(uuid, false);
     }
 
+    // Keep the existing legacy text representation, formatting, and exact-string comparisons.
+    @SuppressWarnings("deprecation")
     public void cancelSession(UUID uuid, boolean penalize) {
         LockpickSession session = sessions.remove(uuid);
         if (session == null) {

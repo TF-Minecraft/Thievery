@@ -22,6 +22,8 @@ public final class StealIgnoreRules {
         return Collections.unmodifiableList(nameContains);
     }
 
+    // Keep the existing legacy text representation, formatting, and exact-string comparisons.
+    @SuppressWarnings("deprecation")
     public static boolean isIgnored(ItemStack item) {
         if (item == null || item.getType().isAir() || !item.hasItemMeta()) {
             return false;

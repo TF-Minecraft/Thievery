@@ -66,6 +66,8 @@ public class DisplayStealManager implements Listener {
         this.lockPickManager = lockPickManager;
     }
 
+    // Keep the existing legacy text representation, formatting, and exact-string comparisons.
+    @SuppressWarnings("deprecation")
     static void notifyLockStateChange(Player player, LockState lockState) {
         String displayState = formatLockState(lockState);
         player.sendTitle(
@@ -209,6 +211,8 @@ public class DisplayStealManager implements Listener {
                 LockPickManager.SessionKind.DISPLAY, targetId, effectiveStrength, dexterity, lockpickStrength, null);
     }
 
+    // Keep the existing legacy text representation, formatting, and exact-string comparisons.
+    @SuppressWarnings("deprecation")
     private void handleSelectResult(Player player, Entity entity, UUID owner, List<DisplayLoot.DisplaySlot> slots,
             LockPickManager.SelectResult result) {
         int dexterity = RiskCalculator.getDexterity(player);

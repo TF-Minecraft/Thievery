@@ -175,6 +175,8 @@ public final class StealGui {
 
     // --- Panes (formerly StealGuiPanes) ---
 
+    // Keep the existing legacy text representation, formatting, and exact-string comparisons.
+    @SuppressWarnings("deprecation")
     public static ItemStack createUnknownPane() {
         ItemStack pane = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
         ItemMeta meta = pane.getItemMeta();
@@ -184,6 +186,8 @@ public final class StealGui {
         return pane;
     }
 
+    // Keep the existing legacy text representation, formatting, and exact-string comparisons.
+    @SuppressWarnings("deprecation")
     public static ItemStack createFillerPane() {
         ItemStack filler = new ItemStack(Material.BLACK_STAINED_GLASS_PANE);
         ItemMeta meta = filler.getItemMeta();
@@ -193,6 +197,8 @@ public final class StealGui {
         return filler;
     }
 
+    // Keep the existing legacy text representation, formatting, and exact-string comparisons.
+    @SuppressWarnings("deprecation")
     public static ItemStack createNothingPane() {
         ItemStack pane = new ItemStack(Material.RED_STAINED_GLASS_PANE);
         ItemMeta meta = pane.getItemMeta();
@@ -202,6 +208,8 @@ public final class StealGui {
         return pane;
     }
 
+    // Keep the existing legacy text representation, formatting, and exact-string comparisons.
+    @SuppressWarnings("deprecation")
     public static ItemStack createHiddenPane() {
         ItemStack hidden = new ItemStack(Material.BARRIER);
         ItemMeta meta = hidden.getItemMeta();
@@ -211,6 +219,8 @@ public final class StealGui {
         return hidden;
     }
 
+    // Keep the existing legacy text representation, formatting, and exact-string comparisons.
+    @SuppressWarnings("deprecation")
     public static ItemStack createRobberyPouchPane(double balance) {
         ItemCategory money = CategoryLoader.getMoneyCategory();
         String iconPath = money != null ? money.getIcon() : "m.currency.pouch_of_coins";
@@ -357,6 +367,8 @@ public final class StealGui {
 
     // --- Builder (formerly StealGuiBuilder) ---
 
+    // Keep the existing legacy text representation, formatting, and exact-string comparisons.
+    @SuppressWarnings("deprecation")
     public static Inventory buildHiddenGui(StealGuiHolder holder, Layout layout, String title) {
         int guiSize = layout.getGuiSize();
         Inventory gui = Bukkit.createInventory(holder, guiSize, title);
@@ -376,6 +388,8 @@ public final class StealGui {
         return gui;
     }
 
+    // Keep the existing legacy text representation, formatting, and exact-string comparisons.
+    @SuppressWarnings("deprecation")
     public static Inventory buildRobberyGui(StealGuiHolder holder, Layout layout, String title,
             Player victim, StealBudget budget, PlayerData thiefData) {
         int guiSize = layout.getGuiSize();
@@ -422,6 +436,8 @@ public final class StealGui {
 
     // --- Refresher (formerly StealGuiRefresher) ---
 
+    // Update the active legacy inventory title; opening a new view or reading its original component title changes behavior.
+    @SuppressWarnings({"deprecation"})
     public static void updateTitle(Player player, StealGuiHolder holder, String title) {
         if (player == null || !player.isOnline() || holder == null || title == null) {
             return;

@@ -53,6 +53,8 @@ public final class StealItemDisplay {
         return buildRepresentation(realItem, budgetRemaining, thiefData, null);
     }
 
+    // Keep the existing legacy text representation, formatting, and exact-string comparisons.
+    @SuppressWarnings("deprecation")
     public static ItemStack buildRepresentation(ItemStack realItem, double budgetRemaining, PlayerData thiefData,
             ChestCluePreviewContext cluePreview) {
         if (!CategoryHandler.canRevealItem(thiefData, realItem)) {

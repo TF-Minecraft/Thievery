@@ -200,6 +200,8 @@ public final class KeychainHandler {
         return RemoveKeyResult.success(setStoredKeys(keychain, stored), removed);
     }
 
+    // Keep the existing legacy text representation, formatting, and exact-string comparisons.
+    @SuppressWarnings("deprecation")
     public static ItemStack refreshDisplay(ItemStack keychain) {
         if (!isKeychain(keychain)) {
             return keychain;
@@ -299,6 +301,8 @@ public final class KeychainHandler {
                 .get(Keys.keyUUIDKey, PersistentDataType.STRING);
     }
 
+    // Keep the existing legacy text representation, formatting, and exact-string comparisons.
+    @SuppressWarnings("deprecation")
     private static String formatKeyName(ItemStack key) {
         if (key.hasItemMeta()) {
             ItemMeta meta = key.getItemMeta();

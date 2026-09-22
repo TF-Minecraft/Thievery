@@ -11,6 +11,7 @@
     <properties>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.proc>full</maven.compiler.proc>
         <advancedcrafting.version>2.0.0</advancedcrafting.version>
         <coreprotect.version>25.0.0</coreprotect.version>
         <denareconomy.version>0.2.0</denareconomy.version>
