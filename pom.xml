@@ -15,8 +15,8 @@
         <coreprotect.version>25.0.0</coreprotect.version>
         <denareconomy.version>0.2.0</denareconomy.version>
         <interactiblefurniture.version>0.2.0-BETA</interactiblefurniture.version>
-        <rpcharacters.version>2.0.0</rpcharacters.version>
-        <simplefactions.version>3.0.0</simplefactions.version>
+        <rpcharacters.version>2.0.1</rpcharacters.version>
+        <simplefactions.version>3.0.1</simplefactions.version>
         <tlibs.version>2.0.0</tlibs.version>
     </properties>
 
