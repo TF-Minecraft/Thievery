@@ -5,9 +5,9 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 
-import net.tfminecraft.DenarEconomy.DenarEconomy;
-import net.tfminecraft.DenarEconomy.Item.Coin;
-import net.tfminecraft.DenarEconomy.Managers.MoneyManager;
+import net.tfminecraft.denareconomy.DenarEconomy;
+import net.tfminecraft.denareconomy.item.Coin;
+import net.tfminecraft.denareconomy.managers.MoneyManager;
 import net.tfminecraft.thievery.loader.CategoryLoader;
 import net.tfminecraft.thievery.player.PlayerData;
 

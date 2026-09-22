@@ -7,7 +7,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 
-import me.Plugins.TLibs.TLibs;
+import net.tfminecraft.tlibs.TLibs;
 import net.tfminecraft.thievery.Thievery;
 import net.tfminecraft.thievery.key.KeyDefinition;
 import net.tfminecraft.thievery.player.PlayerData;

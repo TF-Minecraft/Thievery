@@ -16,7 +16,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 
-import me.Plugins.TLibs.TLibs;
+import net.tfminecraft.tlibs.TLibs;
 import net.tfminecraft.thievery.loader.CategoryLoader;
 import net.tfminecraft.thievery.category.DenarMoney;
 import net.tfminecraft.thievery.category.ItemCategory;

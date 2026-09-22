@@ -1,6 +1,6 @@
 package net.tfminecraft.thievery.utils;
 
-import me.Plugins.TLibs.Objects.API.SubAPI.StringFormatter;
+import net.tfminecraft.tlibs.objects.api.subapi.StringFormatter;
 
 /**
  * Text colours for Thievery. See COLOUR-PALETTE.md at workspace root.

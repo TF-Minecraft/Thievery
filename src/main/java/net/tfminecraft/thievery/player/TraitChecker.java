@@ -2,9 +2,9 @@ package net.tfminecraft.thievery.player;
 
 import org.bukkit.entity.Player;
 
-import net.tfminecraft.RPCharacters.Managers.PlayerManager;
-import net.tfminecraft.RPCharacters.Objects.RPCharacter;
-import net.tfminecraft.RPCharacters.Objects.Trait.Trait;
+import net.tfminecraft.rpcharacters.managers.PlayerManager;
+import net.tfminecraft.rpcharacters.objects.RPCharacter;
+import net.tfminecraft.rpcharacters.objects.trait.Trait;
 import java.util.List;
 
 import net.tfminecraft.thievery.cache.Cache;
@@ -18,7 +18,7 @@ public final class TraitChecker {
         if (configuredTraits == null || configuredTraits.isEmpty()) {
             return true;
         }
-        net.tfminecraft.RPCharacters.Objects.PlayerData pd = PlayerManager.get(player);
+        net.tfminecraft.rpcharacters.objects.PlayerData pd = PlayerManager.get(player);
         if (!pd.hasActiveCharacter()) {
             return false;
         }

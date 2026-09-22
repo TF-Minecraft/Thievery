@@ -6,9 +6,9 @@ import org.bukkit.Location;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 
-import net.tfminecraft.RPCharacters.Managers.PlayerManager;
-import net.tfminecraft.RPCharacters.Objects.RPCharacter;
-import net.tfminecraft.RPCharacters.Utils.ClueGiver;
+import net.tfminecraft.rpcharacters.managers.PlayerManager;
+import net.tfminecraft.rpcharacters.objects.RPCharacter;
+import net.tfminecraft.rpcharacters.utils.ClueGiver;
 import net.tfminecraft.thievery.Thievery;
 import net.tfminecraft.thievery.cache.Cache;
 import net.tfminecraft.thievery.door.ChestLockpickSession;
@@ -81,7 +81,7 @@ public final class ClueDropper {
 
     private static String pickClue(Player player, PlayerData playerData, String targetKey,
             int dexterity, double lockpickStrength, double effectiveRisk, boolean criticalRisk) {
-        net.tfminecraft.RPCharacters.Objects.PlayerData rpData = PlayerManager.get(player);
+        net.tfminecraft.rpcharacters.objects.PlayerData rpData = PlayerManager.get(player);
         if (rpData == null || !rpData.hasActiveCharacter()) return null;
 
         RPCharacter character = rpData.getActiveCharacter();

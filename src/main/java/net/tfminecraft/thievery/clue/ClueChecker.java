@@ -4,9 +4,9 @@ import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
-import net.tfminecraft.RPCharacters.Managers.PlayerManager;
-import net.tfminecraft.RPCharacters.Objects.RPCharacter;
-import net.tfminecraft.RPCharacters.Utils.ClueGiver;
+import net.tfminecraft.rpcharacters.managers.PlayerManager;
+import net.tfminecraft.rpcharacters.objects.RPCharacter;
+import net.tfminecraft.rpcharacters.utils.ClueGiver;
 import net.tfminecraft.thievery.utils.ThieveryTexts;
 
 public final class ClueChecker {
@@ -22,7 +22,7 @@ public final class ClueChecker {
     }
 
     public static void sendInsufficientCluesMessage(Player player) {
-        net.tfminecraft.RPCharacters.Objects.PlayerData pd = PlayerManager.get(player);
+        net.tfminecraft.rpcharacters.objects.PlayerData pd = PlayerManager.get(player);
         if (pd == null || !pd.hasActiveCharacter()) {
             player.sendTitle(" ", ThieveryTexts.msg(ThieveryTexts.ERROR + "No Character!"), 5, 50, 5);
             player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You do not have an active character!"));

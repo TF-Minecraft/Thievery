@@ -12,8 +12,8 @@ import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 
-import me.Plugins.TLibs.Interface.LoaderInterface;
-import net.tfminecraft.AdvancedCrafting.Utils.ThieveryBridge;
+import net.tfminecraft.tlibs.interfaces.LoaderInterface;
+import net.tfminecraft.advancedcrafting.utils.ThieveryBridge;
 import net.tfminecraft.thievery.Thievery;
 import net.tfminecraft.thievery.cache.Cache;
 import net.tfminecraft.thievery.category.AcCraftRef;

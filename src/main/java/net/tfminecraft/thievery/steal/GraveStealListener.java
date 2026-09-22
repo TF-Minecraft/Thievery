@@ -19,9 +19,9 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 
-import net.tfminecraft.RPCharacters.grave.Grave;
-import net.tfminecraft.RPCharacters.grave.GraveLootRules;
-import net.tfminecraft.RPCharacters.grave.GraveManager;
+import net.tfminecraft.rpcharacters.grave.Grave;
+import net.tfminecraft.rpcharacters.grave.GraveLootRules;
+import net.tfminecraft.rpcharacters.grave.GraveManager;
 import net.tfminecraft.thievery.Thievery;
 import net.tfminecraft.thievery.category.CategoryHandler;
 import net.tfminecraft.thievery.category.ItemValue;

@@ -2,8 +2,8 @@ package net.tfminecraft.thievery.steal.source;
 
 import org.bukkit.inventory.ItemStack;
 
-import net.tfminecraft.RPCharacters.grave.Grave;
-import net.tfminecraft.RPCharacters.grave.GraveManager;
+import net.tfminecraft.rpcharacters.grave.Grave;
+import net.tfminecraft.rpcharacters.grave.GraveManager;
 import net.tfminecraft.thievery.steal.PlayerSlotMap;
 
 public final class GraveStealSource implements StealSource {
