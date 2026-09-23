@@ -42,12 +42,6 @@ public final class ThieveryTexts {
 		return StringFormatter.formatHex(raw);
 	}
 
-	/** @deprecated Use {@link #formatGui(String)} for lore or {@link #formatDisplay(String)} for chat. */
-	@Deprecated
-	public static String format(String raw) {
-		return formatGui(raw);
-	}
-
 	/** Display text for chat, titles, and action bar. */
 	public static String msg(String raw) {
 		return formatDisplay(raw);
