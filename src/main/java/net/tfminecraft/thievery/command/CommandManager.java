@@ -3,6 +3,7 @@ package net.tfminecraft.thievery.command;
 import net.tfminecraft.thievery.Thievery;
 import net.tfminecraft.thievery.clue.ClearCluesManager;
 import net.tfminecraft.thievery.door.ContainerManager;
+import net.tfminecraft.thievery.door.FactionLockTutorial;
 import net.tfminecraft.thievery.player.CooldownResetService;
 import net.tfminecraft.thievery.player.InventoryManager;
 import net.tfminecraft.thievery.player.RiskSetService;
@@ -57,6 +58,7 @@ public class CommandManager implements CommandExecutor, TabCompleter {
                 msg(sender, ThieveryTexts.ERROR + "This command can only be used by players.");
                 return true;
             }
+            FactionLockTutorial.dismiss(player);
             msg(player, ThieveryTexts.SUCCESS + "Got it.");
             return true;
         }
