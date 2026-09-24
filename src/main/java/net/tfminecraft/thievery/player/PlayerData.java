@@ -25,6 +25,7 @@ public class PlayerData {
     private List<RecentClueEntry> recentClues = new ArrayList<>();
     private Map<String, Long> lastCriticalClueAtByTarget = new HashMap<>();
     private Map<String, Long> paperKeyCooldownExpiryByDoorUuid = new HashMap<>();
+    private boolean factionLockWarningDismissed;
 
     public PlayerData(UUID id) {
         this.id = id;
@@ -36,6 +37,7 @@ public class PlayerData {
         this.recentClues = new ArrayList<>();
         this.lastCriticalClueAtByTarget = new HashMap<>();
         this.paperKeyCooldownExpiryByDoorUuid = new HashMap<>();
+        this.factionLockWarningDismissed = false;
     }
 
     public UUID getId() {
@@ -147,6 +149,14 @@ public class PlayerData {
     public void setPaperKeyCooldownExpiryByDoorUuid(Map<String, Long> paperKeyCooldownExpiryByDoorUuid) {
         this.paperKeyCooldownExpiryByDoorUuid = paperKeyCooldownExpiryByDoorUuid != null
                 ? paperKeyCooldownExpiryByDoorUuid : new HashMap<>();
+    }
+
+    public boolean isFactionLockWarningDismissed() {
+        return factionLockWarningDismissed;
+    }
+
+    public void setFactionLockWarningDismissed(boolean factionLockWarningDismissed) {
+        this.factionLockWarningDismissed = factionLockWarningDismissed;
     }
 
     public boolean isPaperKeyOnCooldown(String doorKeyUuid) {
