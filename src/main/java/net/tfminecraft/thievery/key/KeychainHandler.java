@@ -6,6 +6,7 @@ import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
@@ -50,6 +51,7 @@ public final class KeychainHandler {
     }
 
     private static final Gson GSON = new Gson();
+    private static final Pattern KEY_COUNT_HEADER = Pattern.compile("Keys \\d+/\\d+");
     private static final Type KEY_LIST_TYPE = new TypeToken<List<Map<String, Object>>>() {}.getType();
 
     private KeychainHandler() {}
@@ -212,14 +214,7 @@ public final class KeychainHandler {
             return keychain;
         }
         List<ItemStack> stored = getStoredKeys(keychain);
-        List<String> lore = new ArrayList<>();
-        List<String> existing = meta.getLore();
-        int reservedLines = KeychainLoader.getLoreLineStart() - 1;
-        if (existing != null) {
-            for (int i = 0; i < reservedLines && i < existing.size(); i++) {
-                lore.add(existing.get(i));
-            }
-        }
+        List<String> lore = templateLore(meta.getLore(), KeychainLoader.getLoreLineStart() - 1);
         lore.add(ThieveryTexts.gui(ThieveryTexts.WHITE + "Keys " + ThieveryTexts.GUI_WARN + stored.size()
                 + "/" + KeychainLoader.getMaxKeys()));
         for (ItemStack key : stored) {
@@ -229,6 +224,27 @@ public final class KeychainHandler {
         LegacyModelData.set(meta, KeychainLoader.resolveModelData(stored.size()));
         updated.setItemMeta(meta);
         return updated;
+    }
+
+    /**
+     * Template lore lines to keep above the key list. Stops at a previously written "Keys N/M" header so a
+     * template shorter than lore-line-start does not keep old headers and repeat them on every refresh.
+     */
+    @SuppressWarnings("deprecation")
+    static List<String> templateLore(List<String> existing, int reservedLines) {
+        List<String> lore = new ArrayList<>();
+        if (existing == null) {
+            return lore;
+        }
+        for (int i = 0; i < reservedLines && i < existing.size(); i++) {
+            String line = existing.get(i);
+            String plain = ChatColor.stripColor(line);
+            if (plain != null && KEY_COUNT_HEADER.matcher(plain.trim()).matches()) {
+                break;
+            }
+            lore.add(line);
+        }
+        return lore;
     }
 
     public static String findMatchingDoorUuid(ItemStack item, String doorKeyUuid) {
