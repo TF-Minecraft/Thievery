@@ -27,6 +27,7 @@ import net.tfminecraft.thievery.steal.RobberyUtil;
 import net.tfminecraft.thievery.steal.StealBudget;
 import net.tfminecraft.thievery.steal.StealGui;
 import net.tfminecraft.thievery.steal.StealGui;
+import net.tfminecraft.thievery.utils.EvilRpPlays;
 import net.tfminecraft.thievery.utils.ThieveryTexts;
 
 public class PickpocketManager implements Listener {
@@ -92,6 +93,7 @@ public class PickpocketManager implements Listener {
         StealBudget budget = new StealBudget(PickpocketLoader.getBudget());
         PickpocketSession session = new PickpocketSession(pickpocketId, victim.getUniqueId(), budget, layout);
         sessionsByPickpocket.put(pickpocketId, session);
+        EvilRpPlays.record(pickpocket);
 
         PickpocketReference reference = new PickpocketReference(session, () -> sessionsByPickpocket.remove(pickpocketId));
         String title = reference.buildTitle(pickpocket);

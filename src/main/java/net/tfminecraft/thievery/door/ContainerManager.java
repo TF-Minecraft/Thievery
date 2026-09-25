@@ -70,6 +70,7 @@ import net.tfminecraft.thievery.player.RiskCalculator;
 import net.tfminecraft.thievery.player.GuildAccessCooldown;
 import net.tfminecraft.thievery.steal.StealGui;
 import net.tfminecraft.thievery.player.TargetKeyResolver;
+import net.tfminecraft.thievery.utils.EvilRpPlays;
 import net.tfminecraft.thievery.utils.ThieveryTexts;
 import net.tfminecraft.thievery.utils.ToolResolver;
 import net.tfminecraft.thievery.utils.GuildChecker;
@@ -771,6 +772,7 @@ public class ContainerManager implements Listener {
         ChestLockpickSession session = new ChestLockpickSession(playerId, b, lockpickDef, successChance, chestInv,
                 targetKey, lockType);
         lockpickingSessions.put(playerId, session);
+        EvilRpPlays.record(p);
 
         ChestStealReference reference = new ChestStealReference(session, () -> lockpickingSessions.remove(playerId));
         String title = reference.buildTitle(p);
