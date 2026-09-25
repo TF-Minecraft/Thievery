@@ -50,8 +50,26 @@ public class ContainerDataManager {
 
     /** Cached owner lookup for hot paths such as hopper transfers. */
     public UUID getOwner(Location location) {
-        return OWNER_CACHE.computeIfAbsent(BlockKey.of(location),
-                key -> Optional.ofNullable(loadContainerData(location).getOwner())).orElse(null);
+        BlockKey key = BlockKey.of(location);
+        Optional<UUID> cached = OWNER_CACHE.get(key);
+        if (cached != null) {
+            return cached.orElse(null);
+        }
+        File file = getFileForLocation(location);
+        if (!file.exists()) {
+            OWNER_CACHE.putIfAbsent(key, Optional.empty());
+            return null;
+        }
+        try (Reader reader = new FileReader(file)) {
+            ContainerDataJson json = gson.fromJson(reader, ContainerDataJson.class);
+            UUID owner = json == null ? null : json.owner;
+            OWNER_CACHE.putIfAbsent(key, Optional.ofNullable(owner));
+            return owner;
+        } catch (IOException e) {
+            // Leave uncached so the next lookup retries the read.
+            Bukkit.getLogger().warning("Failed to load container owner for " + location + ": " + e.getMessage());
+            return null;
+        }
     }
 
     public boolean deleteContainerData(Location location) {
