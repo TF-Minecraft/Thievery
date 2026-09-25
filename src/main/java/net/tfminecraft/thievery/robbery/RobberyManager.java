@@ -44,6 +44,7 @@ import net.tfminecraft.thievery.steal.PlayerSlotMap;
 import net.tfminecraft.thievery.steal.RobberyUtil;
 import net.tfminecraft.thievery.steal.StealBudget;
 import net.tfminecraft.thievery.steal.StealGui;
+import net.tfminecraft.thievery.utils.EvilRpPlays;
 import net.tfminecraft.thievery.utils.ThieveryTexts;
 
 public class RobberyManager implements Listener {
@@ -148,6 +149,7 @@ public class RobberyManager implements Listener {
         session.setAcceptDeadlineMs(System.currentTimeMillis()
                 + RobberyLoader.getAcceptTimeoutSeconds() * 1000L);
         sessionsByRobber.put(robber.getUniqueId(), session);
+        EvilRpPlays.record(robber);
 
         sendAcceptMessage(victim, robber);
         robber.sendMessage(ThieveryTexts.msg(ThieveryTexts.WARN + "Waiting for " + victim.getName()
@@ -256,6 +258,7 @@ public class RobberyManager implements Listener {
 
     private void openActiveRobbery(Player robber, Player victim, RobberySession session) {
         session.setState(State.ACTIVE);
+        EvilRpPlays.record(robber);
         session.setActiveEndMs(System.currentTimeMillis() + RobberyLoader.getDurationSeconds() * 1000L);
         victimRestraintLocations.put(victim.getUniqueId(), victim.getLocation().clone());
 

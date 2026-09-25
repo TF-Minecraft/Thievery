@@ -19,6 +19,7 @@ import net.tfminecraft.thievery.player.PlayerData;
 import net.tfminecraft.thievery.door.DoorLockpick.DoorProximityAnchor;
 import net.tfminecraft.thievery.door.DoorLockpick.ProximityAnchor;
 import net.tfminecraft.thievery.player.RiskCalculator;
+import net.tfminecraft.thievery.utils.EvilRpPlays;
 import net.tfminecraft.thievery.utils.ThieveryTexts;
 
 public class LockPickManager {
@@ -77,6 +78,7 @@ public class LockPickManager {
     public void startSession(Player player, ProximityAnchor anchor, SessionKind kind, String targetId,
             double effectiveStrength, int dexterity, double lockpickStrength, Runnable onProximityLost) {
         cancelSession(player.getUniqueId(), true);
+        EvilRpPlays.record(player);
 
         int barLength = Parameters.barLength;
         int successCount = Math.max(1,

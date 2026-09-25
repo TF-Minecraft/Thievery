@@ -27,6 +27,7 @@ import net.tfminecraft.thievery.category.CategoryHandler;
 import net.tfminecraft.thievery.category.ItemValue;
 import net.tfminecraft.thievery.player.PlayerData;
 import net.tfminecraft.thievery.steal.source.GraveStealSource;
+import net.tfminecraft.thievery.utils.EvilRpPlays;
 import net.tfminecraft.thievery.utils.ThieveryTexts;
 
 public final class GraveStealListener implements Listener {
@@ -76,6 +77,7 @@ public final class GraveStealListener implements Listener {
 		if (!GraveLootRules.canSteal(player, grave)) {
 			return;
 		}
+		EvilRpPlays.record(player);
 		loot(player, grave);
 	}
 
