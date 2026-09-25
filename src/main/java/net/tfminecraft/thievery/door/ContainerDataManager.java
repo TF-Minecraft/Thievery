@@ -8,7 +8,9 @@ import java.io.Reader;
 import java.io.Writer;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
@@ -20,6 +22,9 @@ import net.tfminecraft.thievery.door.ContainerData;
 import net.tfminecraft.thievery.door.LockState;
 
 public class ContainerDataManager {
+
+    // Shared across instances; container files are keyed by block coordinates only.
+    private static final Map<BlockKey, Optional<UUID>> OWNER_CACHE = new ConcurrentHashMap<>();
 
     private final File dataFolder;
     private final Gson gson = new Gson();
@@ -37,7 +42,38 @@ public class ContainerDataManager {
         }
     }
 
+    private record BlockKey(int x, int y, int z) {
+        static BlockKey of(Location location) {
+            return new BlockKey(location.getBlockX(), location.getBlockY(), location.getBlockZ());
+        }
+    }
+
+    /** Cached owner lookup for hot paths such as hopper transfers. */
+    public UUID getOwner(Location location) {
+        BlockKey key = BlockKey.of(location);
+        Optional<UUID> cached = OWNER_CACHE.get(key);
+        if (cached != null) {
+            return cached.orElse(null);
+        }
+        File file = getFileForLocation(location);
+        if (!file.exists()) {
+            OWNER_CACHE.putIfAbsent(key, Optional.empty());
+            return null;
+        }
+        try (Reader reader = new FileReader(file)) {
+            ContainerDataJson json = gson.fromJson(reader, ContainerDataJson.class);
+            UUID owner = json == null ? null : json.owner;
+            OWNER_CACHE.putIfAbsent(key, Optional.ofNullable(owner));
+            return owner;
+        } catch (IOException e) {
+            // Leave uncached so the next lookup retries the read.
+            Bukkit.getLogger().warning("Failed to load container owner for " + location + ": " + e.getMessage());
+            return null;
+        }
+    }
+
     public boolean deleteContainerData(Location location) {
+        OWNER_CACHE.remove(BlockKey.of(location));
         File file = getFileForLocation(location);
         return file.exists() && file.delete();
     }
@@ -73,7 +109,9 @@ public class ContainerDataManager {
             json.lockState = data.getLockState();
             json.accessMap = data.getAccessMap();
             gson.toJson(json, writer);
+            OWNER_CACHE.put(BlockKey.of(data.getLocation()), Optional.ofNullable(data.getOwner()));
         } catch (IOException e) {
+            OWNER_CACHE.remove(BlockKey.of(data.getLocation()));
             Bukkit.getLogger().warning("Failed to save container data for " + data.getLocation() + ": " + e.getMessage());
         }
     }
