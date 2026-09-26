@@ -2,6 +2,7 @@ package net.tfminecraft.thievery.category;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -565,7 +566,7 @@ public final class CategoryHandler {
         if (type != null) {
             return type;
         }
-        return types.get(typeId.toUpperCase());
+        return types.get(typeId.toUpperCase(Locale.ROOT));
     }
 
     public static String resolveMmoTypeDisplayName(String slug) {

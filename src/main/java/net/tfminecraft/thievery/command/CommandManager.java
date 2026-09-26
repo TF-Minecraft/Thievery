@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -236,14 +237,14 @@ public class CommandManager implements CommandExecutor, TabCompleter {
                 && sender.hasPermission("thievery.admin")) {
             List<String> options = new ArrayList<>();
             options.add("all");
-            String prefix = args[1].toLowerCase();
+            String prefix = args[1].toLowerCase(Locale.ROOT);
             for (Player online : Bukkit.getOnlinePlayers()) {
-                if (online.getName().toLowerCase().startsWith(prefix)) {
+                if (online.getName().toLowerCase(Locale.ROOT).startsWith(prefix)) {
                     options.add(online.getName());
                 }
             }
             return options.stream()
-                    .filter(option -> option.toLowerCase().startsWith(prefix))
+                    .filter(option -> option.toLowerCase(Locale.ROOT).startsWith(prefix))
                     .collect(Collectors.toList());
         }
 
@@ -253,7 +254,7 @@ public class CommandManager implements CommandExecutor, TabCompleter {
             options.add("0");
             options.add("0.5");
             options.add("1");
-            String prefix = args[2].toLowerCase();
+            String prefix = args[2].toLowerCase(Locale.ROOT);
             return options.stream()
                     .filter(option -> option.startsWith(prefix))
                     .collect(Collectors.toList());

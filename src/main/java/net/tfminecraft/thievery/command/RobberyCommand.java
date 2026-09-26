@@ -14,6 +14,7 @@ import net.tfminecraft.thievery.player.TraitChecker;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 
 public class RobberyCommand implements CommandExecutor, TabCompleter {
 
@@ -35,7 +36,7 @@ public class RobberyCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
-        String sub = args[0].toLowerCase();
+        String sub = args[0].toLowerCase(Locale.ROOT);
         if (sub.equals("start")) {
             if (!TraitChecker.hasTraits(player, RobberyLoader.getTraits())) {
                 TraitChecker.sendMissingTraitMessage(player, "robbery");
@@ -66,7 +67,7 @@ public class RobberyCommand implements CommandExecutor, TabCompleter {
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
             List<String> options = new ArrayList<>();
-            String prefix = args[0].toLowerCase();
+            String prefix = args[0].toLowerCase(Locale.ROOT);
             for (String option : List.of("start", "accept")) {
                 if (option.startsWith(prefix)) {
                     options.add(option);

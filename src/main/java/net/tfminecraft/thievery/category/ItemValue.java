@@ -3,6 +3,7 @@ package net.tfminecraft.thievery.category;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -161,7 +162,7 @@ public final class ItemValue {
         }
         double total = 0;
         for (CraftInput input : inputs) {
-            String kind = input.getKind().toLowerCase();
+            String kind = input.getKind().toLowerCase(Locale.ROOT);
             if (kind.equals("ingredient")) {
                 Ingredient ing = ThieveryBridge.getIngredientById(input.getId());
                 if (ing != null) {
@@ -187,7 +188,7 @@ public final class ItemValue {
         }
         double total = 0;
         for (GemstoneData gem : sockets.getGems()) {
-            String path = "m." + gem.getMMOItemType().toLowerCase() + "." + gem.getMMOItemID().toLowerCase();
+            String path = "m." + gem.getMMOItemType().toLowerCase(Locale.ROOT) + "." + gem.getMMOItemID().toLowerCase(Locale.ROOT);
             total += CategoryLoader.getWeightForPath(path);
         }
         return total;
@@ -894,7 +895,7 @@ public final class ItemValue {
         }
 
         for (CraftInput input : provenance.getInputs()) {
-            String kind = input.getKind().toLowerCase();
+            String kind = input.getKind().toLowerCase(Locale.ROOT);
             if (kind.equals("ingredient")) {
                 Ingredient ing = ThieveryBridge.getIngredientById(input.getId());
                 if (ing != null) {
@@ -948,7 +949,7 @@ public final class ItemValue {
         List<String> details = new ArrayList<>();
         double total = 0;
         for (GemstoneData gem : sockets.getGems()) {
-            String path = "m." + gem.getMMOItemType().toLowerCase() + "." + gem.getMMOItemID().toLowerCase();
+            String path = "m." + gem.getMMOItemType().toLowerCase(Locale.ROOT) + "." + gem.getMMOItemID().toLowerCase(Locale.ROOT);
             double gemValue = CategoryLoader.getWeightForPath(path);
             total += gemValue;
 

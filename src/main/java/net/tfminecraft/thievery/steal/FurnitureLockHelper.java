@@ -1,5 +1,6 @@
 package net.tfminecraft.thievery.steal;
 
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -59,7 +60,7 @@ public final class FurnitureLockHelper {
             return LockState.DEFAULT;
         }
         try {
-            return LockState.valueOf(raw.toString().toUpperCase());
+            return LockState.valueOf(raw.toString().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException ignored) {
             return LockState.DEFAULT;
         }

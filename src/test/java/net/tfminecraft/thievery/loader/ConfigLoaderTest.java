@@ -267,6 +267,30 @@ class ConfigLoaderTest {
     }
 
     @Test
+    void configuredIdentifiersParseTheSameUnderTurkishCaseRules() throws Exception {
+        java.util.Locale original = java.util.Locale.getDefault();
+        java.util.Locale.setDefault(java.util.Locale.forLanguageTag("tr-TR"));
+        try {
+            load("""
+                    lockpicking:
+                      excluded-containers: [chiseled_bookshelf]
+                      lockable-furniture: [vitrine, SAFE_DISPLAY]
+                      lockable-entities: [item_frame]
+                      lock-types:
+                        private: {budget-multiplier: 2, risk-multiplier: 3, critical-risk: false, break-chance-multiplier: 4}
+                    """);
+            assertTrue(Parameters.excludedContainerMaterials.contains(Material.CHISELED_BOOKSHELF));
+            assertTrue(Parameters.isLockableFurnitureId("VITRINE"));
+            assertTrue(Parameters.isLockableFurnitureId("safe_display"));
+            assertEquals(Set.of(EntityType.ITEM_FRAME), Parameters.lockableEntityTypes);
+            assertEquals(new LockTypeProfile(2, 3, false, 4), Parameters.lockTypeProfile(LockState.PRIVATE));
+            verify(logger, never()).warning(anyString());
+        } finally {
+            java.util.Locale.setDefault(original);
+        }
+    }
+
+    @Test
     void invalidFiltersWarnAndValidLockProfilesSupportScalarDefaults() throws Exception {
         load("""
                 lockpicking:

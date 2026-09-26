@@ -2,6 +2,7 @@ package net.tfminecraft.thievery.steal;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -165,7 +166,7 @@ public final class StealItemDisplay {
     }
 
     public static String formatValue(double value) {
-        return String.format("%.2f", value);
+        return String.format(Locale.ROOT, "%.2f", value);
     }
 
     public static String formatTimeRemaining(long remainingMs) {

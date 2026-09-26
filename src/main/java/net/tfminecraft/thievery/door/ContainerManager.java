@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -549,7 +550,7 @@ public class ContainerManager implements Listener {
     }
 
     private String formatLockState(LockState lockState) {
-        String value = lockState.name().toLowerCase();
+        String value = lockState.name().toLowerCase(Locale.ROOT);
         return Character.toUpperCase(value.charAt(0)) + value.substring(1);
     }
 

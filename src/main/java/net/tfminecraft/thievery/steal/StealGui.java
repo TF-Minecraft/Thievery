@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -236,7 +237,7 @@ public final class StealGui {
         meta.setDisplayName(ThieveryTexts.gui(ThieveryTexts.GUI_WARN + "Pouch"));
         List<String> lore = new ArrayList<>();
         lore.add(ThieveryTexts.formatGui(ThieveryTexts.MUTED + "Balance: "
-                + ThieveryTexts.GUI_SUCCESS + String.format("%.2f", balance) + "d"));
+                + ThieveryTexts.GUI_SUCCESS + String.format(Locale.ROOT, "%.2f", balance) + "d"));
         lore.add(" ");
         lore.add(ThieveryTexts.formatGui(ThieveryTexts.MUTED + "Click: "
                 + ThieveryTexts.GUI_SUCCESS + RobberyLoader.getPouchClickAmount() + "d"));

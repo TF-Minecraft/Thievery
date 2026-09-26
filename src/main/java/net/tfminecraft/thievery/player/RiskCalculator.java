@@ -2,6 +2,7 @@ package net.tfminecraft.thievery.player;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
@@ -147,7 +148,7 @@ public final class RiskCalculator {
     }
 
     public static String formatPercent(double value) {
-        return String.format("%.2f%%", value * 100.0);
+        return String.format(Locale.ROOT, "%.2f%%", value * 100.0);
     }
 
     public static String formatPercentWhole(double value) {

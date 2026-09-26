@@ -75,6 +75,7 @@ public final class DisplayLoot {
                 }
                 ItemStack toGive = current.clone();
                 toGive.setAmount(takeable);
+                int heldBefore = countSimilar(player, current);
                 HashMap<Integer, ItemStack> leftovers = player.getInventory().addItem(toGive);
                 int leftoverAmount = 0;
                 for (ItemStack leftover : leftovers.values()) {
@@ -87,9 +88,14 @@ public final class DisplayLoot {
                 ItemStack taken = current.clone();
                 taken.setAmount(added);
                 if (!slot.take(taken)) {
-                    // Missing removal leftovers may already have been removed by a cancelling listener.
-                    // Re-adding them would recreate loot from a rejected transfer.
-                    player.getInventory().removeItem(taken);
+                    // A cancelling listener may already have removed some provisional loot. Remove only
+                    // what is still above the thief's own stock, never items they held beforehand.
+                    int provisional = Math.min(added, countSimilar(player, current) - heldBefore);
+                    if (provisional > 0) {
+                        ItemStack rollback = current.clone();
+                        rollback.setAmount(provisional);
+                        player.getInventory().removeItem(rollback);
+                    }
                     continue;
                 }
                 budget.addUsed(CategoryHandler.getTotalValue(taken));
@@ -97,5 +103,15 @@ public final class DisplayLoot {
         } finally {
             DUMPING.remove();
         }
+    }
+
+    private static int countSimilar(Player player, ItemStack prototype) {
+        int total = 0;
+        for (ItemStack stack : player.getInventory().getStorageContents()) {
+            if (stack != null && stack.isSimilar(prototype)) {
+                total += stack.getAmount();
+            }
+        }
+        return total;
     }
 }

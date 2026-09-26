@@ -30,6 +30,7 @@ class DisplayLootTest {
         when(player.getInventory()).thenReturn(inventory);
         when(inventory.addItem(any(ItemStack.class))).thenAnswer(i -> storage.addItem(i.getArgument(0, ItemStack.class)));
         when(inventory.removeItem(any(ItemStack.class))).thenAnswer(i -> storage.removeItem(i.getArgument(0, ItemStack.class)));
+        when(inventory.getStorageContents()).thenAnswer(i -> storage.getStorageContents());
         categories = mockStatic(CategoryHandler.class);
         categories.when(() -> CategoryHandler.canRevealItem(eq(data), any())).thenReturn(true);
         categories.when(() -> CategoryHandler.getPerItemValue(any())).thenReturn(2.0);
@@ -73,12 +74,14 @@ class DisplayLootTest {
         verify(slot, never()).take(any());
         assertEquals(2, budget.getUsed());
     }
-    @Test void rejectedSourceRemovalRollsBackInventoryAndDoesNotConsumeBudget() {
+    @Test void rejectedSourceRemovalRollsBackOnlyProvisionalLootAndDoesNotConsumeBudget() {
         var slot = slot(new ItemStack(Material.DIAMOND, 3));
         doReturn(false).when(slot).take(any());
         var budget = new StealBudget(10);
+        storage.setItem(10, new ItemStack(Material.DIAMOND, 2));
         DisplayLoot.dump(player, List.of(slot), budget, data);
-        assertTrue(storage.isEmpty());
+        assertEquals(new ItemStack(Material.DIAMOND, 2), storage.getItem(10));
+        assertEquals(2, java.util.Arrays.stream(storage.getStorageContents()).filter(java.util.Objects::nonNull).mapToInt(ItemStack::getAmount).sum());
         assertEquals(3, slot.get().getAmount());
         assertEquals(0, budget.getUsed());
         assertFalse(DisplayLoot.isDumping());
@@ -92,7 +95,7 @@ class DisplayLootTest {
         when(furniture.getActiveSlots()).thenReturn(Map.of("display",placed));UUID entityId=UUID.randomUUID();when(furniture.getEntityId()).thenReturn(entityId);
         var entity=mock(org.bukkit.entity.Entity.class);var displays=mock(DisplayStealManager.class);var listener=new FurnitureDisplayListener(displays);
         when(player.getInventory().getItemInMainHand()).thenReturn(new ItemStack(Material.STICK));
-        var budget=new StealBudget(10);var callbacks=new java.util.concurrent.atomic.AtomicInteger();storage.setItem(10,new ItemStack(Material.EMERALD,2));
+        var budget=new StealBudget(10);var callbacks=new java.util.concurrent.atomic.AtomicInteger();storage.setItem(10,new ItemStack(Material.DIAMOND,2));
         MockBukkit.getMock().getPluginManager().registerEvents(new org.bukkit.event.Listener() {
             @org.bukkit.event.EventHandler
             public void revoke(net.tfminecraft.interactiblefurniture.events.FurnitureSlotItemTakeEvent event) {
@@ -109,7 +112,8 @@ class DisplayLootTest {
             verify(displays).handleLockpick(eq(player),eq(entity),isNull(),eq(net.tfminecraft.thievery.door.LockState.PRIVATE),slots.capture());
             DisplayLoot.dump(player,slots.getValue(),budget,data);
         }
-        assertEquals(1,callbacks.get());assertFalse(storage.contains(Material.DIAMOND));assertEquals(new ItemStack(Material.EMERALD,2),storage.getItem(10));
+        // The listener removed the provisional diamonds, so the thief keeps exactly their own two.
+        assertEquals(1,callbacks.get());assertEquals(new ItemStack(Material.DIAMOND,2),storage.getItem(10));assertEquals(1,storage.all(Material.DIAMOND).size());
         assertEquals(3,source.getAmount());verify(placed,never()).setCurrentItem(any());verify(furniture,never()).removeActiveSlot(any());assertEquals(0,budget.getUsed());assertFalse(DisplayLoot.isDumping());
     }
     @Test void sourceFailureAlwaysClearsTheDumpListenerFlag() {

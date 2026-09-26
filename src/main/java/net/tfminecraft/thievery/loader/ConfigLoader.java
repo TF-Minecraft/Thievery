@@ -2,6 +2,7 @@ package net.tfminecraft.thievery.loader;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Locale;
 
 import org.bukkit.Material;
 import org.bukkit.entity.EntityType;
@@ -133,7 +134,7 @@ public class ConfigLoader {
             }
             LockState state;
             try {
-                state = LockState.valueOf(key.trim().toUpperCase());
+                state = LockState.valueOf(key.trim().toUpperCase(Locale.ROOT));
             } catch (IllegalArgumentException ignored) {
                 Thievery.getInstance().getLogger().warning("Unknown lockpicking lock type: " + key);
                 continue;
@@ -153,7 +154,7 @@ public class ConfigLoader {
             if (entry.isBlank()) {
                 continue;
             }
-            Material material = Material.matchMaterial(entry.trim().toUpperCase());
+            Material material = Material.matchMaterial(entry.trim().toUpperCase(Locale.ROOT));
             if (material == null) {
                 Thievery.getInstance().getLogger().warning(
                         "Unknown lockpicking excluded container material: " + entry);
@@ -173,7 +174,7 @@ public class ConfigLoader {
             if (entry.isBlank()) {
                 continue;
             }
-            ids.add(entry.trim().toLowerCase());
+            ids.add(entry.trim().toLowerCase(Locale.ROOT));
         }
         return ids;
     }
@@ -185,7 +186,7 @@ public class ConfigLoader {
                 continue;
             }
             try {
-                types.add(EntityType.valueOf(entry.trim().toUpperCase()));
+                types.add(EntityType.valueOf(entry.trim().toUpperCase(Locale.ROOT)));
             } catch (IllegalArgumentException ignored) {
                 Thievery.getInstance().getLogger().warning(
                         "Unknown lockpicking lockable entity type: " + entry);

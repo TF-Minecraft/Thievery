@@ -3,6 +3,7 @@ package net.tfminecraft.thievery.cache;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -80,7 +81,7 @@ public final class Parameters {
         if (furnitureId == null || furnitureId.isBlank()) {
             return false;
         }
-        return lockableFurnitureIds.contains(furnitureId.toLowerCase());
+        return lockableFurnitureIds.contains(furnitureId.toLowerCase(Locale.ROOT));
     }
 
     public static boolean isLockableEntityType(EntityType type) {

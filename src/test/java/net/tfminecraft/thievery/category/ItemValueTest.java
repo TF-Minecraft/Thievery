@@ -58,8 +58,9 @@ class ItemValueTest {
     @SuppressWarnings("unchecked")
     void setUp() throws Exception {
         MockBukkit.mock();
+        // Turkish case rules turn "INGREDIENT" into "ingredıent" unless comparisons use Locale.ROOT.
         previousLocale = Locale.getDefault();
-        Locale.setDefault(Locale.US);
+        Locale.setDefault(Locale.forLanguageTag("tr-TR"));
         previousDefault = Cache.defaultItemValue;
         Cache.defaultItemValue = 0.1;
         for (String name : List.of("QUALITY_PERCENT", "AURA_PERCENT", "AURA_MINS")) {
