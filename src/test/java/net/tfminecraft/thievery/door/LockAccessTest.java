@@ -103,6 +103,14 @@ class LockAccessTest {
     }
 
     @Test
+    void ownerNameFallsBackForUnknownOwners() {
+        assertEquals("owner", LockAccess.ownerName(owner));
+        UUID stranger = UUID.randomUUID();
+        bukkit.when(() -> Bukkit.getOfflinePlayer(stranger)).thenReturn(mock(OfflinePlayer.class));
+        assertEquals("an unknown player", LockAccess.ownerName(stranger));
+    }
+
+    @Test
     void unknownLockStateDoesNotGrantSharedAccess() {
         assertFalse(LockAccess.canAccess(opener, owner, null));
     }

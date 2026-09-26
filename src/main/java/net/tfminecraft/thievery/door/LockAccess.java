@@ -13,6 +13,11 @@ public final class LockAccess {
 
     private LockAccess() {}
 
+    public static String ownerName(UUID owner) {
+        String name = Bukkit.getOfflinePlayer(owner).getName();
+        return name != null ? name : "an unknown player";
+    }
+
     public static boolean canAccess(Player player, UUID owner, LockState lockState) {
         if (lockState == LockState.PUBLIC) {
             return true;

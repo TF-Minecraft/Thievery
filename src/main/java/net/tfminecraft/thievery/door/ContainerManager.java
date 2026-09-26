@@ -473,7 +473,9 @@ public class ContainerManager implements Listener {
             UUID leftOwner = leftData.getOwner();
             UUID rightOwner = rightData.getOwner();
             boolean ownsDoubleChest = playerId.equals(leftOwner) || playerId.equals(rightOwner);
-            if (!ownsDoubleChest) {
+            boolean staffOverride = !ownsDoubleChest && (leftOwner != null || rightOwner != null)
+                    && player.hasPermission("thievery.admin");
+            if (!ownsDoubleChest && !staffOverride) {
                 player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You can only change the lock state on containers you own."));
                 return;
             }
@@ -484,21 +486,31 @@ public class ContainerManager implements Listener {
             containerDataManager.saveContainerData(leftData);
             containerDataManager.saveContainerData(rightData);
 
-            notifyLockStateChange(player, nextState);
+            if (staffOverride) {
+                notifyStaffLockStateChange(player, leftOwner != null ? leftOwner : rightOwner, nextState);
+            } else {
+                notifyLockStateChange(player, nextState);
+            }
             return;
         }
 
         Location location = container.getBlock().getLocation();
         ContainerData data = containerDataManager.loadContainerData(location);
 
-        if (!playerId.equals(data.getOwner())) {
+        boolean owns = playerId.equals(data.getOwner());
+        boolean staffOverride = !owns && data.getOwner() != null && player.hasPermission("thievery.admin");
+        if (!owns && !staffOverride) {
             player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You can only change the lock state on containers you own."));
             return;
         }
 
         LockState nextState = data.rotateLockState();
         containerDataManager.saveContainerData(data);
-        notifyLockStateChange(player, nextState);
+        if (staffOverride) {
+            notifyStaffLockStateChange(player, data.getOwner(), nextState);
+        } else {
+            notifyLockStateChange(player, nextState);
+        }
     }
 
     @EventHandler
@@ -547,6 +559,19 @@ public class ContainerManager implements Listener {
                 ThieveryTexts.msg(ThieveryTexts.WARN + displayState), 5, 30, 10);
         player.playSound(player.getLocation(), Sound.BLOCK_IRON_TRAPDOOR_OPEN, 1.0f, 1.0f);
         FactionLockTutorial.onLockState(player, lockState);
+    }
+
+    // Staff keep the placer as owner, so guild and faction locks still follow the placer's
+    // membership. Skip the faction tutorial because it describes the staff member's own faction.
+    @SuppressWarnings("deprecation")
+    private void notifyStaffLockStateChange(Player player, UUID owner, LockState lockState) {
+        String displayState = formatLockState(lockState);
+        player.sendTitle(
+                ThieveryTexts.msg(ThieveryTexts.ACCENT + "Lock State"),
+                ThieveryTexts.msg(ThieveryTexts.WARN + displayState), 5, 30, 10);
+        player.playSound(player.getLocation(), Sound.BLOCK_IRON_TRAPDOOR_OPEN, 1.0f, 1.0f);
+        player.sendMessage(ThieveryTexts.msg(ThieveryTexts.WARN + "Staff override: lock owned by "
+                + LockAccess.ownerName(owner) + " is now " + displayState + "."));
     }
 
     private String formatLockState(LockState lockState) {
