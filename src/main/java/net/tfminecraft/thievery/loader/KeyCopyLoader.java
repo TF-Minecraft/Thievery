@@ -80,7 +80,7 @@ public final class KeyCopyLoader {
     }
 
     private static boolean matchesPath(ItemStack item, String path) {
-        if (item == null || item.getType().isAir() || path == null || path.isBlank()) {
+        if (item == null || item.getType().isAir() || path.isBlank()) {
             return false;
         }
         return TLibs.getItemAPI().getChecker().checkItemWithPath(item, path);

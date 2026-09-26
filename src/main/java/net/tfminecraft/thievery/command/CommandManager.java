@@ -125,7 +125,7 @@ public class CommandManager implements CommandExecutor, TabCompleter {
                         + ThieveryTexts.ERROR + ".");
                 return true;
             }
-            if (risk < 0.0 || risk > 1.0) {
+            if (!Double.isFinite(risk) || risk < 0.0 || risk > 1.0) {
                 msg(sender, ThieveryTexts.ERROR + "[Thievery] Risk must be between " + ThieveryTexts.WARN + "0.0 "
                         + ThieveryTexts.ERROR + "and " + ThieveryTexts.WARN + "1.0" + ThieveryTexts.ERROR + ".");
                 return true;

@@ -105,8 +105,7 @@ public abstract class HiddenStealReference extends StealReference {
 
     protected abstract boolean onBeforeReveal(Player thief, Inventory guiInv, int guiSlot);
 
-    protected void onAfterReveal(Player thief, Inventory guiInv, int guiSlot) {
-    }
+    protected abstract void onAfterReveal(Player thief, Inventory guiInv, int guiSlot);
 
     public abstract void refreshGui(Player thief, Inventory guiInv);
 

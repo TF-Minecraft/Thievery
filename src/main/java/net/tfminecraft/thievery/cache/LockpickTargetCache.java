@@ -9,7 +9,9 @@ import java.util.Map;
  * the target key is registered for 10 minutes. Subsequent attempts while
  * no members are online but the window is still active are allowed (with a warning).
  */
-public class LockpickTargetCache {
+public final class LockpickTargetCache {
+
+    private LockpickTargetCache() {}
 
     private static final long WINDOW_MS = 10 * 60 * 1000L; // 10 minutes
 

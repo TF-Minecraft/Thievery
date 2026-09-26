@@ -15,7 +15,9 @@ import net.tfminecraft.thievery.door.LockTypeProfile;
 /**
  * Central tuning parameters for the door locking and lockpicking system.
  */
-public class Parameters {
+public final class Parameters {
+
+    private Parameters() {}
 
     public static double lockpickMaxReduction = 0.5;
 

@@ -104,7 +104,7 @@ public class ConfigLoader {
         Parameters.doorUnlockWindowMs = config.getLong("lockpicking.door-unlock-window-minutes", 60L)
                 * 60L * 1000L;
 
-        Parameters.barLength = config.getInt("lockpicking.bar.length", 20);
+        Parameters.barLength = Math.max(1, config.getInt("lockpicking.bar.length", 20));
         Parameters.maxSuccessSlots = config.getInt("lockpicking.bar.max-success-slots", 3);
         Parameters.minBreakSlots = config.getInt("lockpicking.bar.min-break-slots", 3);
         Parameters.maxBreakSlots = config.getInt("lockpicking.bar.max-break-slots", 19);
@@ -128,7 +128,7 @@ public class ConfigLoader {
             return;
         }
         for (String key : types.getKeys(false)) {
-            if (key == null || key.isBlank()) {
+            if (key.isBlank()) {
                 continue;
             }
             LockState state;
@@ -150,7 +150,7 @@ public class ConfigLoader {
     private static java.util.Set<Material> loadExcludedContainers(FileConfiguration config) {
         java.util.Set<Material> excluded = java.util.EnumSet.noneOf(Material.class);
         for (String entry : config.getStringList("lockpicking.excluded-containers")) {
-            if (entry == null || entry.isBlank()) {
+            if (entry.isBlank()) {
                 continue;
             }
             Material material = Material.matchMaterial(entry.trim().toUpperCase());
@@ -170,7 +170,7 @@ public class ConfigLoader {
     private static java.util.Set<String> loadLockableFurnitureIds(FileConfiguration config) {
         java.util.Set<String> ids = new java.util.HashSet<>();
         for (String entry : config.getStringList("lockpicking.lockable-furniture")) {
-            if (entry == null || entry.isBlank()) {
+            if (entry.isBlank()) {
                 continue;
             }
             ids.add(entry.trim().toLowerCase());
@@ -181,7 +181,7 @@ public class ConfigLoader {
     private static java.util.Set<EntityType> loadLockableEntityTypes(FileConfiguration config) {
         java.util.Set<EntityType> types = java.util.EnumSet.noneOf(EntityType.class);
         for (String entry : config.getStringList("lockpicking.lockable-entities")) {
-            if (entry == null || entry.isBlank()) {
+            if (entry.isBlank()) {
                 continue;
             }
             try {

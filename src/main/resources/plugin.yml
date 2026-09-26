@@ -9,7 +9,7 @@ softdepend: [AdvancedCrafting, InteractibleFurniture, DenarEconomy, GunsAndGadge
 
 commands:
   thievery:
-    useage: /<command>
+    usage: /<command>
     description: Thievery Command
   robbery:
     description: Robbery commands

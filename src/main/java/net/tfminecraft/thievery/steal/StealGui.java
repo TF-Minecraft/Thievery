@@ -395,8 +395,6 @@ public final class StealGui {
         int guiSize = layout.getGuiSize();
         Inventory gui = Bukkit.createInventory(holder, guiSize, title);
         ItemStack fillerPane = createFillerPane();
-        Set<Integer> assignedLootSlots = new HashSet<>(layout.getLogicalSlotToGuiSlot().values());
-        assignedLootSlots.add(ROBBERY_POUCH_GUI_SLOT);
 
         for (Map.Entry<Integer, Integer> entry : layout.getLogicalSlotToGuiSlot().entrySet()) {
             int logicalSlot = entry.getKey();
@@ -414,10 +412,8 @@ public final class StealGui {
         placeRobberyPouchSlot(gui, victim, thiefData, budget);
 
         for (int guiSlot = 0; guiSlot < guiSize; guiSlot++) {
-            if (!assignedLootSlots.contains(guiSlot) || gui.getItem(guiSlot) == null) {
-                if (gui.getItem(guiSlot) == null) {
-                    gui.setItem(guiSlot, fillerPane);
-                }
+            if (gui.getItem(guiSlot) == null) {
+                gui.setItem(guiSlot, fillerPane);
             }
         }
         return gui;

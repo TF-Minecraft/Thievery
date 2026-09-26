@@ -20,7 +20,7 @@ public final class DoorLoader {
     }
 
     public static boolean matchesDebugTool(ItemStack item) {
-        if (item == null || item.getType().isAir() || debugToolPath == null || debugToolPath.isBlank()) {
+        if (item == null || item.getType().isAir() || debugToolPath.isBlank()) {
             return false;
         }
         return TLibs.getItemAPI().getChecker().checkItemWithPath(item, debugToolPath);

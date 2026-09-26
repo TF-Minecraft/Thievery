@@ -193,13 +193,6 @@ public class DisplayStealManager implements Listener {
             return;
         }
 
-        double debuffFactor = lockPickManager.getDebuffFactor(player.getUniqueId(), targetId);
-        if (debuffFactor > 0) {
-            int penalty = (int) Math.round(debuffFactor * 100);
-            long seconds = lockPickManager.getCooldownRemainingSeconds(player.getUniqueId(), targetId);
-            player.sendMessage(ThieveryTexts.msg(ThieveryTexts.WARN + "Lockpicking with " + penalty + "% penalty (" + seconds + "s)"));
-        }
-
         double effectiveStrength = Parameters.displayLockStrength
                 * (1.0 - Math.min(1.0, lockpickStrength) * Parameters.lockpickMaxReduction);
         int dexterity = RiskCalculator.getDexterity(player);

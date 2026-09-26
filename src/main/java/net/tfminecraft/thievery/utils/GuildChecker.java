@@ -11,7 +11,9 @@ import net.tfminecraft.thievery.cache.Cache;
 import net.tfminecraft.thievery.cache.LockpickTargetCache;
 import net.tfminecraft.thievery.player.TargetKeyResolver;
 
-public class GuildChecker {
+public final class GuildChecker {
+
+    private GuildChecker() {}
 
     public static class LockpickAccessResult {
         public enum Type { ALLOWED, WARN, DENY }

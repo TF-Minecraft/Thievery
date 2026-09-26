@@ -105,7 +105,7 @@ public class LockPickManager {
         for (int i = 0; i < failCount; i++) {
             layoutList.add('f');
         }
-        Collections.shuffle(layoutList);
+        Collections.shuffle(layoutList, random);
 
         char[] layout = new char[barLength];
         for (int i = 0; i < barLength; i++) {
@@ -168,9 +168,6 @@ public class LockPickManager {
                 }
 
                 int currentSlot = (int) Math.round(session.position);
-                if (currentSlot >= barLength) {
-                    currentSlot = barLength - 1;
-                }
 
                 StringBuilder bar = new StringBuilder(ThieveryTexts.DARK + "[");
                 for (int i = 0; i < barLength; i++) {
@@ -208,10 +205,8 @@ public class LockPickManager {
             return SelectResult.NOT_IN_SESSION;
         }
 
+        // The cursor is bounded by this session's layout, even after a config reload.
         int slot = (int) Math.round(session.position);
-        if (slot >= Parameters.barLength) {
-            slot = Parameters.barLength - 1;
-        }
         char type = session.layout[slot];
 
         boolean penalize = type != 's';
@@ -235,9 +230,7 @@ public class LockPickManager {
         if (session == null) {
             return;
         }
-        if (session.task != null) {
-            session.task.cancel();
-        }
+        session.task.cancel();
         if (penalize) {
             applyCooldown(uuid, session.targetId);
         }

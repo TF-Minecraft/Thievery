@@ -71,6 +71,12 @@ public final class AcCraftRef {
 
     @Override
     public int hashCode() {
-        return Objects.hash(statTemplate.toLowerCase(), tier);
+        // Match equalsIgnoreCase's character folding without depending on the
+        // server locale (or expanding Unicode characters into several letters).
+        int templateHash = statTemplate.codePoints()
+                .map(Character::toUpperCase)
+                .map(Character::toLowerCase)
+                .reduce(0, (hash, codePoint) -> 31 * hash + codePoint);
+        return Objects.hash(templateHash, tier);
     }
 }

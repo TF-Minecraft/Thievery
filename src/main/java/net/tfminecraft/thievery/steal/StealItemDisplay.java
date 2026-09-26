@@ -69,18 +69,12 @@ public final class StealItemDisplay {
         ItemStack display;
         if (ItemValue.isBundle(realItem)) {
             display = ItemValue.buildDisplayBundle(thiefData, realItem);
-            if (display == null) {
-                return StealGui.createHiddenPane();
-            }
         } else {
             display = realItem.clone();
             display.setAmount(displayAmount);
         }
 
         ItemMeta meta = display.getItemMeta();
-        if (meta == null) {
-            return display;
-        }
 
         List<String> lore = meta.hasLore() ? new ArrayList<>(meta.getLore()) : new ArrayList<>();
         lore.add("");

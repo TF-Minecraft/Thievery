@@ -29,18 +29,22 @@ public final class DisplayLoot {
     }
 
     public static boolean isEligible(ItemStack item, PlayerData thiefData, double remaining) {
+        return eligibleAmount(item, thiefData, remaining) > 0;
+    }
+
+    private static int eligibleAmount(ItemStack item, PlayerData thiefData, double remaining) {
         if (item == null || item.getType().isAir()) {
-            return false;
+            return 0;
         }
         if (ItemValue.isBundle(item)) {
             if (!ItemValue.hasStealableContents(thiefData, item, remaining)
                     && !CategoryHandler.canRevealItem(thiefData, item)) {
-                return false;
+                return 0;
             }
         } else if (!CategoryHandler.canRevealItem(thiefData, item)) {
-            return false;
+            return 0;
         }
-        return StealBudget.computeTakeableAmount(item, remaining) > 0;
+        return StealBudget.computeTakeableAmount(item, remaining);
     }
 
     public static boolean hasAnything(List<DisplaySlot> slots, PlayerData thiefData, double capacity) {
@@ -65,10 +69,7 @@ public final class DisplayLoot {
         try {
             for (DisplaySlot slot : order) {
                 ItemStack current = slot.get();
-                if (!isEligible(current, thiefData, budget.getRemaining())) {
-                    continue;
-                }
-                int takeable = StealBudget.computeTakeableAmount(current, budget.getRemaining());
+                int takeable = eligibleAmount(current, thiefData, budget.getRemaining());
                 if (takeable <= 0) {
                     continue;
                 }
@@ -77,9 +78,7 @@ public final class DisplayLoot {
                 HashMap<Integer, ItemStack> leftovers = player.getInventory().addItem(toGive);
                 int leftoverAmount = 0;
                 for (ItemStack leftover : leftovers.values()) {
-                    if (leftover != null) {
-                        leftoverAmount += leftover.getAmount();
-                    }
+                    leftoverAmount += leftover.getAmount();
                 }
                 int added = takeable - leftoverAmount;
                 if (added <= 0) {
@@ -88,12 +87,9 @@ public final class DisplayLoot {
                 ItemStack taken = current.clone();
                 taken.setAmount(added);
                 if (!slot.take(taken)) {
-                    HashMap<Integer, ItemStack> rollback = player.getInventory().removeItem(taken);
-                    if (!rollback.isEmpty()) {
-                        for (ItemStack extra : rollback.values()) {
-                            player.getInventory().addItem(extra);
-                        }
-                    }
+                    // Missing removal leftovers may already have been removed by a cancelling listener.
+                    // Re-adding them would recreate loot from a rejected transfer.
+                    player.getInventory().removeItem(taken);
                     continue;
                 }
                 budget.addUsed(CategoryHandler.getTotalValue(taken));

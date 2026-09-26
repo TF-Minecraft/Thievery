@@ -174,7 +174,7 @@ public class ChestStealReference extends HiddenStealReference {
 
     private void breakLockpick(Player player) {
         ItemStack held = player.getInventory().getItemInMainHand();
-        if (held == null || held.getType().isAir()) {
+        if (held.getType().isAir()) {
             return;
         }
         if (held.getAmount() > 1) {

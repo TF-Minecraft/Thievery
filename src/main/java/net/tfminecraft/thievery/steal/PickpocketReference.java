@@ -87,11 +87,6 @@ public class PickpocketReference extends HiddenStealReference {
             return false;
         }
 
-        Integer logicalSlot = session.getLayout().getLogicalForGui(guiSlot);
-        if (logicalSlot == null) {
-            return false;
-        }
-
         int dexterity = RiskCalculator.getDexterity(thief);
         PlayerData thiefData = Thievery.getPlayerManager().get(thief.getUniqueId());
         thiefData.addRiskGain(dexterity, 0, RiskSource.PICKPOCKET);

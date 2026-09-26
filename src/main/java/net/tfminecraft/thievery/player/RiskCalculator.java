@@ -47,9 +47,6 @@ public final class RiskCalculator {
     }
 
     public static double getDexterityLerpValue(int dexterity) {
-        if (dexterityLerpMap.isEmpty()) {
-            return 1.0;
-        }
         Map.Entry<Integer, Double> floor = dexterityLerpMap.floorEntry(dexterity);
         Map.Entry<Integer, Double> ceiling = dexterityLerpMap.ceilingEntry(dexterity);
         if (floor == null) {

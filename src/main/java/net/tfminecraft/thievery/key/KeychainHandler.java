@@ -16,6 +16,7 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonParseException;
 import com.google.gson.reflect.TypeToken;
 
 import net.tfminecraft.tlibs.TLibs;
@@ -98,14 +99,16 @@ public final class KeychainHandler {
             return keys;
         }
         ItemMeta meta = keychain.getItemMeta();
-        if (meta == null) {
-            return keys;
-        }
         String json = meta.getPersistentDataContainer().get(Keys.keychainKeys, PersistentDataType.STRING);
         if (json == null || json.isBlank()) {
             return keys;
         }
-        List<Map<String, Object>> serialized = GSON.fromJson(json, KEY_LIST_TYPE);
+        List<Map<String, Object>> serialized;
+        try {
+            serialized = GSON.fromJson(json, KEY_LIST_TYPE);
+        } catch (JsonParseException malformed) {
+            return keys;
+        }
         if (serialized == null) {
             return keys;
         }
@@ -113,7 +116,7 @@ public final class KeychainHandler {
             if (map == null) continue;
             try {
                 ItemStack key = ItemStack.deserialize(map);
-                if (key != null && !key.getType().isAir()) {
+                if (!key.getType().isAir()) {
                     keys.add(key);
                 }
             } catch (Exception ignored) {
@@ -210,9 +213,6 @@ public final class KeychainHandler {
         }
         ItemStack updated = keychain.clone();
         ItemMeta meta = updated.getItemMeta();
-        if (meta == null) {
-            return keychain;
-        }
         List<ItemStack> stored = getStoredKeys(keychain);
         List<String> lore = templateLore(meta.getLore(), KeychainLoader.getLoreLineStart() - 1);
         lore.add(ThieveryTexts.gui(ThieveryTexts.WHITE + "Keys " + ThieveryTexts.GUI_WARN + stored.size()
@@ -239,7 +239,7 @@ public final class KeychainHandler {
         for (int i = 0; i < reservedLines && i < existing.size(); i++) {
             String line = existing.get(i);
             String plain = ChatColor.stripColor(line);
-            if (plain != null && KEY_COUNT_HEADER.matcher(plain.trim()).matches()) {
+            if (KEY_COUNT_HEADER.matcher(plain.trim()).matches()) {
                 break;
             }
             lore.add(line);
@@ -290,9 +290,6 @@ public final class KeychainHandler {
     }
 
     private static DoorKeyMatch matchesSingleItem(ItemStack item, String doorKeyUuid, DoorKeyPurpose purpose) {
-        if (item == null || item.getType().isAir()) {
-            return null;
-        }
         String uuid = getKeyUuid(item);
         if (!doorKeyUuid.equals(uuid)) {
             return null;
@@ -310,9 +307,6 @@ public final class KeychainHandler {
     }
 
     private static String getKeyUuid(ItemStack item) {
-        if (item == null || !item.hasItemMeta()) {
-            return null;
-        }
         return item.getItemMeta().getPersistentDataContainer()
                 .get(Keys.keyUUIDKey, PersistentDataType.STRING);
     }
@@ -320,11 +314,9 @@ public final class KeychainHandler {
     // Keep the existing legacy text representation, formatting, and exact-string comparisons.
     @SuppressWarnings("deprecation")
     private static String formatKeyName(ItemStack key) {
-        if (key.hasItemMeta()) {
-            ItemMeta meta = key.getItemMeta();
-            if (meta != null && meta.hasDisplayName()) {
-                return ChatColor.stripColor(meta.getDisplayName());
-            }
+        ItemMeta meta = key.getItemMeta();
+        if (meta.hasDisplayName()) {
+            return ChatColor.stripColor(meta.getDisplayName());
         }
         if (KeyCopyHandler.isPaperCopy(key)) {
             String sourceId = KeyCopyHandler.getSourceKeyId(key);
@@ -356,9 +348,7 @@ public final class KeychainHandler {
                 builder.append(' ');
             }
             builder.append(Character.toUpperCase(part.charAt(0)));
-            if (part.length() > 1) {
-                builder.append(part.substring(1));
-            }
+            builder.append(part.substring(1));
         }
         return builder.length() > 0 ? builder.toString() : id;
     }

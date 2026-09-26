@@ -79,8 +79,8 @@ public final class ClearCluesResolver {
             UUID owner = doorData != null ? doorData.getOwnerUUID() : null;
             return Optional.of(new ClearCluesTarget(Kind.DOOR, canonical, owner, null));
         }
-        if (block.getState() instanceof Container) {
-            ContainerData data = loadContainerDataForBlock(block);
+        if (block.getState() instanceof Container container) {
+            ContainerData data = loadContainerData(container);
             return Optional.of(new ClearCluesTarget(Kind.CONTAINER, data.getLocation(),
                     data.getOwner(), data.getLockState()));
         }
@@ -150,9 +150,7 @@ public final class ClearCluesResolver {
         Inventory inv = container.getInventory();
         if (inv instanceof DoubleChestInventory doubleInv) {
             DoubleChest holder = (DoubleChest) doubleInv.getHolder();
-            if (holder != null) {
-                inv = holder.getInventory();
-            }
+            inv = holder.getInventory();
         }
         int removed = 0;
         for (int slot = 0; slot < inv.getSize(); slot++) {
@@ -164,24 +162,19 @@ public final class ClearCluesResolver {
         return removed;
     }
 
-    private static ContainerData loadContainerDataForBlock(Block block) {
-        if (!(block.getState() instanceof Container container)) {
-            return containerDataManager.loadContainerData(block.getLocation());
-        }
+    private static ContainerData loadContainerData(Container container) {
         Inventory inv = container.getInventory();
         if (inv instanceof DoubleChestInventory doubleInv) {
             DoubleChest dc = (DoubleChest) doubleInv.getHolder();
-            if (dc != null) {
-                Location leftLoc = ((org.bukkit.block.Chest) dc.getLeftSide()).getLocation();
-                ContainerData left = containerDataManager.loadContainerData(leftLoc);
-                if (left.getOwner() != null) {
-                    return left;
-                }
-                return containerDataManager.loadContainerData(
-                        ((org.bukkit.block.Chest) dc.getRightSide()).getLocation());
+            Location leftLoc = ((org.bukkit.block.Chest) dc.getLeftSide()).getLocation();
+            ContainerData left = containerDataManager.loadContainerData(leftLoc);
+            if (left.getOwner() != null) {
+                return left;
             }
+            return containerDataManager.loadContainerData(
+                    ((org.bukkit.block.Chest) dc.getRightSide()).getLocation());
         }
-        return containerDataManager.loadContainerData(block.getLocation());
+        return containerDataManager.loadContainerData(container.getLocation());
     }
 
     private static boolean isDoor(Block block) {

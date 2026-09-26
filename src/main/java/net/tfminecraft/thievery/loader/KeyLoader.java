@@ -11,7 +11,9 @@ import org.bukkit.inventory.ItemStack;
 import net.tfminecraft.tlibs.TLibs;
 import net.tfminecraft.thievery.key.KeyDefinition;
 
-public class KeyLoader {
+public final class KeyLoader {
+
+    private KeyLoader() {}
 
     private static final HashMap<String, KeyDefinition> keys = new HashMap<>();
 

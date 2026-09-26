@@ -11,7 +11,9 @@ import org.bukkit.inventory.ItemStack;
 import net.tfminecraft.tlibs.TLibs;
 import net.tfminecraft.thievery.player.LockpickDefinition;
 
-public class LockpickLoader {
+public final class LockpickLoader {
+
+    private LockpickLoader() {}
 
     private static final HashMap<String, LockpickDefinition> lockpicks = new HashMap<>();
 
