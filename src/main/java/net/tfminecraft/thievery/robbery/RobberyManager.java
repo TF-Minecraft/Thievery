@@ -56,7 +56,7 @@ public class RobberyManager implements Listener {
     private final Map<UUID, Location> victimRestraintLocations = new HashMap<>();
 
     public void startAwaitingTarget(Player robber) {
-        endSessionForRobber(robber.getUniqueId(), false);
+        endSessionForRobber(robber.getUniqueId());
         awaitingTarget.add(robber.getUniqueId());
         robber.sendMessage(ThieveryTexts.msg(ThieveryTexts.WARN + "Right-click a player within "
                 + RobberyLoader.getMaxDistance() + " blocks to begin a robbery."));
@@ -141,7 +141,7 @@ public class RobberyManager implements Listener {
         }
 
         awaitingTarget.remove(robber.getUniqueId());
-        endSessionForRobber(robber.getUniqueId(), false);
+        endSessionForRobber(robber.getUniqueId());
 
         StealGui.Layout layout = StealGui.Layout.createRobbery(PlayerSlotMap.TOTAL_LOGICAL_SLOTS);
         StealBudget budget = new StealBudget(RobberyLoader.getBudget());
@@ -246,13 +246,11 @@ public class RobberyManager implements Listener {
             endSession(asRobber, false);
         }
 
+        // Restraints are created only for active sessions; both end paths release them.
         RobberySession asVictim = findActiveSessionForVictim(playerId);
         if (asVictim != null) {
             PlayerSlotMap.dropAllExceptIgnored(player);
             endSession(asVictim, false);
-        } else if (isVictimRestrained(playerId)) {
-            PlayerSlotMap.dropAllExceptIgnored(player);
-            victimRestraintLocations.remove(playerId);
         }
     }
 
@@ -304,18 +302,12 @@ public class RobberyManager implements Listener {
         return null;
     }
 
-    private void endSessionForRobber(UUID robberId, boolean notify) {
+    private void endSessionForRobber(UUID robberId) {
         RobberySession session = sessionsByRobber.remove(robberId);
         activeReferences.remove(robberId);
         StealManager.getInstance().endSession(robberId, false);
         if (session != null) {
             releaseVictim(session.getVictimId());
-            if (notify) {
-                Player victim = Bukkit.getPlayer(session.getVictimId());
-                if (victim != null && victim.isOnline()) {
-                    victim.sendMessage(ThieveryTexts.msg(ThieveryTexts.MUTED + "The robbery has ended."));
-                }
-            }
         }
     }
 

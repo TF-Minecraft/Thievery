@@ -13,7 +13,9 @@ import com.google.gson.GsonBuilder;
 
 import net.tfminecraft.thievery.player.PlayerData;
 
-public class Database {
+public final class Database {
+
+    private Database() {}
 
     private static final Gson gson = new GsonBuilder().setPrettyPrinting().create();
     private static final File dataDir = new File("plugins/Thievery/playerdata");

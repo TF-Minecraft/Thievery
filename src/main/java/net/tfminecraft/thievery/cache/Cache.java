@@ -8,7 +8,9 @@ import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 
-public class Cache {
+public final class Cache {
+
+    private Cache() {}
     public static int cooldown;
     public static int radius;
 

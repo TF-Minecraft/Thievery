@@ -49,7 +49,7 @@ public class PlayerData {
     }
 
     public void setPoints(int points) {
-        this.points = Math.min(Math.max(0, points), Cache.categoryPoints);
+        this.points = Math.max(0, Math.min(points, Cache.categoryPoints));
     }
 
     public long getLastGain() {

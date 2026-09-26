@@ -151,7 +151,7 @@ public class DoorManager implements Listener {
 
     // Keep the existing legacy text representation, formatting, and exact-string comparisons.
     @SuppressWarnings("deprecation")
-    @EventHandler
+    @EventHandler(ignoreCancelled = true)
     public void onBlockBreak(BlockBreakEvent event) {
         Block block = event.getBlock();
         Player player = event.getPlayer();
@@ -169,14 +169,14 @@ public class DoorManager implements Listener {
         }
 
         if (player.getGameMode() == GameMode.CREATIVE) {
-            scheduleLockRemovalAfterBreak(event, lockedDoor, block.getType());
+            scheduleLockRemovalAfterBreak(event, lockedDoor, lockedDoor.getBlock().getType());
             return;
         }
 
         if (KeychainHandler.matchesDoor(player.getInventory().getItemInMainHand(), data.getKey(),
                 DoorKeyPurpose.UNLOCK_OR_BREAK)) {
-            // Correct key held — allow break and always clean up door data
-            doorDataManager.deleteDoorData(lockedDoor);
+            // Keep the lock until the break has actually removed the door.
+            scheduleLockRemovalAfterBreak(event, lockedDoor, lockedDoor.getBlock().getType());
         } else {
             event.setCancelled(true);
             player.sendTitle(ThieveryTexts.msg(ThieveryTexts.ERROR + "This door is locked."), "", 5, 30, 10);
@@ -209,10 +209,8 @@ public class DoorManager implements Listener {
     // --- Helpers ---
 
     private boolean isDoorOpen(Block block) {
-        if (block.getBlockData() instanceof Openable openable) {
-            return openable.isOpen();
-        }
-        return false;
+        // Both callers have already established a door, trapdoor, or fence gate.
+        return ((Openable) block.getBlockData()).isOpen();
     }
 
     private boolean isTrapdoor(Block block) {
@@ -236,7 +234,8 @@ public class DoorManager implements Listener {
     }
 
     private String getKeyUUID(ItemStack item) {
-        if (item == null || !item.hasItemMeta()) return null;
+        // Called only for a held item accepted by ToolResolver.isLockingKey.
+        if (!item.hasItemMeta()) return null;
         ItemMeta meta = item.getItemMeta();
         if (!meta.getPersistentDataContainer().has(Keys.keyUUIDKey, PersistentDataType.STRING)) return null;
         return meta.getPersistentDataContainer().get(Keys.keyUUIDKey, PersistentDataType.STRING);
@@ -265,10 +264,9 @@ public class DoorManager implements Listener {
             }
             return;
         }
-        if (KeychainHandler.isKeychain(heldItem)) {
-            ItemStack updated = KeychainHandler.consumePaperKeyForDoor(heldItem, doorKeyUuid);
-            player.getInventory().setItemInMainHand(updated);
-        }
+        // A resolved paper match comes from either the held paper key or its keychain.
+        ItemStack updated = KeychainHandler.consumePaperKeyForDoor(heldItem, doorKeyUuid);
+        player.getInventory().setItemInMainHand(updated);
     }
 
     // --- Lockpick helpers ---
@@ -295,12 +293,6 @@ public class DoorManager implements Listener {
         }
         if (access.type == GuildChecker.LockpickAccessResult.Type.WARN) {
             player.sendMessage(ThieveryTexts.msg(ThieveryTexts.WARN + access.message));
-        }
-        double debuffFactor = lockPickManager.getDebuffFactor(player.getUniqueId(), canonical);
-        if (debuffFactor > 0) {
-            int penalty = (int) Math.round(debuffFactor * 100);
-            long seconds = lockPickManager.getCooldownRemainingSeconds(player.getUniqueId(), canonical);
-            player.sendMessage(ThieveryTexts.msg(ThieveryTexts.WARN + "Lockpicking with " + penalty + "% penalty (" + seconds + "s)"));
         }
         double lockpickStrength = ToolResolver.getLockpickStrength(player.getInventory().getItemInMainHand());
         double requiredStrength = data.getStrength() * Parameters.lockpickMinLockStrengthRatio;
@@ -377,7 +369,7 @@ public class DoorManager implements Listener {
 
     private void scheduleLockRemovalAfterBreak(BlockBreakEvent event, Location lockedDoor, Material brokenType) {
         Bukkit.getScheduler().runTaskLater(Thievery.getInstance(), () -> {
-            if (lockedDoor.getBlock().getType() == brokenType) {
+            if (event.isCancelled() || lockedDoor.getBlock().getType() == brokenType) {
                 return;
             }
             doorDataManager.deleteDoorData(lockedDoor);
@@ -412,4 +404,3 @@ public class DoorManager implements Listener {
     }
 
 }
-

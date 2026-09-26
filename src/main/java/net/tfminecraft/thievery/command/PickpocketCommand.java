@@ -3,6 +3,7 @@ package net.tfminecraft.thievery.command;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -58,7 +59,7 @@ public class PickpocketCommand implements CommandExecutor, TabCompleter {
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
             List<String> options = new ArrayList<>();
-            String prefix = args[0].toLowerCase();
+            String prefix = args[0].toLowerCase(Locale.ROOT);
             if ("start".startsWith(prefix)) {
                 options.add("start");
             }

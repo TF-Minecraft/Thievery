@@ -2,6 +2,7 @@ package net.tfminecraft.thievery.steal;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 import org.bukkit.Sound;
@@ -82,7 +83,7 @@ public class DisplayStealManager implements Listener {
     }
 
     static String formatLockState(LockState lockState) {
-        String value = lockState.name().toLowerCase();
+        String value = lockState.name().toLowerCase(Locale.ROOT);
         return Character.toUpperCase(value.charAt(0)) + value.substring(1);
     }
 
@@ -191,13 +192,6 @@ public class DisplayStealManager implements Listener {
         if (!DisplayLoot.hasAnything(slots, thiefData, lockpickDef.getCapacity())) {
             player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "Nothing here is worth stealing."));
             return;
-        }
-
-        double debuffFactor = lockPickManager.getDebuffFactor(player.getUniqueId(), targetId);
-        if (debuffFactor > 0) {
-            int penalty = (int) Math.round(debuffFactor * 100);
-            long seconds = lockPickManager.getCooldownRemainingSeconds(player.getUniqueId(), targetId);
-            player.sendMessage(ThieveryTexts.msg(ThieveryTexts.WARN + "Lockpicking with " + penalty + "% penalty (" + seconds + "s)"));
         }
 
         double effectiveStrength = Parameters.displayLockStrength

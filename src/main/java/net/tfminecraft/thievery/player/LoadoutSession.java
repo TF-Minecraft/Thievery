@@ -12,7 +12,6 @@ public class LoadoutSession {
     public enum ToggleResult {
         TOGGLED_ON,
         TOGGLED_OFF,
-        NO_CHANGE,
         ALLOCATION_FULL,
         NOT_ENOUGH_BANK,
         UNKNOWN_CATEGORY

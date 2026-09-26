@@ -4,10 +4,6 @@ import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.bukkit.inventory.ItemStack;
-
-import net.tfminecraft.tlibs.TLibs;
-
 public final class CategorySlugs {
 
     public enum SlugSpecificity {
@@ -116,36 +112,5 @@ public final class CategorySlugs {
     public static int materialTier(String slug) {
         Matcher matcher = MATERIAL.matcher(slug.trim());
         return matcher.matches() ? Integer.parseInt(matcher.group(2)) : 0;
-    }
-
-    public static Optional<SlugSpecificity> resolve(String slug, ItemStack item, String itemPath) {
-        if (slug == null || slug.isBlank()) {
-            return Optional.empty();
-        }
-        String trimmed = slug.trim();
-        if (isMaterialSlug(trimmed)) {
-            return Optional.of(SlugSpecificity.MATERIAL_TIER);
-        }
-        if (isGgSlug(trimmed) || isMagicSlug(trimmed) || isCraftSlug(trimmed)) {
-            return Optional.of(SlugSpecificity.CRAFT_REF);
-        }
-        if (isMmoTypeSlug(trimmed)) {
-            if (item != null && !item.getType().isAir()
-                    && TLibs.getItemAPI().getChecker().checkItemWithPath(item, trimmed)) {
-                return Optional.of(SlugSpecificity.MMO_TYPE);
-            }
-            return Optional.empty();
-        }
-        if (isPathSlug(trimmed)) {
-            if (itemPath != null && trimmed.equalsIgnoreCase(itemPath)) {
-                return Optional.of(SlugSpecificity.EXACT_PATH);
-            }
-            if (item != null && !item.getType().isAir()
-                    && TLibs.getItemAPI().getChecker().checkItemWithPath(item, trimmed)) {
-                return Optional.of(SlugSpecificity.FUZZY_PATH);
-            }
-            return Optional.empty();
-        }
-        return Optional.empty();
     }
 }

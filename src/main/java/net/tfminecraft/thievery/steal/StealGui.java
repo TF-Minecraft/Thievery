@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -236,7 +237,7 @@ public final class StealGui {
         meta.setDisplayName(ThieveryTexts.gui(ThieveryTexts.GUI_WARN + "Pouch"));
         List<String> lore = new ArrayList<>();
         lore.add(ThieveryTexts.formatGui(ThieveryTexts.MUTED + "Balance: "
-                + ThieveryTexts.GUI_SUCCESS + String.format("%.2f", balance) + "d"));
+                + ThieveryTexts.GUI_SUCCESS + String.format(Locale.ROOT, "%.2f", balance) + "d"));
         lore.add(" ");
         lore.add(ThieveryTexts.formatGui(ThieveryTexts.MUTED + "Click: "
                 + ThieveryTexts.GUI_SUCCESS + RobberyLoader.getPouchClickAmount() + "d"));
@@ -395,8 +396,6 @@ public final class StealGui {
         int guiSize = layout.getGuiSize();
         Inventory gui = Bukkit.createInventory(holder, guiSize, title);
         ItemStack fillerPane = createFillerPane();
-        Set<Integer> assignedLootSlots = new HashSet<>(layout.getLogicalSlotToGuiSlot().values());
-        assignedLootSlots.add(ROBBERY_POUCH_GUI_SLOT);
 
         for (Map.Entry<Integer, Integer> entry : layout.getLogicalSlotToGuiSlot().entrySet()) {
             int logicalSlot = entry.getKey();
@@ -414,10 +413,8 @@ public final class StealGui {
         placeRobberyPouchSlot(gui, victim, thiefData, budget);
 
         for (int guiSlot = 0; guiSlot < guiSize; guiSlot++) {
-            if (!assignedLootSlots.contains(guiSlot) || gui.getItem(guiSlot) == null) {
-                if (gui.getItem(guiSlot) == null) {
-                    gui.setItem(guiSlot, fillerPane);
-                }
+            if (gui.getItem(guiSlot) == null) {
+                gui.setItem(guiSlot, fillerPane);
             }
         }
         return gui;

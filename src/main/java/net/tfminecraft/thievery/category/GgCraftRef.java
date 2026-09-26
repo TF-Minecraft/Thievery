@@ -61,9 +61,6 @@ public final class GgCraftRef {
         if (item == null || item.getType().isAir() || !item.hasItemMeta()) {
             return Optional.empty();
         }
-        if (GUN_TYPE == null || MAJORITY_TIER == null) {
-            return Optional.empty();
-        }
         var pdc = item.getItemMeta().getPersistentDataContainer();
         String type = pdc.get(GUN_TYPE, PersistentDataType.STRING);
         Integer tier = pdc.get(MAJORITY_TIER, PersistentDataType.INTEGER);
@@ -86,9 +83,6 @@ public final class GgCraftRef {
     }
 
     public String getDisplayName() {
-        if (gunType.isEmpty()) {
-            return rawId;
-        }
         return Character.toUpperCase(gunType.charAt(0)) + gunType.substring(1);
     }
 

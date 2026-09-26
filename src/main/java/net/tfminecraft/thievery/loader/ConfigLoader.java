@@ -2,6 +2,7 @@ package net.tfminecraft.thievery.loader;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Locale;
 
 import org.bukkit.Material;
 import org.bukkit.entity.EntityType;
@@ -104,7 +105,7 @@ public class ConfigLoader {
         Parameters.doorUnlockWindowMs = config.getLong("lockpicking.door-unlock-window-minutes", 60L)
                 * 60L * 1000L;
 
-        Parameters.barLength = config.getInt("lockpicking.bar.length", 20);
+        Parameters.barLength = Math.max(1, config.getInt("lockpicking.bar.length", 20));
         Parameters.maxSuccessSlots = config.getInt("lockpicking.bar.max-success-slots", 3);
         Parameters.minBreakSlots = config.getInt("lockpicking.bar.min-break-slots", 3);
         Parameters.maxBreakSlots = config.getInt("lockpicking.bar.max-break-slots", 19);
@@ -128,12 +129,12 @@ public class ConfigLoader {
             return;
         }
         for (String key : types.getKeys(false)) {
-            if (key == null || key.isBlank()) {
+            if (key.isBlank()) {
                 continue;
             }
             LockState state;
             try {
-                state = LockState.valueOf(key.trim().toUpperCase());
+                state = LockState.valueOf(key.trim().toUpperCase(Locale.ROOT));
             } catch (IllegalArgumentException ignored) {
                 Thievery.getInstance().getLogger().warning("Unknown lockpicking lock type: " + key);
                 continue;
@@ -150,10 +151,10 @@ public class ConfigLoader {
     private static java.util.Set<Material> loadExcludedContainers(FileConfiguration config) {
         java.util.Set<Material> excluded = java.util.EnumSet.noneOf(Material.class);
         for (String entry : config.getStringList("lockpicking.excluded-containers")) {
-            if (entry == null || entry.isBlank()) {
+            if (entry.isBlank()) {
                 continue;
             }
-            Material material = Material.matchMaterial(entry.trim().toUpperCase());
+            Material material = Material.matchMaterial(entry.trim().toUpperCase(Locale.ROOT));
             if (material == null) {
                 Thievery.getInstance().getLogger().warning(
                         "Unknown lockpicking excluded container material: " + entry);
@@ -170,10 +171,10 @@ public class ConfigLoader {
     private static java.util.Set<String> loadLockableFurnitureIds(FileConfiguration config) {
         java.util.Set<String> ids = new java.util.HashSet<>();
         for (String entry : config.getStringList("lockpicking.lockable-furniture")) {
-            if (entry == null || entry.isBlank()) {
+            if (entry.isBlank()) {
                 continue;
             }
-            ids.add(entry.trim().toLowerCase());
+            ids.add(entry.trim().toLowerCase(Locale.ROOT));
         }
         return ids;
     }
@@ -181,11 +182,11 @@ public class ConfigLoader {
     private static java.util.Set<EntityType> loadLockableEntityTypes(FileConfiguration config) {
         java.util.Set<EntityType> types = java.util.EnumSet.noneOf(EntityType.class);
         for (String entry : config.getStringList("lockpicking.lockable-entities")) {
-            if (entry == null || entry.isBlank()) {
+            if (entry.isBlank()) {
                 continue;
             }
             try {
-                types.add(EntityType.valueOf(entry.trim().toUpperCase()));
+                types.add(EntityType.valueOf(entry.trim().toUpperCase(Locale.ROOT)));
             } catch (IllegalArgumentException ignored) {
                 Thievery.getInstance().getLogger().warning(
                         "Unknown lockpicking lockable entity type: " + entry);

@@ -149,9 +149,6 @@ public final class KeyCopyHandler {
             return true;
         }
         ItemMeta meta = item.getItemMeta();
-        if (meta == null) {
-            return false;
-        }
         meta.getPersistentDataContainer().set(Keys.keyUUIDKey, PersistentDataType.STRING,
                 UUID.randomUUID().toString());
         item.setItemMeta(meta);
@@ -221,9 +218,6 @@ public final class KeyCopyHandler {
         ItemStack result = item.clone();
         result.setAmount(1);
         ItemMeta meta = result.getItemMeta();
-        if (meta == null) {
-            return null;
-        }
         meta.getPersistentDataContainer().set(Keys.keyUUIDKey, PersistentDataType.STRING, metadata.getDoorKeyUuid());
         meta.getPersistentDataContainer().set(Keys.keySourceStrength, PersistentDataType.DOUBLE,
                 metadata.getSourceStrength());
@@ -242,7 +236,7 @@ public final class KeyCopyHandler {
     }
 
     private static boolean hasCopyKind(ItemStack item) {
-        if (item == null || !item.hasItemMeta()) {
+        if (!item.hasItemMeta()) {
             return false;
         }
         return item.getItemMeta().getPersistentDataContainer().has(Keys.keyCopyKind, PersistentDataType.STRING);

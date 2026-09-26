@@ -29,18 +29,22 @@ public final class DisplayLoot {
     }
 
     public static boolean isEligible(ItemStack item, PlayerData thiefData, double remaining) {
+        return eligibleAmount(item, thiefData, remaining) > 0;
+    }
+
+    private static int eligibleAmount(ItemStack item, PlayerData thiefData, double remaining) {
         if (item == null || item.getType().isAir()) {
-            return false;
+            return 0;
         }
         if (ItemValue.isBundle(item)) {
             if (!ItemValue.hasStealableContents(thiefData, item, remaining)
                     && !CategoryHandler.canRevealItem(thiefData, item)) {
-                return false;
+                return 0;
             }
         } else if (!CategoryHandler.canRevealItem(thiefData, item)) {
-            return false;
+            return 0;
         }
-        return StealBudget.computeTakeableAmount(item, remaining) > 0;
+        return StealBudget.computeTakeableAmount(item, remaining);
     }
 
     public static boolean hasAnything(List<DisplaySlot> slots, PlayerData thiefData, double capacity) {
@@ -65,21 +69,17 @@ public final class DisplayLoot {
         try {
             for (DisplaySlot slot : order) {
                 ItemStack current = slot.get();
-                if (!isEligible(current, thiefData, budget.getRemaining())) {
-                    continue;
-                }
-                int takeable = StealBudget.computeTakeableAmount(current, budget.getRemaining());
+                int takeable = eligibleAmount(current, thiefData, budget.getRemaining());
                 if (takeable <= 0) {
                     continue;
                 }
                 ItemStack toGive = current.clone();
                 toGive.setAmount(takeable);
+                int heldBefore = countSimilar(player, current);
                 HashMap<Integer, ItemStack> leftovers = player.getInventory().addItem(toGive);
                 int leftoverAmount = 0;
                 for (ItemStack leftover : leftovers.values()) {
-                    if (leftover != null) {
-                        leftoverAmount += leftover.getAmount();
-                    }
+                    leftoverAmount += leftover.getAmount();
                 }
                 int added = takeable - leftoverAmount;
                 if (added <= 0) {
@@ -88,11 +88,13 @@ public final class DisplayLoot {
                 ItemStack taken = current.clone();
                 taken.setAmount(added);
                 if (!slot.take(taken)) {
-                    HashMap<Integer, ItemStack> rollback = player.getInventory().removeItem(taken);
-                    if (!rollback.isEmpty()) {
-                        for (ItemStack extra : rollback.values()) {
-                            player.getInventory().addItem(extra);
-                        }
+                    // A cancelling listener may already have removed some provisional loot. Remove only
+                    // what is still above the thief's own stock, never items they held beforehand.
+                    int provisional = Math.min(added, countSimilar(player, current) - heldBefore);
+                    if (provisional > 0) {
+                        ItemStack rollback = current.clone();
+                        rollback.setAmount(provisional);
+                        player.getInventory().removeItem(rollback);
                     }
                     continue;
                 }
@@ -101,5 +103,15 @@ public final class DisplayLoot {
         } finally {
             DUMPING.remove();
         }
+    }
+
+    private static int countSimilar(Player player, ItemStack prototype) {
+        int total = 0;
+        for (ItemStack stack : player.getInventory().getStorageContents()) {
+            if (stack != null && stack.isSimilar(prototype)) {
+                total += stack.getAmount();
+            }
+        }
+        return total;
     }
 }

@@ -57,7 +57,7 @@ public final class GraveStealListener implements Listener {
 	}
 
 	private void tryLoot(Player player, Block block) {
-		if (player == null || block == null) {
+		if (block == null) {
 			return;
 		}
 		Grave grave = GraveManager.get().getAt(block);
@@ -181,9 +181,6 @@ public final class GraveStealListener implements Listener {
 	}
 
 	private static Block inventoryBlock(Inventory inventory) {
-		if (inventory == null) {
-			return null;
-		}
 		InventoryHolder holder = inventory.getHolder();
 		if (holder instanceof BlockState state) {
 			return state.getBlock();

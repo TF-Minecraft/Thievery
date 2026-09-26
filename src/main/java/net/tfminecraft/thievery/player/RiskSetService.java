@@ -1,6 +1,7 @@
 package net.tfminecraft.thievery.player;
 
 import java.io.File;
+import java.util.Locale;
 import java.util.UUID;
 
 import net.tfminecraft.thievery.Thievery;
@@ -58,6 +59,6 @@ public class RiskSetService {
     }
 
     public static String formatRisk(double risk) {
-        return String.format("%.3f", risk);
+        return String.format(Locale.ROOT, "%.3f", risk);
     }
 }

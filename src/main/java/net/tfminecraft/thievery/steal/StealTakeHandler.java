@@ -80,10 +80,6 @@ public final class StealTakeHandler {
             }
         }
 
-        if (takeAmount <= 0) {
-            return false;
-        }
-
         ItemStack toGive = realItem.clone();
         toGive.setAmount(takeAmount);
 
@@ -128,7 +124,7 @@ public final class StealTakeHandler {
             source.setItem(logicalSlot, result.getUpdatedBundle());
         }
         budget.addUsed(result.getValueTaken());
-        if (callback != null && result.isAnyTaken()) {
+        if (callback != null) {
             callback.onAfterTake(robber, realItem, result.getValueTaken(), true, logicalSlot);
         }
         refreshGui.run();

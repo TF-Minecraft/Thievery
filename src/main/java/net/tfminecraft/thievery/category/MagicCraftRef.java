@@ -68,9 +68,6 @@ public final class MagicCraftRef {
         if (item == null || item.getType().isAir() || !item.hasItemMeta()) {
             return Optional.empty();
         }
-        if (ARCHETYPE == null || MAJORITY_TIER == null) {
-            return Optional.empty();
-        }
         var pdc = item.getItemMeta().getPersistentDataContainer();
         String type = pdc.get(ARCHETYPE, PersistentDataType.STRING);
         Integer tier = pdc.get(MAJORITY_TIER, PersistentDataType.INTEGER);
@@ -94,20 +91,16 @@ public final class MagicCraftRef {
             return fills;
         }
         PersistentDataContainer root = item.getItemMeta().getPersistentDataContainer();
-        if (WEAPON_REQ_FILL != null) {
-            PersistentDataContainer fillContainer = root.get(WEAPON_REQ_FILL, PersistentDataType.TAG_CONTAINER);
-            if (fillContainer != null) {
-                for (NamespacedKey key : fillContainer.getKeys()) {
-                    Double value = fillContainer.get(key, PersistentDataType.DOUBLE);
-                    if (value != null) {
-                        fills.put(key.getKey(), value);
-                    }
+        PersistentDataContainer fillContainer = root.get(WEAPON_REQ_FILL, PersistentDataType.TAG_CONTAINER);
+        if (fillContainer != null) {
+            for (NamespacedKey key : fillContainer.getKeys()) {
+                Double value = fillContainer.get(key, PersistentDataType.DOUBLE);
+                if (value != null) {
+                    fills.put(key.getKey(), value);
                 }
             }
         }
-        if (WEAPON_REQ != null) {
-            parseBlob(fills, root.get(WEAPON_REQ, PersistentDataType.STRING));
-        }
+        parseBlob(fills, root.get(WEAPON_REQ, PersistentDataType.STRING));
         return fills;
     }
 
@@ -145,9 +138,6 @@ public final class MagicCraftRef {
     }
 
     public String getDisplayName() {
-        if (gearType.isEmpty()) {
-            return rawId;
-        }
         return Character.toUpperCase(gearType.charAt(0)) + gearType.substring(1);
     }
 

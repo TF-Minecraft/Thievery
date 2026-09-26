@@ -42,15 +42,14 @@ public class InventoryManager implements Listener {
 
     public void openLoadout(Player player) {
         PlayerData playerData = Thievery.getPlayerManager().get(player);
-        sessions.put(player.getUniqueId(), LoadoutSession.from(playerData));
-        renderLoadout(player, 0, true);
+        LoadoutSession session = LoadoutSession.from(playerData);
+        sessions.put(player.getUniqueId(), session);
+        renderLoadout(player, session, 0, true);
     }
 
     // Update the active legacy inventory title; opening a new view or reading its original component title changes behavior.
     @SuppressWarnings({"deprecation"})
-    private void renderLoadout(Player player, int page, boolean open) {
-        LoadoutSession session = sessions.get(player.getUniqueId());
-        if (session == null) return;
+    private void renderLoadout(Player player, LoadoutSession session, int page, boolean open) {
 
         List<ItemCategory> categories = CategoryLoader.getLoadoutCategories();
         int maxPage = Math.max(0, (categories.size() - 1) / CATEGORIES_PER_PAGE);
@@ -64,9 +63,7 @@ public class InventoryManager implements Listener {
                     buildTitle(session)
             );
         } else {
-            if (!(player.getOpenInventory().getTopInventory().getHolder() instanceof LoadoutHolder holder)) {
-                return;
-            }
+            LoadoutHolder holder = (LoadoutHolder) player.getOpenInventory().getTopInventory().getHolder();
             holder.setPage(safePage);
             inv = player.getOpenInventory().getTopInventory();
             inv.clear();
@@ -131,10 +128,8 @@ public class InventoryManager implements Listener {
     private ItemStack createFiller() {
         ItemStack item = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
         ItemMeta meta = item.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName(ThieveryTexts.gui(ThieveryTexts.DARK + " "));
-            item.setItemMeta(meta);
-        }
+        meta.setDisplayName(ThieveryTexts.gui(ThieveryTexts.DARK + " "));
+        item.setItemMeta(meta);
         return item;
     }
 
@@ -143,13 +138,11 @@ public class InventoryManager implements Listener {
     private ItemStack createButton(Material material, String name, String loreLine) {
         ItemStack item = new ItemStack(material);
         ItemMeta meta = item.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName(name);
-            if (loreLine != null) {
-                meta.setLore(List.of(loreLine));
-            }
-            item.setItemMeta(meta);
+        meta.setDisplayName(name);
+        if (loreLine != null) {
+            meta.setLore(List.of(loreLine));
         }
+        item.setItemMeta(meta);
         return item;
     }
 
@@ -158,9 +151,8 @@ public class InventoryManager implements Listener {
         player.closeInventory();
     }
 
-    private void applySession(Player player) {
-        LoadoutSession session = sessions.remove(player.getUniqueId());
-        if (session == null) return;
+    private void applySession(Player player, LoadoutSession session) {
+        sessions.remove(player.getUniqueId());
 
         PlayerData playerData = Thievery.getPlayerManager().get(player);
         playerData.setActiveCategories(List.copyOf(session.getDraftActive()));
@@ -194,32 +186,24 @@ public class InventoryManager implements Listener {
             if (categoryId == null) return;
 
             ToggleResult result = session.toggleCategory(categoryId);
-            switch (result) {
-                case TOGGLED_ON, TOGGLED_OFF -> {
-                    player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BIT, 1f, 1f);
-                    renderLoadout(player, holder.getPage(), false);
-                }
-                case NO_CHANGE -> {}
-                case ALLOCATION_FULL -> {
-                    player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You cannot allocate more than "
-                            + Cache.categoryPoints + " points."));
-                    player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
-                }
-                case NOT_ENOUGH_BANK -> {
-                    player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR
-                            + "You do not have enough bank points for that category."));
-                    player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
-                }
-                case UNKNOWN_CATEGORY -> {
-                    player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "Unknown category."));
-                    player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
-                }
+            String error = switch (result) {
+                case TOGGLED_ON, TOGGLED_OFF -> null;
+                case ALLOCATION_FULL -> "You cannot allocate more than " + Cache.categoryPoints + " points.";
+                case NOT_ENOUGH_BANK -> "You do not have enough bank points for that category.";
+                case UNKNOWN_CATEGORY -> "Unknown category.";
+            };
+            if (error == null) {
+                player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BIT, 1f, 1f);
+                renderLoadout(player, session, holder.getPage(), false);
+            } else {
+                player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + error));
+                player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
             }
             return;
         }
 
         if (slot == SLOT_PREV_PAGE && holder.getPage() > 0) {
-            renderLoadout(player, holder.getPage() - 1, false);
+            renderLoadout(player, session, holder.getPage() - 1, false);
             return;
         }
 
@@ -227,7 +211,7 @@ public class InventoryManager implements Listener {
             List<ItemCategory> categories = CategoryLoader.getLoadoutCategories();
             int maxPage = Math.max(0, (categories.size() - 1) / CATEGORIES_PER_PAGE);
             if (holder.getPage() < maxPage) {
-                renderLoadout(player, holder.getPage() + 1, false);
+                renderLoadout(player, session, holder.getPage() + 1, false);
             }
             return;
         }
@@ -244,7 +228,7 @@ public class InventoryManager implements Listener {
                 return;
             }
             player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BIT, 1f, 1f);
-            applySession(player);
+            applySession(player, session);
         }
     }
 

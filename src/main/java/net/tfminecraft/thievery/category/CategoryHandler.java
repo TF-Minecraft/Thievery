@@ -2,6 +2,7 @@ package net.tfminecraft.thievery.category;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -32,8 +33,7 @@ public final class CategoryHandler {
     public record ResolvedEntry(
             ItemCategory category,
             CategoryItemEntry entry,
-            SlugSpecificity specificity,
-            int yamlOrder) {
+            SlugSpecificity specificity) {
     }
 
     private CategoryHandler() {
@@ -131,28 +131,35 @@ public final class CategoryHandler {
             if (money == null) {
                 return Optional.empty();
             }
-            return Optional.of(new ResolvedEntry(money, null, SlugSpecificity.EXACT_PATH, 0));
+            return Optional.of(new ResolvedEntry(money, null, SlugSpecificity.EXACT_PATH));
         }
 
         String itemPath = pathOf(item);
         ResolvedEntry best = null;
-        int order = 0;
         for (ItemCategory category : CategoryLoader.getAsList()) {
             for (CategoryItemEntry entry : category.getItems()) {
                 if (!matchesDirectSlug(entry.getSlug(), item)) {
                     continue;
                 }
-                Optional<SlugSpecificity> specificity = CategorySlugs.resolve(entry.getSlug(), item, itemPath);
-                if (specificity.isEmpty()) {
-                    continue;
-                }
-                ResolvedEntry candidate = new ResolvedEntry(category, entry, specificity.get(), order++);
+                SlugSpecificity specificity = directMatchSpecificity(entry.getSlug(), itemPath);
+                ResolvedEntry candidate = new ResolvedEntry(category, entry, specificity);
                 if (best == null || candidate.specificity().getRank() > best.specificity().getRank()) {
                     best = candidate;
                 }
             }
         }
         return Optional.ofNullable(best);
+    }
+
+    /** Classifies a slug already accepted by matchesDirectSlug without repeating integration checks. */
+    private static SlugSpecificity directMatchSpecificity(String slug, String itemPath) {
+        if (CategorySlugs.isMaterialSlug(slug)) {
+            return SlugSpecificity.MATERIAL_TIER;
+        }
+        if (CategorySlugs.isMmoTypeSlug(slug)) {
+            return SlugSpecificity.MMO_TYPE;
+        }
+        return slug.trim().equalsIgnoreCase(itemPath) ? SlugSpecificity.EXACT_PATH : SlugSpecificity.FUZZY_PATH;
     }
 
     public static Optional<ResolvedEntry> resolveBestCraftEntry(ItemStack item) {
@@ -166,8 +173,7 @@ public final class CategoryHandler {
             return Optional.empty();
         }
 
-        ResolvedEntry best = null;
-        int order = 0;
+        // Craft references share one specificity, so the first configured match wins.
         for (ItemCategory category : CategoryLoader.getAsList()) {
             for (CategoryItemEntry entry : category.getItems()) {
                 boolean matches = false;
@@ -189,17 +195,12 @@ public final class CategoryHandler {
                         matches = true;
                     }
                 }
-                if (!matches) {
-                    continue;
-                }
-                ResolvedEntry candidate = new ResolvedEntry(
-                        category, entry, SlugSpecificity.CRAFT_REF, order++);
-                if (best == null || candidate.yamlOrder() < best.yamlOrder()) {
-                    best = candidate;
+                if (matches) {
+                    return Optional.of(new ResolvedEntry(category, entry, SlugSpecificity.CRAFT_REF));
                 }
             }
         }
-        return Optional.ofNullable(best);
+        return Optional.empty();
     }
 
     public static Optional<ResolvedEntry> resolveBestEntry(ItemStack item) {
@@ -216,10 +217,8 @@ public final class CategoryHandler {
         if (directEntry.specificity().getRank() > craftEntry.specificity().getRank()) {
             return direct;
         }
-        if (craftEntry.specificity().getRank() > directEntry.specificity().getRank()) {
-            return craft;
-        }
-        return directEntry.yamlOrder() <= craftEntry.yamlOrder() ? direct : craft;
+        // Craft references have rank 2; direct matches have rank 0, 1, 3 or 4.
+        return craft;
     }
 
     public static ItemCategory resolveCraftCategory(ItemStack item) {
@@ -242,15 +241,7 @@ public final class CategoryHandler {
         if (magic != null) {
             return CategoryLoader.getWeightForMagicRef(magic);
         }
-        Optional<ResolvedEntry> best = resolveBestDirectEntry(item);
-        if (best.isEmpty()) {
-            return CategoryLoader.getDefaultWeight();
-        }
-        ResolvedEntry resolved = best.get();
-        if (resolved.entry() != null) {
-            return resolved.entry().getWeight();
-        }
-        return resolved.category().getValue();
+        return weightForResolvedEntry(resolveBestDirectEntry(item).orElse(null));
     }
 
     public static double weightForResolvedEntry(ResolvedEntry resolved) {
@@ -452,7 +443,7 @@ public final class CategoryHandler {
                         lore.addAll(buildAcCraftRefLines(ref, entry.getWeight())));
             } else if (CategorySlugs.isMmoTypeSlug(slug)) {
                 lore.add(formatLine(resolveMmoTypeDisplayName(slug), entry.getWeight()));
-            } else if (CategorySlugs.isPathSlug(slug)) {
+            } else {
                 ItemStack preview = TLibs.getItemAPI().getCreator().getItemFromPath(slug);
                 String itemName = preview != null ? StringFormatter.getName(preview) : slug;
                 lore.add(formatLine(itemName, entry.getWeight()));
@@ -484,23 +475,19 @@ public final class CategoryHandler {
             lore.add(formatLine(itemName, ItemValue.categoryWeightForIngredient(ingredient)));
         }
 
-        if (ThieveryBridge.hasBaseIngredientForType(wantedType, wantedTier)) {
+        Ingredient base = findBaseIngredient(wantedType, wantedTier);
+        if (base != null) {
             String typeName = type != null ? type.getName() : wantedType;
             String label = "Tier " + toRoman(wantedTier) + " " + typeName + " Alloys";
-            lore.add(formatLine(label, estimateAlloyExampleValue(wantedType, wantedTier)));
+            lore.add(formatLine(label, ItemValue.categoryWeightForIngredient(base)));
         }
         return lore;
     }
 
-    private static double estimateAlloyExampleValue(String typeId, int tier) {
-        Ingredient base = findBaseIngredient(typeId, tier);
-        if (base == null) {
-            return 0;
-        }
-        return ItemValue.categoryWeightForIngredient(base);
-    }
-
     private static Ingredient findBaseIngredient(String typeId, int tier) {
+        if (tier <= 0) {
+            return null;
+        }
         for (Ingredient ingredient : ThieveryBridge.getAllIngredients()) {
             if (!ingredient.getIngredientData().getType().getId().equalsIgnoreCase(typeId)) {
                 continue;
@@ -579,7 +566,7 @@ public final class CategoryHandler {
         if (type != null) {
             return type;
         }
-        return types.get(typeId.toUpperCase());
+        return types.get(typeId.toUpperCase(Locale.ROOT));
     }
 
     public static String resolveMmoTypeDisplayName(String slug) {

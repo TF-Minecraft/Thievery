@@ -2,6 +2,7 @@ package net.tfminecraft.thievery.steal;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -69,18 +70,12 @@ public final class StealItemDisplay {
         ItemStack display;
         if (ItemValue.isBundle(realItem)) {
             display = ItemValue.buildDisplayBundle(thiefData, realItem);
-            if (display == null) {
-                return StealGui.createHiddenPane();
-            }
         } else {
             display = realItem.clone();
             display.setAmount(displayAmount);
         }
 
         ItemMeta meta = display.getItemMeta();
-        if (meta == null) {
-            return display;
-        }
 
         List<String> lore = meta.hasLore() ? new ArrayList<>(meta.getLore()) : new ArrayList<>();
         lore.add("");
@@ -171,7 +166,7 @@ public final class StealItemDisplay {
     }
 
     public static String formatValue(double value) {
-        return String.format("%.2f", value);
+        return String.format(Locale.ROOT, "%.2f", value);
     }
 
     public static String formatTimeRemaining(long remainingMs) {

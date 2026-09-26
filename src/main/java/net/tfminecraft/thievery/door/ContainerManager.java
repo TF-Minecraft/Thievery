@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -20,7 +21,6 @@ import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
-import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.BlockState;
@@ -202,7 +202,7 @@ public class ContainerManager implements Listener {
                 .hoverEvent(HoverEvent.showText(Component.text("Click to teleport to thief")));
     }
 
-    @EventHandler
+    @EventHandler(ignoreCancelled = true)
     public void onBlockBreak(BlockBreakEvent event) {
         Block block = event.getBlock();
 
@@ -218,18 +218,16 @@ public class ContainerManager implements Listener {
             Inventory inventory = chest.getInventory();
             if (inventory instanceof DoubleChestInventory doubleChestInventory) {
                 DoubleChest doubleChest = (DoubleChest) doubleChestInventory.getHolder();
-                if (doubleChest != null) {
-                    if (!(doubleChest.getLeftSide() instanceof Chest leftChest)) return;
-                    if (!(doubleChest.getRightSide() instanceof Chest rightChest)) return;
+                Chest leftChest = (Chest) doubleChest.getLeftSide();
+                Chest rightChest = (Chest) doubleChest.getRightSide();
 
-                    ContainerData leftData = containerDataManager.loadContainerData(leftChest.getLocation());
-                    ContainerData rightData = containerDataManager.loadContainerData(rightChest.getLocation());
-                    if (!canAccessLockedDoubleChest(breaker, leftData, rightData)) {
-                        event.setCancelled(true);
-                        breaker.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You do not have access to break this container."));
-                        alertAdminsContainerBreak(breaker, location);
-                        return;
-                    }
+                ContainerData leftData = containerDataManager.loadContainerData(leftChest.getLocation());
+                ContainerData rightData = containerDataManager.loadContainerData(rightChest.getLocation());
+                if (!canAccessLockedDoubleChest(breaker, leftData, rightData)) {
+                    event.setCancelled(true);
+                    breaker.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You do not have access to break this container."));
+                    alertAdminsContainerBreak(breaker, location);
+                    return;
                 }
             }
         }
@@ -242,8 +240,13 @@ public class ContainerManager implements Listener {
             return;
         }
 
-        // Delete container data file
-        containerDataManager.deleteContainerData(location);
+        // Protection listeners may still cancel this event. Keep metadata until
+        // the break completes, and preserve any container now at this location.
+        Bukkit.getScheduler().runTaskLater(Thievery.getInstance(), () -> {
+            if (!event.isCancelled() && !(block.getState() instanceof Container)) {
+                containerDataManager.deleteContainerData(location);
+            }
+        }, 1L);
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -276,9 +279,6 @@ public class ContainerManager implements Listener {
     }
 
     private UUID getOwnerFromInventory(Inventory inv) {
-        if (inv == null) {
-            return null;
-        }
         return getOwnerFromHolder(inv.getHolder(false));
     }
 
@@ -296,10 +296,9 @@ public class ContainerManager implements Listener {
             }
             return containerDataManager.getOwner(rightChest.getLocation());
         }
-        if (holder instanceof Container container) {
-            return containerDataManager.getOwner(container.getLocation());
-        }
-        return null;
+        // Callers only pass container inventories, whose holder is either a
+        // DoubleChest or the Container itself.
+        return containerDataManager.getOwner(((Container) holder).getLocation());
     }
 
 
@@ -436,9 +435,7 @@ public class ContainerManager implements Listener {
             if (neighbor.getType() != type) {
                 continue;
             }
-            if (!(neighbor.getState() instanceof Chest chest)) {
-                continue;
-            }
+            Chest chest = (Chest) neighbor.getState();
             if (chest.getInventory() instanceof DoubleChestInventory) {
                 continue;
             }
@@ -466,7 +463,6 @@ public class ContainerManager implements Listener {
 
         if (inventory instanceof DoubleChestInventory doubleChestInventory) {
             DoubleChest doubleChest = (DoubleChest) doubleChestInventory.getHolder();
-            if (doubleChest == null) return;
 
             Location leftLoc = ((Chest) doubleChest.getLeftSide()).getLocation();
             Location rightLoc = ((Chest) doubleChest.getRightSide()).getLocation();
@@ -521,7 +517,6 @@ public class ContainerManager implements Listener {
         Inventory inventory = container.getInventory();
         if (inventory instanceof DoubleChestInventory doubleChestInventory) {
             DoubleChest doubleChest = (DoubleChest) doubleChestInventory.getHolder();
-            if (doubleChest == null) return;
 
             Location leftLoc = ((Chest) doubleChest.getLeftSide()).getLocation();
             Location rightLoc = ((Chest) doubleChest.getRightSide()).getLocation();
@@ -555,14 +550,11 @@ public class ContainerManager implements Listener {
     }
 
     private String formatLockState(LockState lockState) {
-        String value = lockState.name().toLowerCase();
+        String value = lockState.name().toLowerCase(Locale.ROOT);
         return Character.toUpperCase(value.charAt(0)) + value.substring(1);
     }
 
     private void showParticleOutline(Player p, Location loc, Particle particle) {
-        World world = loc.getWorld();
-        if (world == null) return;
-
         double spacing = 0.1;
         double min = 0.0;
         double max = 1.0;
@@ -654,7 +646,7 @@ public class ContainerManager implements Listener {
         if (event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
         if (event.getClickedBlock() == null) return;
         if (GraveManager.get().isGrave(event.getClickedBlock())) return;
-        if (!(event.getClickedBlock().getState() instanceof Container)) return;
+        if (!(event.getClickedBlock().getState() instanceof Container container)) return;
 
         Player player = event.getPlayer();
         // Only allow if player is holding a lockpick item
@@ -682,19 +674,17 @@ public class ContainerManager implements Listener {
 
         // Only allow lockpicking containers the player cannot already access
         Block clickedBlock = event.getClickedBlock();
-        Inventory blockInv = ((Container) clickedBlock.getState()).getInventory();
+        Inventory blockInv = container.getInventory();
         if (!Cache.debugAllowOwnChest) {
             if (blockInv instanceof DoubleChestInventory doubleInv) {
                 DoubleChest doubleChest = (DoubleChest) doubleInv.getHolder();
-                if (doubleChest != null) {
-                    Location leftLoc = ((Chest) doubleChest.getLeftSide()).getLocation();
-                    Location rightLoc = ((Chest) doubleChest.getRightSide()).getLocation();
-                    ContainerData leftData = containerDataManager.loadContainerData(leftLoc);
-                    ContainerData rightData = containerDataManager.loadContainerData(rightLoc);
-                    if (leftData.canAccess(player) && rightData.canAccess(player)) {
-                        player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You already have access to this container."));
-                        return;
-                    }
+                Location leftLoc = ((Chest) doubleChest.getLeftSide()).getLocation();
+                Location rightLoc = ((Chest) doubleChest.getRightSide()).getLocation();
+                ContainerData leftData = containerDataManager.loadContainerData(leftLoc);
+                ContainerData rightData = containerDataManager.loadContainerData(rightLoc);
+                if (leftData.canAccess(player) && rightData.canAccess(player)) {
+                    player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You already have access to this container."));
+                    return;
                 }
             } else {
                 ContainerData data = containerDataManager.loadContainerData(clickedBlock.getLocation());
@@ -705,7 +695,7 @@ public class ContainerManager implements Listener {
             }
         }
 
-        var ownerUUID = getContainerOwnerUUID(clickedBlock);
+        var ownerUUID = getOwnerFromInventory(blockInv);
         GuildChecker.LockpickAccessResult access = GuildChecker.checkLockpickAccess(ownerUUID);
         if (access.type == GuildChecker.LockpickAccessResult.Type.DENY) {
             player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + access.message));
@@ -720,17 +710,10 @@ public class ContainerManager implements Listener {
             return;
         }
 
-        lockpickChest(event); // proceed to start the system
+        lockpickChest(event, container); // proceed to start the system
     }
 
-    private UUID getContainerOwnerUUID(Block block) {
-        if (!(block.getState() instanceof Container container)) {
-            return null;
-        }
-        return getOwnerFromInventory(container.getInventory());
-    }
-
-    private void lockpickChest(PlayerInteractEvent e) {
+    private void lockpickChest(PlayerInteractEvent e, Container container) {
         Block b = e.getClickedBlock();
         Player p = e.getPlayer();
 
@@ -759,15 +742,12 @@ public class ContainerManager implements Listener {
             return;
         }
 
-        BlockState state = b.getState();
-        if (!(state instanceof Container container)) return;
-
         Inventory chestInv = container.getInventory();
 
         int dexterity = RiskCalculator.getDexterity(p);
         double successChance = ChestLockpickSession.computeSuccessChance(dexterity, lockpickDef.getStrength());
 
-        String targetKey = TargetKeyResolver.resolve(getContainerOwnerUUID(b));
+        String targetKey = TargetKeyResolver.resolve(getOwnerFromInventory(chestInv));
         LockTypeProfile lockType = Parameters.lockTypeProfile(data.getLockState());
         ChestLockpickSession session = new ChestLockpickSession(playerId, b, lockpickDef, successChance, chestInv,
                 targetKey, lockType);
@@ -780,31 +760,26 @@ public class ContainerManager implements Listener {
 
         String today = GuildAccessCooldown.today();
         pingNearbyContainers(p, b.getLocation(), today);
-        recordContainerAccess(p, b, data, playerId, today);
+        recordContainerAccess(p, container, data, playerId, today);
 
         StealManager.getInstance().openSession(p, reference, lockpickInv);
     }
 
-    private void recordContainerAccess(Player player, Block b, ContainerData data, UUID playerId, String today) {
-        BlockState chestState = b.getState();
-        if (!(chestState instanceof Container chest)) return;
-
-        Inventory inventory = chest.getInventory();
+    private void recordContainerAccess(Player player, Container container, ContainerData data, UUID playerId, String today) {
+        Inventory inventory = container.getInventory();
         if (inventory instanceof DoubleChestInventory doubleChestInventory) {
             DoubleChest doubleChest = (DoubleChest) doubleChestInventory.getHolder();
-            if (doubleChest != null) {
-                Chest leftChest = (Chest) doubleChest.getLeftSide();
-                Chest rightChest = (Chest) doubleChest.getRightSide();
+            Chest leftChest = (Chest) doubleChest.getLeftSide();
+            Chest rightChest = (Chest) doubleChest.getRightSide();
 
-                ContainerData leftData = containerDataManager.loadContainerData(leftChest.getLocation());
-                ContainerData rightData = containerDataManager.loadContainerData(rightChest.getLocation());
+            ContainerData leftData = containerDataManager.loadContainerData(leftChest.getLocation());
+            ContainerData rightData = containerDataManager.loadContainerData(rightChest.getLocation());
 
-                leftData.updateAccess(playerId, today);
-                rightData.updateAccess(playerId, today);
+            leftData.updateAccess(playerId, today);
+            rightData.updateAccess(playerId, today);
 
-                containerDataManager.saveContainerData(leftData);
-                containerDataManager.saveContainerData(rightData);
-            }
+            containerDataManager.saveContainerData(leftData);
+            containerDataManager.saveContainerData(rightData);
         } else {
             data.updateAccess(playerId, today);
             containerDataManager.saveContainerData(data);

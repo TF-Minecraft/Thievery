@@ -3,6 +3,7 @@ package net.tfminecraft.thievery.category;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -161,7 +162,7 @@ public final class ItemValue {
         }
         double total = 0;
         for (CraftInput input : inputs) {
-            String kind = input.getKind().toLowerCase();
+            String kind = input.getKind().toLowerCase(Locale.ROOT);
             if (kind.equals("ingredient")) {
                 Ingredient ing = ThieveryBridge.getIngredientById(input.getId());
                 if (ing != null) {
@@ -187,7 +188,7 @@ public final class ItemValue {
         }
         double total = 0;
         for (GemstoneData gem : sockets.getGems()) {
-            String path = "m." + gem.getMMOItemType().toLowerCase() + "." + gem.getMMOItemID().toLowerCase();
+            String path = "m." + gem.getMMOItemType().toLowerCase(Locale.ROOT) + "." + gem.getMMOItemID().toLowerCase(Locale.ROOT);
             total += CategoryLoader.getWeightForPath(path);
         }
         return total;
@@ -215,13 +216,10 @@ public final class ItemValue {
             return CategoryHandler.canRevealItem(thiefData, bundle);
         }
         BundleMeta meta = (BundleMeta) bundle.getItemMeta();
-        if (meta == null || !meta.hasItems()) {
+        if (!meta.hasItems()) {
             return canRevealContainer(thiefData, bundle);
         }
         for (ItemStack inner : meta.getItems()) {
-            if (inner == null || inner.getType().isAir()) {
-                continue;
-            }
             if (CategoryHandler.canRevealItem(thiefData, inner)) {
                 return true;
             }
@@ -234,14 +232,11 @@ public final class ItemValue {
             return CategoryHandler.getPerItemValue(bundle) * bundle.getAmount();
         }
         BundleMeta meta = (BundleMeta) bundle.getItemMeta();
-        if (meta == null || !meta.hasItems()) {
+        if (!meta.hasItems()) {
             return 0;
         }
         double total = 0;
         for (ItemStack inner : meta.getItems()) {
-            if (inner == null || inner.getType().isAir()) {
-                continue;
-            }
             total += CategoryHandler.getPerItemValue(inner) * inner.getAmount();
         }
         return total;
@@ -261,13 +256,10 @@ public final class ItemValue {
         }
         double total = canRevealContainer(thiefData, bundle) ? CategoryHandler.getPerItemValue(bundle) : 0;
         BundleMeta meta = (BundleMeta) bundle.getItemMeta();
-        if (meta == null || !meta.hasItems()) {
+        if (!meta.hasItems()) {
             return total;
         }
         for (ItemStack inner : meta.getItems()) {
-            if (inner == null || inner.getType().isAir()) {
-                continue;
-            }
             if (!CategoryHandler.canRevealItem(thiefData, inner)) {
                 continue;
             }
@@ -281,16 +273,10 @@ public final class ItemValue {
             return null;
         }
         BundleMeta sourceMeta = (BundleMeta) realBundle.getItemMeta();
-        if (sourceMeta == null) {
-            return null;
-        }
 
         List<ItemStack> revealable = new ArrayList<>();
         if (sourceMeta.hasItems()) {
             for (ItemStack inner : sourceMeta.getItems()) {
-                if (inner == null || inner.getType().isAir()) {
-                    continue;
-                }
                 if (!CategoryHandler.canRevealItem(thiefData, inner)) {
                     continue;
                 }
@@ -303,9 +289,6 @@ public final class ItemValue {
 
         ItemStack display = realBundle.clone();
         BundleMeta displayMeta = (BundleMeta) display.getItemMeta();
-        if (displayMeta == null) {
-            return null;
-        }
         displayMeta.setItems(revealable.isEmpty() ? null : revealable);
         display.setItemMeta(displayMeta);
         return display;
@@ -317,13 +300,10 @@ public final class ItemValue {
             return lore;
         }
         BundleMeta meta = (BundleMeta) bundle.getItemMeta();
-        if (meta == null || !meta.hasItems()) {
+        if (!meta.hasItems()) {
             return lore;
         }
         for (ItemStack inner : meta.getItems()) {
-            if (inner == null || inner.getType().isAir()) {
-                continue;
-            }
             if (!CategoryHandler.canRevealItem(thiefData, inner)) {
                 continue;
             }
@@ -342,13 +322,10 @@ public final class ItemValue {
             return false;
         }
         BundleMeta meta = (BundleMeta) bundle.getItemMeta();
-        if (meta == null || !meta.hasItems()) {
+        if (!meta.hasItems()) {
             return false;
         }
         for (ItemStack inner : meta.getItems()) {
-            if (inner == null || inner.getType().isAir()) {
-                continue;
-            }
             if (!CategoryHandler.canRevealItem(thiefData, inner)) {
                 continue;
             }
@@ -365,13 +342,10 @@ public final class ItemValue {
             return false;
         }
         BundleMeta meta = (BundleMeta) bundle.getItemMeta();
-        if (meta == null || !meta.hasItems()) {
+        if (!meta.hasItems()) {
             return true;
         }
         for (ItemStack inner : meta.getItems()) {
-            if (inner == null || inner.getType().isAir()) {
-                continue;
-            }
             if (!CategoryHandler.canRevealItem(thiefData, inner)) {
                 return false;
             }
@@ -389,16 +363,13 @@ public final class ItemValue {
         }
 
         BundleMeta meta = (BundleMeta) bundle.getItemMeta();
-        if (meta == null || !meta.hasItems()) {
+        if (!meta.hasItems()) {
             return 0;
         }
 
         double sum = 0;
         int count = 0;
         for (ItemStack inner : meta.getItems()) {
-            if (inner == null || inner.getType().isAir()) {
-                continue;
-            }
             if (!CategoryHandler.canRevealItem(thiefData, inner)) {
                 continue;
             }
@@ -425,13 +396,18 @@ public final class ItemValue {
         }
 
         BundleMeta meta = (BundleMeta) bundle.getItemMeta();
-        if (meta == null || !meta.hasItems()) {
+        if (!meta.hasItems()) {
             return 0;
         }
 
         List<ItemStack> contents = new ArrayList<>();
         for (ItemStack inner : meta.getItems()) {
-            contents.add(inner == null ? null : inner.clone());
+            contents.add(inner.clone());
+        }
+
+        ItemStack[] storage = player.getInventory().getStorageContents().clone();
+        for (int slot = 0; slot < storage.length; slot++) {
+            storage[slot] = storage[slot] == null ? null : storage[slot].clone();
         }
 
         double budget = capacityRemaining;
@@ -441,7 +417,7 @@ public final class ItemValue {
             progress = false;
             for (int i = 0; i < contents.size(); i++) {
                 ItemStack inner = contents.get(i);
-                if (inner == null || inner.getType().isAir()) {
+                if (inner == null) {
                     continue;
                 }
                 if (!CategoryHandler.canRevealItem(thiefData, inner)) {
@@ -453,7 +429,7 @@ public final class ItemValue {
                     continue;
                 }
 
-                if (StealTakeHandler.maxFitInPlayerInventory(player, inner, 1) < 1) {
+                if (!reservePreviewItem(storage, inner)) {
                     return valueTaken;
                 }
 
@@ -474,6 +450,25 @@ public final class ItemValue {
         return valueTaken;
     }
 
+    /** Reserves one item in a private inventory snapshot, using the same stacking order as a take. */
+    private static boolean reservePreviewItem(ItemStack[] storage, ItemStack item) {
+        for (ItemStack slot : storage) {
+            if (slot != null && !slot.getType().isAir() && slot.isSimilar(item)
+                    && slot.getAmount() < item.getMaxStackSize()) {
+                slot.setAmount(slot.getAmount() + 1);
+                return true;
+            }
+        }
+        for (int index = 0; index < storage.length; index++) {
+            if (storage[index] == null || storage[index].getType().isAir()) {
+                storage[index] = item.clone();
+                storage[index].setAmount(1);
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static BundleTakeResult takeFromBundle(ItemStack bundle, Player player, PlayerData thiefData,
             double capacityRemaining, BundleTakeMode mode) {
         if (!isBundle(bundle)) {
@@ -481,9 +476,6 @@ public final class ItemValue {
         }
 
         BundleMeta meta = (BundleMeta) bundle.getItemMeta();
-        if (meta == null) {
-            return BundleTakeResult.none(bundle);
-        }
 
         if (mode == BundleTakeMode.GREEDY
                 && allInnersStealable(thiefData, bundle)
@@ -504,7 +496,7 @@ public final class ItemValue {
 
         List<ItemStack> contents = new ArrayList<>();
         for (ItemStack inner : meta.getItems()) {
-            contents.add(inner == null ? null : inner.clone());
+            contents.add(inner.clone());
         }
 
         if (mode == BundleTakeMode.ONE) {
@@ -519,9 +511,6 @@ public final class ItemValue {
         List<Integer> affordable = new ArrayList<>();
         for (int i = 0; i < contents.size(); i++) {
             ItemStack inner = contents.get(i);
-            if (inner == null || inner.getType().isAir()) {
-                continue;
-            }
             if (!CategoryHandler.canRevealItem(thiefData, inner)) {
                 continue;
             }
@@ -567,7 +556,7 @@ public final class ItemValue {
             progress = false;
             for (int i = 0; i < contents.size(); i++) {
                 ItemStack inner = contents.get(i);
-                if (inner == null || inner.getType().isAir()) {
+                if (inner == null) {
                     continue;
                 }
                 if (!CategoryHandler.canRevealItem(thiefData, inner)) {
@@ -609,13 +598,10 @@ public final class ItemValue {
             boolean anyTaken) {
         ItemStack updated = bundle.clone();
         BundleMeta meta = (BundleMeta) updated.getItemMeta();
-        if (meta == null) {
-            return new BundleTakeResult(bundle, valueTaken, anyTaken, false);
-        }
 
         List<ItemStack> remaining = new ArrayList<>();
         for (ItemStack inner : contents) {
-            if (inner != null && !inner.getType().isAir()) {
+            if (inner != null) {
                 remaining.add(inner);
             }
         }
@@ -721,9 +707,9 @@ public final class ItemValue {
         }
 
         lines.add(ThieveryTexts.formatDisplay(DIVIDER));
-        lines.add(totalLine("Per item", perItem, true));
+        lines.add(totalLine("Per item", perItem));
         if (item.getAmount() > 1) {
-            lines.add(totalLine("Stack total (×" + item.getAmount() + ")", perItem * item.getAmount(), true));
+            lines.add(totalLine("Stack total (×" + item.getAmount() + ")", perItem * item.getAmount()));
         }
         lines.add(ThieveryTexts.formatDisplay(HEADER));
         return lines;
@@ -735,17 +721,14 @@ public final class ItemValue {
         lines.add(sectionTitle("Bundle", CategoryHandler.getPerItemValue(bundle)));
 
         BundleMeta meta = (BundleMeta) bundle.getItemMeta();
-        if (meta == null || !meta.hasItems()) {
+        if (!meta.hasItems()) {
             lines.add(ThieveryTexts.formatDisplay(ThieveryTexts.MUTED + "  Empty bundle shell only."));
-            lines.add(totalLine("Total", CategoryHandler.getTotalValue(bundle), true));
+            lines.add(totalLine("Total", CategoryHandler.getTotalValue(bundle)));
             return;
         }
 
         double innerTotal = 0;
         for (ItemStack inner : meta.getItems()) {
-            if (inner == null || inner.getType().isAir()) {
-                continue;
-            }
             double innerValue = CategoryHandler.getPerItemValue(inner) * inner.getAmount();
             innerTotal += innerValue;
             lines.add(ThieveryTexts.formatDisplay(ThieveryTexts.MUTED + "  • " + ThieveryTexts.WHITE
@@ -757,7 +740,7 @@ public final class ItemValue {
         lines.add(ThieveryTexts.formatDisplay(DIVIDER));
         lines.add(valueLine("Bundle shell", shell));
         lines.add(valueLine("Contents", innerTotal));
-        lines.add(totalLine("Total", shell + innerTotal, true));
+        lines.add(totalLine("Total", shell + innerTotal));
     }
 
     private static void appendItemHeader(List<String> lines, ItemStack item) {
@@ -912,7 +895,7 @@ public final class ItemValue {
         }
 
         for (CraftInput input : provenance.getInputs()) {
-            String kind = input.getKind().toLowerCase();
+            String kind = input.getKind().toLowerCase(Locale.ROOT);
             if (kind.equals("ingredient")) {
                 Ingredient ing = ThieveryBridge.getIngredientById(input.getId());
                 if (ing != null) {
@@ -966,7 +949,7 @@ public final class ItemValue {
         List<String> details = new ArrayList<>();
         double total = 0;
         for (GemstoneData gem : sockets.getGems()) {
-            String path = "m." + gem.getMMOItemType().toLowerCase() + "." + gem.getMMOItemID().toLowerCase();
+            String path = "m." + gem.getMMOItemType().toLowerCase(Locale.ROOT) + "." + gem.getMMOItemID().toLowerCase(Locale.ROOT);
             double gemValue = CategoryLoader.getWeightForPath(path);
             total += gemValue;
 
@@ -1041,9 +1024,8 @@ public final class ItemValue {
                 + StealItemDisplay.formatValue(value));
     }
 
-    private static String totalLine(String label, double value, boolean bold) {
-        String weight = bold ? "§l" : "";
-        return ThieveryTexts.formatDisplay(ThieveryTexts.MUTED + label + ": " + weight + ThieveryTexts.ACCENT
+    private static String totalLine(String label, double value) {
+        return ThieveryTexts.formatDisplay(ThieveryTexts.MUTED + label + ": §l" + ThieveryTexts.ACCENT
                 + StealItemDisplay.formatValue(value));
     }
 

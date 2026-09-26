@@ -3,6 +3,7 @@ package net.tfminecraft.thievery.cache;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -15,7 +16,9 @@ import net.tfminecraft.thievery.door.LockTypeProfile;
 /**
  * Central tuning parameters for the door locking and lockpicking system.
  */
-public class Parameters {
+public final class Parameters {
+
+    private Parameters() {}
 
     public static double lockpickMaxReduction = 0.5;
 
@@ -78,7 +81,7 @@ public class Parameters {
         if (furnitureId == null || furnitureId.isBlank()) {
             return false;
         }
-        return lockableFurnitureIds.contains(furnitureId.toLowerCase());
+        return lockableFurnitureIds.contains(furnitureId.toLowerCase(Locale.ROOT));
     }
 
     public static boolean isLockableEntityType(EntityType type) {

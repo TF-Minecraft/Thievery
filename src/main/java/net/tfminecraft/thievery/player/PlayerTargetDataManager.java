@@ -176,8 +176,9 @@ public class PlayerTargetDataManager {
             try {
                 UUID victimId = UUID.fromString(file.getName().replace(".json", ""));
                 PlayerTargetData data = load(victimId);
-                boolean changed = data.getRobberyAccessMap().remove(playerId) != null
-                        || data.getPickpocketAccessMap().remove(playerId) != null;
+                boolean robberyChanged = data.getRobberyAccessMap().remove(playerId) != null;
+                boolean pickpocketChanged = data.getPickpocketAccessMap().remove(playerId) != null;
+                boolean changed = robberyChanged || pickpocketChanged;
                 if (changed) {
                     save(data);
                 }
@@ -204,4 +205,3 @@ public class PlayerTargetDataManager {
     }
 
 }
-

@@ -73,6 +73,7 @@ jobs:
           [[ "$final_name" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || exit 1
           echo "jar=target/$final_name.jar" >> "$GITHUB_OUTPUT"
           mvn -B --no-transfer-progress clean verify -DskipTests=false -Dmaven.test.skip=false
+          python3 .github/scripts/check-test-reports.py
 
       - name: Stage only the release JAR
         env:
