@@ -78,6 +78,19 @@ public class DisplayStealManager implements Listener {
         FactionLockTutorial.onLockState(player, lockState);
     }
 
+    // Staff keep the placer as owner, so guild and faction locks still follow the placer's
+    // membership. Skip the faction tutorial because it describes the staff member's own faction.
+    @SuppressWarnings("deprecation")
+    static void notifyStaffLockStateChange(Player player, UUID owner, LockState lockState) {
+        String displayState = formatLockState(lockState);
+        player.sendTitle(
+                ThieveryTexts.msg(ThieveryTexts.ACCENT + "Lock State"),
+                ThieveryTexts.msg(ThieveryTexts.WARN + displayState), 5, 30, 10);
+        player.playSound(player.getLocation(), Sound.BLOCK_IRON_TRAPDOOR_OPEN, 1.0f, 1.0f);
+        player.sendMessage(ThieveryTexts.msg(ThieveryTexts.WARN + "Staff override: lock owned by "
+                + LockAccess.ownerName(owner) + " is now " + displayState + "."));
+    }
+
     static void notifyStaffBypass(Player player) {
         player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "Bypassing lock due to staff"));
     }
@@ -125,6 +138,10 @@ public class DisplayStealManager implements Listener {
         }
         if (owner.equals(player.getUniqueId())) {
             notifyLockStateChange(player, rotate.get());
+            return;
+        }
+        if (player.hasPermission("thievery.admin")) {
+            notifyStaffLockStateChange(player, owner, rotate.get());
             return;
         }
         denyNotOwner(player);

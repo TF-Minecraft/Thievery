@@ -278,6 +278,24 @@ class DisplayStealManagerTest {
     }
 
     @Test
+    void staffCycleForeignDisplayLockStateWithoutTakingOwnership() {
+        HangingBreakByEntityEvent event = mock(HangingBreakByEntityEvent.class);
+        when(event.getEntity()).thenReturn(frame);
+        when(event.getRemover()).thenReturn(player);
+        when(player.isSneaking()).thenReturn(true);
+        when(player.hasPermission("thievery.admin")).thenReturn(true);
+        UUID placer = lock.getOwner();
+        access.when(() -> LockAccess.ownerName(placer)).thenReturn("placer");
+        manager.onHangingBreak(event);
+        verify(event).setCancelled(true);
+        assertEquals(LockState.GUILD, lock.getLockState());
+        assertEquals(placer, lock.getOwner());
+        verify(store).save(lock);
+        verify(player).sendMessage("§eStaff override: lock owned by placer is now Guild.");
+        tutorial.verifyNoInteractions();
+    }
+
+    @Test
     void lockpickStartRejectsInvalidTargetsExistingAccessMissingCluesCooldownAndWeakTools() {
         List<DisplayLoot.DisplaySlot> slots = lootSlots;
         manager.handleLockpick(null, stand, lock.getOwner(), LockState.PRIVATE, slots);
