@@ -133,8 +133,9 @@ public class DoorManager implements Listener {
         }
 
         if (data != null) {
-            // Always allow closing an open door, even without the key
-            if (isDoorOpen(block)) return;
+            // Doors and gates can be closed without a key. Locked trapdoors cannot
+            // be toggled, even when their block data is already open.
+            if (DoorLockInteraction.allowsToggleWithoutKey(isDoorOpen(block), isTrapdoor(block))) return;
 
             if (isUnlockWindowActive(data)) return;
 
@@ -212,6 +213,10 @@ public class DoorManager implements Listener {
             return openable.isOpen();
         }
         return false;
+    }
+
+    private boolean isTrapdoor(Block block) {
+        return Tag.TRAPDOORS.isTagged(block.getType());
     }
 
     private boolean isDoor(Block block) {
