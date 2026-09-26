@@ -198,6 +198,16 @@ class ContainerManagerTest {
         verify(player,times(3)).sendMessage(startsWith("§eStaff override: lock owned by builder"));
         tutorial.verifyNoInteractions();
     }
+    @Test void staffCannotCycleUnownedLocks() {
+        when(player.hasPermission("thievery.admin")).thenReturn(true); when(player.isSneaking()).thenReturn(true);
+        var barrel=block(0,Material.BARREL); var unowned=new ContainerData(barrel.getLocation()); data.put(unowned.getLocation(),unowned);
+        manager.onShiftLeftClickContainer(interact(barrel,Action.LEFT_CLICK_BLOCK));
+        var chest=doubleChest(); var left=new ContainerData(chest.left().getLocation()); var right=new ContainerData(chest.right().getLocation()); data.put(left.getLocation(),left); data.put(right.getLocation(),right);
+        manager.onShiftLeftClickContainer(interact(chest.block(),Action.LEFT_CLICK_BLOCK));
+        assertEquals(LockState.DEFAULT,unowned.getLockState()); assertEquals(LockState.DEFAULT,left.getLockState()); assertEquals(LockState.DEFAULT,right.getLockState());
+        verify(storage,never()).saveContainerData(any());
+        verify(player,times(2)).sendMessage("§cYou can only change the lock state on containers you own.");
+    }
     @Test void owningOnlyLeftDoubleChestHalfCyclesBothHalvesWithoutTransferringOwnership() {
         var chest = doubleChest();
         ContainerData left = lock(chest.block(), player.getUniqueId());

@@ -473,7 +473,8 @@ public class ContainerManager implements Listener {
             UUID leftOwner = leftData.getOwner();
             UUID rightOwner = rightData.getOwner();
             boolean ownsDoubleChest = playerId.equals(leftOwner) || playerId.equals(rightOwner);
-            boolean staffOverride = !ownsDoubleChest && player.hasPermission("thievery.admin");
+            boolean staffOverride = !ownsDoubleChest && (leftOwner != null || rightOwner != null)
+                    && player.hasPermission("thievery.admin");
             if (!ownsDoubleChest && !staffOverride) {
                 player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You can only change the lock state on containers you own."));
                 return;
@@ -497,7 +498,7 @@ public class ContainerManager implements Listener {
         ContainerData data = containerDataManager.loadContainerData(location);
 
         boolean owns = playerId.equals(data.getOwner());
-        boolean staffOverride = !owns && player.hasPermission("thievery.admin");
+        boolean staffOverride = !owns && data.getOwner() != null && player.hasPermission("thievery.admin");
         if (!owns && !staffOverride) {
             player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You can only change the lock state on containers you own."));
             return;
