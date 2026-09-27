@@ -24,6 +24,7 @@ class LockStateLogTest {
     @BeforeEach
     void setUp() {
         coreProtect = mock(CoreProtectAPI.class);
+        when(coreProtect.APIVersion()).thenReturn(LockStateLog.LOCK_CHANGE_API_VERSION);
         thievery = mockStatic(Thievery.class);
         thievery.when(Thievery::getCoreProtect).thenReturn(coreProtect);
         player = mock(Player.class);
@@ -40,23 +41,25 @@ class LockStateLogTest {
     }
 
     @Test
-    void recordsOwnerAndStaffChangesWithTheNewStateInTheUserName() {
+    void recordsOwnerAndStaffChangesUnderThePlayerName() {
         LockStateLog.record(player, location, LockState.FACTION, false);
         LockStateLog.record(player, location, LockState.PUBLIC, true);
-        verify(coreProtect).logInteraction("Owner_lock_faction", location);
-        verify(coreProtect).logInteraction("Owner_staff_lock_public", location);
-        assertEquals("Owner_lock_private", LockStateLog.user("Owner", LockState.PRIVATE, false));
+        verify(coreProtect).logLockChange("Owner", location, "Faction", false);
+        verify(coreProtect).logLockChange("Owner", location, "Public", true);
+        assertEquals("Private", LockStateLog.displayName(LockState.PRIVATE));
     }
 
     @Test
-    void skipsLoggingWithoutCoreProtectOrMissingDetails() {
+    void skipsLoggingWithoutCoreProtectSupportOrMissingDetails() {
         LockStateLog.record(null, location, LockState.GUILD, false);
         LockStateLog.record(player, null, LockState.GUILD, false);
         LockStateLog.record(player, location, null, false);
+        when(coreProtect.APIVersion()).thenReturn(LockStateLog.LOCK_CHANGE_API_VERSION - 1);
+        LockStateLog.record(player, location, LockState.GUILD, false);
         thievery.when(Thievery::getCoreProtect).thenReturn(null);
         LockStateLog.record(player, location, LockState.GUILD, false);
         Cache.coreProtect = false;
         LockStateLog.record(player, location, LockState.GUILD, false);
-        verifyNoInteractions(coreProtect);
+        verify(coreProtect, never()).logLockChange(any(), any(), any(), anyBoolean());
     }
 }

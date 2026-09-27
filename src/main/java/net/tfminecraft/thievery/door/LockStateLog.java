@@ -9,9 +9,11 @@ import net.tfminecraft.coreprotect.CoreProtectAPI;
 import net.tfminecraft.thievery.Thievery;
 import net.tfminecraft.thievery.cache.Cache;
 
-// Records lock state changes as CoreProtect interactions so staff can see who changed a lock and
-// when. The new state is part of the user name, following the "<player>_lockpick" convention.
+// Records lock state changes in CoreProtect so staff can see who changed a lock, to what and when.
 public final class LockStateLog {
+
+    // CoreProtectAPI.logLockChange was added in API version 14.
+    static final int LOCK_CHANGE_API_VERSION = 14;
 
     private LockStateLog() {}
 
@@ -20,13 +22,14 @@ public final class LockStateLog {
             return;
         }
         CoreProtectAPI coreProtect = Thievery.getCoreProtect();
-        if (coreProtect == null) {
+        if (coreProtect == null || coreProtect.APIVersion() < LOCK_CHANGE_API_VERSION) {
             return;
         }
-        coreProtect.logInteraction(user(player.getName(), lockState, staffOverride), location);
+        coreProtect.logLockChange(player.getName(), location, displayName(lockState), staffOverride);
     }
 
-    static String user(String playerName, LockState lockState, boolean staffOverride) {
-        return playerName + (staffOverride ? "_staff" : "") + "_lock_" + lockState.name().toLowerCase(Locale.ROOT);
+    static String displayName(LockState lockState) {
+        String value = lockState.name().toLowerCase(Locale.ROOT);
+        return Character.toUpperCase(value.charAt(0)) + value.substring(1);
     }
 }
