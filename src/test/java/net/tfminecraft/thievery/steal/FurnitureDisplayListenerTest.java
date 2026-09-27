@@ -5,6 +5,7 @@ import static org.mockito.Mockito.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import net.tfminecraft.interactiblefurniture.InteractibleFurniture;
@@ -15,10 +16,12 @@ import net.tfminecraft.interactiblefurniture.furniture.SlotDefinition;
 import net.tfminecraft.thievery.door.FactionLockTutorial;
 import net.tfminecraft.thievery.door.LockAccess;
 import net.tfminecraft.thievery.door.LockState;
+import net.tfminecraft.thievery.door.LockStateLog;
 import net.tfminecraft.thievery.utils.ToolResolver;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.block.BlockFace;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -118,9 +121,21 @@ class FurnitureDisplayListenerTest {
         listener.onFurnitureBreak(new FurnitureBreakEvent(furniture, player));
         assertEquals(player.getUniqueId(), owner.get());
         assertEquals(LockState.DEFAULT, state.get());
-        listener.onFurnitureBreak(new FurnitureBreakEvent(furniture, player));
-        assertEquals(LockState.PRIVATE, state.get());
-        locks.verify(() -> FurnitureLockHelper.rotateLockState(furniture));
+        Location origin = new Location(null, 3, 63, 5);
+        Location below = new Location(null, 3, 62, 5);
+        Location furnitureLocation = mock(Location.class, RETURNS_DEEP_STUBS);
+        when(furnitureLocation.getBlock().getRelative(BlockFace.DOWN).getLocation()).thenReturn(below);
+        when(furniture.getLoc()).thenReturn(furnitureLocation);
+        when(furniture.getOriginBlockLocation()).thenReturn(Optional.of(origin));
+        try (MockedStatic<LockStateLog> log = mockStatic(LockStateLog.class)) {
+            listener.onFurnitureBreak(new FurnitureBreakEvent(furniture, player));
+            log.verify(() -> LockStateLog.record(player, origin, LockState.PRIVATE, false));
+            when(furniture.getOriginBlockLocation()).thenReturn(Optional.empty());
+            listener.onFurnitureBreak(new FurnitureBreakEvent(furniture, player));
+            log.verify(() -> LockStateLog.record(player, below, LockState.GUILD, false));
+        }
+        assertEquals(LockState.GUILD, state.get());
+        locks.verify(() -> FurnitureLockHelper.rotateLockState(furniture), times(2));
     }
 
     @Test

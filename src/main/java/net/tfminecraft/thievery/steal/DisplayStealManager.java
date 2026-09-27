@@ -5,8 +5,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
+import org.bukkit.Location;
 import org.bukkit.Sound;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
@@ -45,6 +47,7 @@ import net.tfminecraft.thievery.door.FactionLockTutorial;
 import net.tfminecraft.thievery.door.LockAccess;
 import net.tfminecraft.thievery.door.LockPickManager;
 import net.tfminecraft.thievery.door.LockState;
+import net.tfminecraft.thievery.door.LockStateLog;
 import net.tfminecraft.thievery.player.LockpickDefinition;
 import net.tfminecraft.thievery.player.PlayerData;
 import net.tfminecraft.thievery.player.RiskCalculator;
@@ -129,19 +132,32 @@ public class DisplayStealManager implements Listener {
         return !(entity instanceof ArmorStand stand) || !stand.isInvisible();
     }
 
-    static void applyToggle(Player player, UUID owner, java.util.function.Consumer<UUID> claim,
-            java.util.function.Supplier<LockState> rotate) {
+    // CoreProtect drops interactions on air, so log display lock changes on the block holding the display.
+    static Location supportLocation(Entity entity) {
+        Block block = entity.getLocation().getBlock();
+        if (entity instanceof Hanging hanging) {
+            return block.getRelative(hanging.getAttachedFace()).getLocation();
+        }
+        return block.getRelative(BlockFace.DOWN).getLocation();
+    }
+
+    static void applyToggle(Player player, java.util.function.Supplier<Location> location, UUID owner,
+            java.util.function.Consumer<UUID> claim, java.util.function.Supplier<LockState> rotate) {
         if (owner == null) {
             claim.accept(player.getUniqueId());
             notifyLockStateChange(player, LockState.DEFAULT);
             return;
         }
         if (owner.equals(player.getUniqueId())) {
-            notifyLockStateChange(player, rotate.get());
+            LockState next = rotate.get();
+            LockStateLog.record(player, location.get(), next, false);
+            notifyLockStateChange(player, next);
             return;
         }
         if (player.hasPermission("thievery.admin")) {
-            notifyStaffLockStateChange(player, owner, rotate.get());
+            LockState next = rotate.get();
+            LockStateLog.record(player, location.get(), next, true);
+            notifyStaffLockStateChange(player, owner, next);
             return;
         }
         denyNotOwner(player);
@@ -406,7 +422,7 @@ public class DisplayStealManager implements Listener {
         EntityLockData data = lockDataManager.load(entity.getUniqueId());
         if (player.isSneaking()) {
             event.setCancelled(true);
-            applyToggle(player, data.getOwner(), owner -> {
+            applyToggle(player, () -> supportLocation(entity), data.getOwner(), owner -> {
                 data.setOwner(owner);
                 data.setLockState(LockState.DEFAULT);
                 lockDataManager.save(data);
@@ -478,7 +494,7 @@ public class DisplayStealManager implements Listener {
         EntityLockData data = lockDataManager.load(entity.getUniqueId());
         if (player.isSneaking()) {
             event.setCancelled(true);
-            applyToggle(player, data.getOwner(), owner -> {
+            applyToggle(player, () -> supportLocation(entity), data.getOwner(), owner -> {
                 data.setOwner(owner);
                 data.setLockState(LockState.DEFAULT);
                 lockDataManager.save(data);
