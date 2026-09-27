@@ -205,7 +205,11 @@ class DisplayStealManagerTest {
         manager.onEntityDamage(event);
         assertEquals(player.getUniqueId(), lock.getOwner());
         assertEquals(LockState.DEFAULT, lock.getLockState());
-        manager.onEntityDamage(event);
+        try (MockedStatic<LockStateLog> log = mockStatic(LockStateLog.class)) {
+            manager.onEntityDamage(event);
+            log.verify(() -> LockStateLog.record(player, stand.getLocation().getBlock().getRelative(BlockFace.DOWN).getLocation(),
+                    LockState.PRIVATE, false));
+        }
         assertEquals(LockState.PRIVATE, lock.getLockState());
         verify(store, times(2)).save(lock);
         lock.setOwner(UUID.randomUUID());
@@ -256,6 +260,7 @@ class DisplayStealManagerTest {
         HangingBreakByEntityEvent event = mock(HangingBreakByEntityEvent.class);
         when(event.getEntity()).thenReturn(frame);
         when(event.getRemover()).thenReturn(player);
+        when(frame.getAttachedFace()).thenReturn(BlockFace.NORTH);
         manager.onHangingBreak(event);
         verify(event).setCancelled(true);
         when(player.isSneaking()).thenReturn(true);
@@ -286,7 +291,12 @@ class DisplayStealManagerTest {
         when(player.hasPermission("thievery.admin")).thenReturn(true);
         UUID placer = lock.getOwner();
         access.when(() -> LockAccess.ownerName(placer)).thenReturn("placer");
-        manager.onHangingBreak(event);
+        when(frame.getAttachedFace()).thenReturn(BlockFace.NORTH);
+        try (MockedStatic<LockStateLog> log = mockStatic(LockStateLog.class)) {
+            manager.onHangingBreak(event);
+            log.verify(() -> LockStateLog.record(player, frame.getLocation().getBlock().getRelative(BlockFace.NORTH).getLocation(),
+                    LockState.GUILD, true));
+        }
         verify(event).setCancelled(true);
         assertEquals(LockState.GUILD, lock.getLockState());
         assertEquals(placer, lock.getOwner());
@@ -443,6 +453,7 @@ class DisplayStealManagerTest {
     @Test
     void hangingDamageDefersLockRotationToHangingBreakExactlyOnce() {
         var realFrame = new org.mockbukkit.mockbukkit.entity.ItemFrameMock(MockBukkit.getMock(), UUID.randomUUID());
+        realFrame.setFacingDirection(BlockFace.SOUTH, true);
         EntityLockData frameLock = new EntityLockData(realFrame.getUniqueId(), player.getUniqueId());
         frameLock.setLockState(LockState.PRIVATE);
         when(store.load(realFrame.getUniqueId())).thenReturn(frameLock);

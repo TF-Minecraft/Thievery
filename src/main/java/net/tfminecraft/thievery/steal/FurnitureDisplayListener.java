@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
+import org.bukkit.block.BlockFace;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -46,6 +48,12 @@ public class FurnitureDisplayListener implements Listener {
         DisplayStealManager.notifyLockStateChange(player, LockState.DEFAULT);
     }
 
+    // CoreProtect drops interactions on air, so prefer the block the furniture was placed on.
+    static Location supportLocation(Furniture furniture) {
+        return furniture.getOriginBlockLocation().orElseGet(
+                () -> furniture.getLoc().getBlock().getRelative(BlockFace.DOWN).getLocation());
+    }
+
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onFurnitureBreak(FurnitureBreakEvent event) {
         Furniture furniture = event.getFurniture();
@@ -55,7 +63,8 @@ public class FurnitureDisplayListener implements Listener {
         Player player = event.getPlayer();
         if (player.isSneaking()) {
             event.setCancelled(true);
-            DisplayStealManager.applyToggle(player, FurnitureLockHelper.getOwner(furniture), owner -> {
+            DisplayStealManager.applyToggle(player, () -> supportLocation(furniture),
+                    FurnitureLockHelper.getOwner(furniture), owner -> {
                 FurnitureLockHelper.setOwner(furniture, owner);
                 FurnitureLockHelper.setLockState(furniture, LockState.DEFAULT);
             }, () -> FurnitureLockHelper.rotateLockState(furniture));

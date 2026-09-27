@@ -485,6 +485,7 @@ public class ContainerManager implements Listener {
 
             containerDataManager.saveContainerData(leftData);
             containerDataManager.saveContainerData(rightData);
+            LockStateLog.record(player, event.getClickedBlock().getLocation(), nextState, staffOverride);
 
             if (staffOverride) {
                 notifyStaffLockStateChange(player, leftOwner != null ? leftOwner : rightOwner, nextState);
@@ -506,6 +507,7 @@ public class ContainerManager implements Listener {
 
         LockState nextState = data.rotateLockState();
         containerDataManager.saveContainerData(data);
+        LockStateLog.record(player, location, nextState, staffOverride);
         if (staffOverride) {
             notifyStaffLockStateChange(player, data.getOwner(), nextState);
         } else {
