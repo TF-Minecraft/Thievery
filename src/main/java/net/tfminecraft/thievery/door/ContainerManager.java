@@ -225,7 +225,7 @@ public class ContainerManager implements Listener {
                 ContainerData rightData = containerDataManager.loadContainerData(rightChest.getLocation());
                 if (!canAccessLockedDoubleChest(breaker, leftData, rightData)) {
                     event.setCancelled(true);
-                    breaker.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You do not have access to break this container."));
+                    LockDenial.send(breaker, LockDenial.deniedState(breaker, leftData, rightData), false);
                     alertAdminsContainerBreak(breaker, location);
                     return;
                 }
@@ -235,7 +235,7 @@ public class ContainerManager implements Listener {
         // Prevent break if player cannot access this container
         if (!canAccessContainer(breaker, data)) {
             event.setCancelled(true);
-            breaker.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You do not have access to break this container."));
+            LockDenial.send(breaker, data.getLockState(), false);
             alertAdminsContainerBreak(breaker, location);
             return;
         }
@@ -358,7 +358,8 @@ public class ContainerManager implements Listener {
 
             if (!canAccessLockedDoubleChest(player, mainData, rightData)) {
                 event.setCancelled(true);
-                player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You do not have access to this container."));
+                LockDenial.send(player, LockDenial.deniedState(player, mainData, rightData),
+                        LockDenial.chestPickable(left.getBlock().getType()));
                 return;
             }
 
@@ -382,7 +383,7 @@ public class ContainerManager implements Listener {
             ContainerData data = containerDataManager.loadContainerData(location);
             if (!canAccessLockedContainer(player, data)) {
                 event.setCancelled(true);
-                player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You do not have access to this container."));
+                LockDenial.send(player, data.getLockState(), LockDenial.chestPickable(container.getBlock().getType()));
                 return;
             }
             handleContainerAccess(location, player);
@@ -476,7 +477,7 @@ public class ContainerManager implements Listener {
             boolean staffOverride = !ownsDoubleChest && (leftOwner != null || rightOwner != null)
                     && player.hasPermission("thievery.admin");
             if (!ownsDoubleChest && !staffOverride) {
-                player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You can only change the lock state on containers you own."));
+                LockDenial.sendNotOwner(player);
                 return;
             }
 
@@ -501,7 +502,7 @@ public class ContainerManager implements Listener {
         boolean owns = playerId.equals(data.getOwner());
         boolean staffOverride = !owns && data.getOwner() != null && player.hasPermission("thievery.admin");
         if (!owns && !staffOverride) {
-            player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You can only change the lock state on containers you own."));
+            LockDenial.sendNotOwner(player);
             return;
         }
 
@@ -539,7 +540,8 @@ public class ContainerManager implements Listener {
 
             if (!canAccessLockedDoubleChest(player, leftData, rightData, false)) {
                 event.setCancelled(true);
-                player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You do not have access to this container."));
+                LockDenial.send(player, LockDenial.deniedState(player, leftData, rightData),
+                        LockDenial.chestPickable(event.getClickedBlock().getType()));
             }
             return;
         }
@@ -548,7 +550,7 @@ public class ContainerManager implements Listener {
         ContainerData data = containerDataManager.loadContainerData(location);
         if (!canAccessLockedContainer(player, data, false)) {
             event.setCancelled(true);
-            player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You do not have access to this container."));
+            LockDenial.send(player, data.getLockState(), LockDenial.chestPickable(event.getClickedBlock().getType()));
         }
     }
 
@@ -694,7 +696,7 @@ public class ContainerManager implements Listener {
                 if(Cache.traits.contains(trait.getId())) hasTrait = true;
             }
             if(!hasTrait) {
-                player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You lack the needed character trait(s) to lockpick!"));
+                player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You lack the training to pick locks!"));
                 return;
             }
         }
@@ -710,13 +712,13 @@ public class ContainerManager implements Listener {
                 ContainerData leftData = containerDataManager.loadContainerData(leftLoc);
                 ContainerData rightData = containerDataManager.loadContainerData(rightLoc);
                 if (leftData.canAccess(player) && rightData.canAccess(player)) {
-                    player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You already have access to this container."));
+                    LockDenial.sendAlreadyOpen(player);
                     return;
                 }
             } else {
                 ContainerData data = containerDataManager.loadContainerData(clickedBlock.getLocation());
                 if (data.canAccess(player)) {
-                    player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You already have access to this container."));
+                    LockDenial.sendAlreadyOpen(player);
                     return;
                 }
             }
@@ -748,7 +750,7 @@ public class ContainerManager implements Listener {
 
         for (ChestLockpickSession active : lockpickingSessions.values()) {
             if (active.getChestBlock().equals(b)) {
-                p.sendMessage(ThieveryTexts.msg(ThieveryTexts.CRITICAL + "Someone is already lockpicking this container!"));
+                p.sendMessage(ThieveryTexts.msg(ThieveryTexts.CRITICAL + "Someone is already picking this lock!"));
                 return;
             }
         }
@@ -765,7 +767,7 @@ public class ContainerManager implements Listener {
             long millisRemaining = GuildAccessCooldown.getMillisRemaining(data.getAccessMap(), p, Cache.cooldown);
             p.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You must wait "
                     + GuildAccessCooldown.formatRemaining(millisRemaining)
-                    + " before attempting to lockpick this container again."));
+                    + " before attempting to lockpick this again."));
             return;
         }
 

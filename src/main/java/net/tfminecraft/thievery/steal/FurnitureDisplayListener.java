@@ -73,7 +73,7 @@ public class FurnitureDisplayListener implements Listener {
         if (!DisplayStealManager.canUse(player, FurnitureLockHelper.getOwner(furniture),
                 FurnitureLockHelper.getLockState(furniture), true)) {
             event.setCancelled(true);
-            DisplayStealManager.denyAccess(player);
+            DisplayStealManager.denyAccess(player, FurnitureLockHelper.getLockState(furniture), false);
         }
     }
 
@@ -94,7 +94,7 @@ public class FurnitureDisplayListener implements Listener {
         if (!DisplayStealManager.canUse(player, FurnitureLockHelper.getOwner(furniture),
                 FurnitureLockHelper.getLockState(furniture), false)) {
             event.setCancelled(true);
-            DisplayStealManager.denyAccess(player);
+            DisplayStealManager.denyAccess(player, FurnitureLockHelper.getLockState(furniture), true);
         }
     }
 
@@ -111,7 +111,7 @@ public class FurnitureDisplayListener implements Listener {
         if (!DisplayStealManager.canUse(player, FurnitureLockHelper.getOwner(furniture),
                 FurnitureLockHelper.getLockState(furniture), true)) {
             event.setCancelled(true);
-            DisplayStealManager.denyAccess(player);
+            DisplayStealManager.denyAccess(player, FurnitureLockHelper.getLockState(furniture), true);
         }
     }
 
@@ -125,7 +125,7 @@ public class FurnitureDisplayListener implements Listener {
         if (!DisplayStealManager.canUse(player, FurnitureLockHelper.getOwner(furniture),
                 FurnitureLockHelper.getLockState(furniture), true)) {
             event.setCancelled(true);
-            DisplayStealManager.denyAccess(player);
+            DisplayStealManager.denyAccess(player, FurnitureLockHelper.getLockState(furniture), false);
         }
     }
 

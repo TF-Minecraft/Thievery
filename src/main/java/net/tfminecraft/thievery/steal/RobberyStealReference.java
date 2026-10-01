@@ -52,7 +52,7 @@ public class RobberyStealReference extends StealReference {
         }
         Player victim = Bukkit.getPlayer(session.getVictimId());
         if (victim == null || !victim.isOnline()) {
-            thief.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "The victim is no longer available."));
+            thief.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "Your victim has slipped away."));
             onEnd.run();
             return;
         }
@@ -81,7 +81,7 @@ public class RobberyStealReference extends StealReference {
         if (guiSlot == StealGui.ROBBERY_POUCH_GUI_SLOT && StealGui.isRobberyPouchPane(clickedItem)) {
             Player victim = Bukkit.getPlayer(session.getVictimId());
             if (victim == null || !victim.isOnline()) {
-                robber.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "The victim is no longer available."));
+                robber.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "Your victim has slipped away."));
                 onEnd.run();
                 return;
             }
@@ -112,7 +112,7 @@ public class RobberyStealReference extends StealReference {
 
         Player victim = Bukkit.getPlayer(session.getVictimId());
         if (victim == null || !victim.isOnline()) {
-            robber.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "The victim is no longer available."));
+            robber.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "Your victim has slipped away."));
             onEnd.run();
             return;
         }

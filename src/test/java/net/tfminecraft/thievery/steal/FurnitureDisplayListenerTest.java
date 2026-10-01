@@ -116,7 +116,7 @@ class FurnitureDisplayListenerTest {
         FurnitureBreakEvent event = new FurnitureBreakEvent(furniture, player);
         listener.onFurnitureBreak(event);
         assertTrue(event.isCancelled());
-        verify(player).sendMessage(contains("containers you own"));
+        verify(player).sendMessage(contains("Only the owner can change this lock"));
         owner.set(null);
         listener.onFurnitureBreak(new FurnitureBreakEvent(furniture, player));
         assertEquals(player.getUniqueId(), owner.get());

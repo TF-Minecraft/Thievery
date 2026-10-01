@@ -45,6 +45,7 @@ import net.tfminecraft.thievery.door.EntityLockData;
 import net.tfminecraft.thievery.door.EntityLockDataManager;
 import net.tfminecraft.thievery.door.FactionLockTutorial;
 import net.tfminecraft.thievery.door.LockAccess;
+import net.tfminecraft.thievery.door.LockDenial;
 import net.tfminecraft.thievery.door.LockPickManager;
 import net.tfminecraft.thievery.door.LockState;
 import net.tfminecraft.thievery.door.LockStateLog;
@@ -116,13 +117,13 @@ public class DisplayStealManager implements Listener {
         return false;
     }
 
-    static void denyAccess(Player player) {
-        player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You do not have access to this container."));
+    // Every lockable display can be picked, so the hint depends only on whether the player was using it.
+    static void denyAccess(Player player, LockState lockState, boolean pickable) {
+        LockDenial.send(player, lockState, pickable);
     }
 
     static void denyNotOwner(Player player) {
-        player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR
-                + "You can only change the lock state on containers you own."));
+        LockDenial.sendNotOwner(player);
     }
 
     static boolean isLockableDisplay(Entity entity) {
@@ -183,7 +184,7 @@ public class DisplayStealManager implements Listener {
             return;
         }
         if (canUse(player, owner, lockState, false) && !Cache.debugAllowOwnChest) {
-            player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You already have access to this container."));
+            LockDenial.sendAlreadyOpen(player);
             return;
         }
         if (!ClueChecker.hasEnoughClues(player)) {
@@ -290,7 +291,7 @@ public class DisplayStealManager implements Listener {
                 return true;
             }
         }
-        player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You lack the needed character trait(s) to lockpick!"));
+        player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You lack the training to pick locks!"));
         return false;
     }
 
@@ -435,7 +436,7 @@ public class DisplayStealManager implements Listener {
         }
         if (!canUse(player, data.getOwner(), data.getLockState(), true)) {
             event.setCancelled(true);
-            denyAccess(player);
+            denyAccess(player, data.getLockState(), false);
         }
     }
 
@@ -455,7 +456,7 @@ public class DisplayStealManager implements Listener {
         EntityLockData data = lockDataManager.load(entity.getUniqueId());
         if (!canUse(player, data.getOwner(), data.getLockState(), true)) {
             event.setCancelled(true);
-            denyAccess(player);
+            denyAccess(player, data.getLockState(), true);
         }
     }
 
@@ -478,7 +479,7 @@ public class DisplayStealManager implements Listener {
         EntityLockData data = lockDataManager.load(entity.getUniqueId());
         if (!canUse(player, data.getOwner(), data.getLockState(), false)) {
             event.setCancelled(true);
-            denyAccess(player);
+            denyAccess(player, data.getLockState(), true);
         }
     }
 
@@ -507,7 +508,7 @@ public class DisplayStealManager implements Listener {
         }
         if (!canUse(player, data.getOwner(), data.getLockState(), true)) {
             event.setCancelled(true);
-            denyAccess(player);
+            denyAccess(player, data.getLockState(), false);
         }
     }
 
@@ -527,7 +528,7 @@ public class DisplayStealManager implements Listener {
             EntityLockData data = lockDataManager.load(hanging.getUniqueId());
             if (!canUse(player, data.getOwner(), data.getLockState(), true)) {
                 event.setCancelled(true);
-                denyAccess(player);
+                denyAccess(player, data.getLockState(), false);
                 return;
             }
         }

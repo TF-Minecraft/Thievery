@@ -76,7 +76,7 @@ public class RobberyManager implements Listener {
 
         Player robber = Bukkit.getPlayer(session.getRobberId());
         if (robber == null || !robber.isOnline()) {
-            victim.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "The robber is no longer available."));
+            victim.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "The robber has gone."));
             endSession(session, false);
             return false;
         }
@@ -125,7 +125,7 @@ public class RobberyManager implements Listener {
             return;
         }
         if (!RobberyUtil.isWithinRange(robber, victim, RobberyLoader.getMaxDistance())) {
-            robber.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "That player is too far away."));
+            robber.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "They are too far away."));
             return;
         }
 
@@ -136,7 +136,7 @@ public class RobberyManager implements Listener {
                     RobberyLoader.getCooldownDays());
             robber.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "Your guild must wait "
                     + GuildAccessCooldown.formatRemaining(remaining)
-                    + " before targeting this player again."));
+                    + " before targeting them again."));
             return;
         }
 

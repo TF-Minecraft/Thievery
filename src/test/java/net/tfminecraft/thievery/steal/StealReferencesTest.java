@@ -151,7 +151,7 @@ class StealReferencesTest {
         Runnable close = mock(Runnable.class); var ref = new ChestStealReference(session, close);
         Inventory inv = inventory(ref); int slot = session.getLayout().getGuiSlotForLogical(0);
         assertSame(session, ref.getSession()); assertEquals("Chest title", ref.buildTitle(thief));
-        ref.onOpen(thief, inv); assertTrue(thief.nextMessage().contains("probe the container"));
+        ref.onOpen(thief, inv); assertTrue(thief.nextMessage().contains("probe inside"));
         ref.revealSlot(thief, inv, slot);
         assertTrue(session.isRevealed(slot));
         verify(data).addRiskGain(7, 0.6, RiskSource.CHEST, 1.0); database.verify(() -> Database.savePlayerData(data));
@@ -207,7 +207,7 @@ class StealReferencesTest {
         gui.verify(() -> StealGui.placeRevealedSlot(inv, slot, loot, session.getBudget(), data));
         assertInstanceOf(PlayerStealSource.class, ref.getSource(thief));
         ref.onClose(thief); verify(close).run();
-        victim.disconnect(); assertFalse(ref.validateTarget(thief)); assertTrue(thief.nextMessage().contains("no longer available"));
+        victim.disconnect(); assertFalse(ref.validateTarget(thief)); assertTrue(thief.nextMessage().contains("slipped away"));
         verify(manager).endSession(thief.getUniqueId(), true);
         assertFalse(ref.onBeforeReveal(thief, inv, slot)); assertNull(ref.getSource(thief)); ref.refreshGui(thief, inv);
     }
@@ -252,7 +252,7 @@ class StealReferencesTest {
         session.setState(RobberySession.State.ACTIVE); session.setActiveEndMs(0); ref.tick(thief);
         assertTrue(thief.nextMessage().contains("window has ended")); verify(end).run();
         clearInvocations(end); session.setActiveEndMs(System.currentTimeMillis() + 60000); victim.disconnect(); ref.tick(thief);
-        assertTrue(thief.nextMessage().contains("no longer available")); verify(end).run();
+        assertTrue(thief.nextMessage().contains("slipped away")); verify(end).run();
         ref.onClose(thief); verify(end, times(2)).run();
     }
 
@@ -278,7 +278,7 @@ class StealReferencesTest {
             ref.handleClick(click(inv, slot, loot, ClickType.LEFT), thief);
             gui.verify(() -> StealGui.placeRobberyPouchSlot(inv, victim, data, session.getBudget()));
             victim.disconnect(); ref.handleClick(click(inv, slot, loot, ClickType.LEFT), thief);
-            assertTrue(thief.nextMessage().contains("no longer available")); verify(end).run();
+            assertTrue(thief.nextMessage().contains("slipped away")); verify(end).run();
         }
     }
 
@@ -296,7 +296,7 @@ class StealReferencesTest {
             money.when(() -> DenarMoney.getPouchBalance(victim)).thenReturn(0.0);
             ref.handleClick(click(inv, StealGui.ROBBERY_POUCH_GUI_SLOT, pouch, ClickType.LEFT), thief); assertEquals(100, session.getBudget().getUsed());
             victim.disconnect(); ref.handleClick(click(inv, StealGui.ROBBERY_POUCH_GUI_SLOT, pouch, ClickType.LEFT), thief);
-            assertTrue(thief.nextMessage().contains("no longer available")); verify(end).run();
+            assertTrue(thief.nextMessage().contains("slipped away")); verify(end).run();
         }
     }
 
@@ -326,9 +326,9 @@ class StealReferencesTest {
         // A platform lookup may retain the handle while disconnect processing finishes.
         try(var bukkit=mockStatic(org.bukkit.Bukkit.class,CALLS_REAL_METHODS);var takes=mockStatic(StealTakeHandler.class);var money=mockStatic(DenarMoney.class)) {
             bukkit.when(()->org.bukkit.Bukkit.getPlayer(victim.getUniqueId())).thenReturn(victim);
-            ref.tick(thief);assertTrue(thief.nextMessage().contains("no longer available"));
-            ref.handleClick(click(inv,session.getLayout().getGuiSlotForLogical(0),loot,ClickType.LEFT),thief);assertTrue(thief.nextMessage().contains("no longer available"));
-            ref.handleClick(click(inv,StealGui.ROBBERY_POUCH_GUI_SLOT,pouch,ClickType.LEFT),thief);assertTrue(thief.nextMessage().contains("no longer available"));
+            ref.tick(thief);assertTrue(thief.nextMessage().contains("slipped away"));
+            ref.handleClick(click(inv,session.getLayout().getGuiSlotForLogical(0),loot,ClickType.LEFT),thief);assertTrue(thief.nextMessage().contains("slipped away"));
+            ref.handleClick(click(inv,StealGui.ROBBERY_POUCH_GUI_SLOT,pouch,ClickType.LEFT),thief);assertTrue(thief.nextMessage().contains("slipped away"));
             verify(end,times(3)).run();takes.verifyNoInteractions();money.verifyNoInteractions();
             assertEquals(loot,victim.getInventory().getItem(0));assertEquals(0,session.getBudget().getUsed());
         }
@@ -340,7 +340,7 @@ class StealReferencesTest {
         try(var bukkit=mockStatic(org.bukkit.Bukkit.class,CALLS_REAL_METHODS)) {
             bukkit.when(()->org.bukkit.Bukkit.getPlayer(victim.getUniqueId())).thenReturn(victim);
             ref.revealSlot(thief,inv,slot);
-            assertFalse(session.isRevealed(slot));assertTrue(thief.nextMessage().contains("no longer available"));verify(manager).endSession(thief.getUniqueId(),true);
+            assertFalse(session.isRevealed(slot));assertTrue(thief.nextMessage().contains("slipped away"));verify(manager).endSession(thief.getUniqueId(),true);
             verifyNoInteractions(data);alerts.verifyNoInteractions();assertEquals(loot,victim.getInventory().getItem(9));
         }
     }

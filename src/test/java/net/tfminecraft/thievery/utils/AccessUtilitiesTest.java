@@ -47,7 +47,7 @@ class AccessUtilitiesTest {
             assertFalse(TraitChecker.hasTraits(player,List.of("thief"))); when(data.hasActiveCharacter()).thenReturn(true); when(data.getActiveCharacter()).thenReturn(character);
             assertFalse(TraitChecker.hasTraits(player,List.of("thief"))); when(character.getTraits()).thenReturn(List.of(trait)); when(trait.getId()).thenReturn("scholar"); assertFalse(TraitChecker.hasTraits(player,List.of("thief")));
             when(trait.getId()).thenReturn("thief"); Cache.traits=List.of("thief"); assertTrue(TraitChecker.hasRequiredTraits(player));
-            TraitChecker.sendMissingTraitMessage(player); TraitChecker.sendMissingTraitMessage(player,"robbery"); verify(player).sendMessage("§cYou lack the needed character trait(s) for thievery!"); verify(player).sendMessage("§cYou lack the needed character trait(s) for robbery!");
+            TraitChecker.sendMissingTraitMessage(player); TraitChecker.sendMissingTraitMessage(player,"robbery"); verify(player).sendMessage("§cYou lack the training for thievery!"); verify(player).sendMessage("§cYou lack the training for robbery!");
         } finally { Cache.traits=saved; }
     }
     @Test void lockpickWindowStartsOnRefreshAndIsIsolatedByTarget() {

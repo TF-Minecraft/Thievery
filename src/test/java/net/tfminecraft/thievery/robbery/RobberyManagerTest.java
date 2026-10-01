@@ -219,7 +219,7 @@ class RobberyManagerTest {
         bukkit.when(() -> Bukkit.getPlayer(robber.getUniqueId())).thenReturn(robber);
         when(robber.isOnline()).thenReturn(false);
         assertFalse(manager.acceptRobbery(victim));
-        verify(victim, times(2)).sendMessage(contains("no longer available"));
+        verify(victim, times(2)).sendMessage(contains("The robber has gone"));
         assertTrue(sessions.isEmpty());
     }
 

@@ -53,7 +53,7 @@ public class ChestStealReference extends HiddenStealReference {
 
     @Override
     public void onOpen(Player thief, Inventory gui) {
-        thief.sendMessage(ThieveryTexts.msg("§o" + ThieveryTexts.CRITICAL + "Click a slot to probe the container."));
+        thief.sendMessage(ThieveryTexts.msg("§o" + ThieveryTexts.CRITICAL + "Click a slot to probe inside."));
     }
 
     @Override

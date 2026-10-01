@@ -215,7 +215,7 @@ class DisplayStealManagerTest {
         lock.setOwner(UUID.randomUUID());
         manager.onEntityDamage(event);
         verify(store, times(2)).save(lock);
-        verify(player).sendMessage(contains("containers you own"));
+        verify(player).sendMessage(contains("Only the owner can change this lock"));
         verify(event, times(3)).setCancelled(true);
     }
 
@@ -224,7 +224,7 @@ class DisplayStealManagerTest {
         EntityDamageByEntityEvent event = damage(stand, player);
         manager.onEntityDamage(event);
         verify(event).setCancelled(true);
-        verify(player).sendMessage(contains("do not have access"));
+        verify(player).sendMessage("§cIt's locked. Only its owner holds the key.");
         EntityDamageByEntityEvent nonplayer = damage(stand, mock(Entity.class));
         manager.onEntityDamage(nonplayer);
         verify(nonplayer, never()).setCancelled(true);
@@ -316,7 +316,7 @@ class DisplayStealManagerTest {
         when(stand.isValid()).thenReturn(true);
         access.when(() -> LockAccess.canAccess(player, lock.getOwner(), LockState.PRIVATE)).thenReturn(true);
         select(slots);
-        verify(player).sendMessage(contains("already have access"));
+        verify(player).sendMessage(contains("already open to you"));
         access.when(() -> LockAccess.canAccess(player, lock.getOwner(), LockState.PRIVATE)).thenReturn(false);
         clues.when(() -> ClueChecker.hasEnoughClues(player)).thenReturn(false);
         select(slots);
@@ -406,7 +406,7 @@ class DisplayStealManagerTest {
             when(characterData.getActiveCharacter()).thenReturn(character);
             when(character.getTraits()).thenReturn(List.of());
             select(lootSlots);
-            verify(player).sendMessage(contains("lack the needed character trait"));
+            verify(player).sendMessage(contains("lack the training to pick locks"));
             verify(picks, never()).startSession(any(), any(), any(), any(), anyDouble(), anyInt(), anyDouble(), any());
             var trait = mock(net.tfminecraft.rpcharacters.objects.trait.Trait.class);
             when(trait.getId()).thenReturn("thief");
@@ -490,7 +490,7 @@ class DisplayStealManagerTest {
 
         assertTrue(click.isCancelled());
         assertEquals(displayed, realFrame.getItem());
-        verify(player).sendMessage(contains("do not have access"));
+        verify(player).sendMessage("§cIt's locked. Only its owner holds the key, though a steady hand and a pick might manage.");
         access.when(() -> LockAccess.canAccess(player, owner, LockState.PRIVATE)).thenReturn(true);
         HangingBreakByEntityEvent allowed = new HangingBreakByEntityEvent(realFrame, player);
         manager.onHangingBreak(allowed);
