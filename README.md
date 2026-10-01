@@ -8,7 +8,7 @@ Thievery gives criminal activity and property protection a shared set of game me
 
 - **Property locks** — secure supported doors, containers, furniture displays, armour stands, and item frames, with personal, guild, and faction lock rules.
 - **Keys and keychains** — carry several keys together and create key copies through molds or paper copies.
-- **Lockpicking challenges** — use lockpicks in an interactive timing challenge, with tool strength, lock strength, and Dexterity influencing the attempt.
+- **Lockpicking challenges** — use lockpicks in an interactive timing challenge on doors and displays, or a pin memory puzzle on chests, with tool strength, lock strength, and Dexterity influencing the attempt.
 - **Pickpocketing and robbery** — separate activities provide different targeting, alert, cooldown, and loot-budget rules.
 - **Controlled looting** — theft menus account for item categories and value, including equipment quality and magical properties, when determining what can be taken.
 - **Evidence and risk** — theft and lockpicking can leave clues, with accumulated risk affecting the chance of more revealing evidence.

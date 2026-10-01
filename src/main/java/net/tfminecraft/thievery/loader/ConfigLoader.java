@@ -16,6 +16,7 @@ import net.tfminecraft.thievery.cache.Cache;
 import net.tfminecraft.thievery.cache.Parameters;
 import net.tfminecraft.thievery.door.LockState;
 import net.tfminecraft.thievery.door.LockTypeProfile;
+import net.tfminecraft.thievery.door.PinGrid;
 import net.tfminecraft.thievery.player.RiskCalculator;
 import net.tfminecraft.thievery.utils.ThieveryTexts;
 
@@ -88,6 +89,7 @@ public class ConfigLoader {
         Parameters.chestBaseSuccessChance = config.getDouble("lockpicking.chest.base-success-chance",
                 config.getDouble("lockpicking.chest.base-chance", 1.0));
         Parameters.chestBreakChanceRampPerSlot = config.getDouble("lockpicking.chest.break-chance-ramp-per-slot", 0.1);
+        loadChestMinigame(config);
         loadLockTypeProfiles(config);
         Parameters.maxSuccessChance = config.getDouble("lockpicking.max-success-chance", 0.95);
         if (config.isConfigurationSection("lockpicking.dex-map")) {
@@ -120,6 +122,24 @@ public class ConfigLoader {
         Parameters.lockableEntityTypes = loadLockableEntityTypes(config);
         Parameters.displayLockStrength = Math.min(1.0, Math.max(0.0,
                 config.getDouble("lockpicking.display-lock-strength", 0.5)));
+    }
+
+    private static void loadChestMinigame(FileConfiguration config) {
+        String path = "lockpicking.chest.minigame.";
+        Parameters.chestMinigameEnabled = config.getBoolean(path + "enabled", true);
+        Parameters.chestMinigameRows = Math.max(1, Math.min(PinGrid.MAX_ROWS, config.getInt(path + "rows", 6)));
+        Parameters.chestMinigameColumns = Math.max(1,
+                Math.min(PinGrid.MENU_COLUMNS, config.getInt(path + "columns", 6)));
+        Parameters.chestMinigamePins = Math.max(1, Math.min(Parameters.chestMinigameRows * Parameters.chestMinigameColumns,
+                config.getInt(path + "pins", 14)));
+        Parameters.chestMinigamePrepareSeconds = Math.max(0.0, config.getDouble(path + "prepare-seconds", 1.0));
+        Parameters.chestMinigameMemoriseSeconds = Math.max(0.0, config.getDouble(path + "memorise-seconds", 4.0));
+        Parameters.chestMinigameRecallSeconds = Math.max(0.0, config.getDouble(path + "recall-seconds", 6.0));
+        Parameters.chestMinigameRecallSecondsPerDexterity = Math.max(0.0,
+                config.getDouble(path + "recall-seconds-per-dexterity", 0.05));
+        Parameters.chestMinigameMistakesToFail = Math.max(1, config.getInt(path + "mistakes-to-fail", 3));
+        Parameters.chestMinigameFailBreakChance = Math.max(0.0,
+                Math.min(1.0, config.getDouble(path + "fail-break-chance", 0.5)));
     }
 
     private static void loadLockTypeProfiles(FileConfiguration config) {

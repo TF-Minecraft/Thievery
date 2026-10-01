@@ -84,6 +84,16 @@ class ConfigLoaderTest {
         assertEquals(1, Parameters.chestBaseSuccessChance);
         assertEquals(0.1, Parameters.chestBreakChanceRampPerSlot);
         assertEquals(0.95, Parameters.maxSuccessChance);
+        assertTrue(Parameters.chestMinigameEnabled);
+        assertEquals(6, Parameters.chestMinigameRows);
+        assertEquals(6, Parameters.chestMinigameColumns);
+        assertEquals(14, Parameters.chestMinigamePins);
+        assertEquals(1.0, Parameters.chestMinigamePrepareSeconds);
+        assertEquals(4.0, Parameters.chestMinigameMemoriseSeconds);
+        assertEquals(6.0, Parameters.chestMinigameRecallSeconds);
+        assertEquals(0.05, Parameters.chestMinigameRecallSecondsPerDexterity);
+        assertEquals(3, Parameters.chestMinigameMistakesToFail);
+        assertEquals(0.5, Parameters.chestMinigameFailBreakChance);
         assertEquals(LockTypeProfile.IDENTITY, Parameters.lockTypeProfile(LockState.PRIVATE));
         assertEquals(Set.of(Material.ENDER_CHEST), Parameters.excludedContainerMaterials);
         assertTrue(Parameters.lockableFurnitureIds.isEmpty());
@@ -332,6 +342,69 @@ class ConfigLoaderTest {
         assertTrue(captured.toString().contains("InvalidConfigurationException"));
         load("");
         assertEquals(List.of("retained"), Cache.traits);
+    }
+
+    @Test
+    void chestMinigameSettingsLoadAndClampToTheChestMenu() throws Exception {
+        load("""
+                lockpicking:
+                  chest:
+                    minigame:
+                      enabled: false
+                      rows: 4
+                      columns: 5
+                      pins: 9
+                      prepare-seconds: 0.5
+                      memorise-seconds: 3
+                      recall-seconds: 8
+                      recall-seconds-per-dexterity: 0.1
+                      mistakes-to-fail: 2
+                      fail-break-chance: 0.25
+                """);
+        assertFalse(Parameters.chestMinigameEnabled);
+        assertEquals(4, Parameters.chestMinigameRows);
+        assertEquals(5, Parameters.chestMinigameColumns);
+        assertEquals(9, Parameters.chestMinigamePins);
+        assertEquals(0.5, Parameters.chestMinigamePrepareSeconds);
+        assertEquals(3.0, Parameters.chestMinigameMemoriseSeconds);
+        assertEquals(8.0, Parameters.chestMinigameRecallSeconds);
+        assertEquals(0.1, Parameters.chestMinigameRecallSecondsPerDexterity);
+        assertEquals(2, Parameters.chestMinigameMistakesToFail);
+        assertEquals(0.25, Parameters.chestMinigameFailBreakChance);
+
+        load("""
+                lockpicking:
+                  chest:
+                    minigame:
+                      rows: 9
+                      columns: 12
+                      pins: 99
+                      prepare-seconds: -1
+                      memorise-seconds: -1
+                      recall-seconds: -1
+                      recall-seconds-per-dexterity: -1
+                      mistakes-to-fail: 0
+                      fail-break-chance: 3
+                """);
+        assertEquals(6, Parameters.chestMinigameRows);
+        assertEquals(9, Parameters.chestMinigameColumns);
+        assertEquals(54, Parameters.chestMinigamePins);
+        assertEquals(0.0, Parameters.chestMinigamePrepareSeconds);
+        assertEquals(0.0, Parameters.chestMinigameMemoriseSeconds);
+        assertEquals(0.0, Parameters.chestMinigameRecallSeconds);
+        assertEquals(0.0, Parameters.chestMinigameRecallSecondsPerDexterity);
+        assertEquals(1, Parameters.chestMinigameMistakesToFail);
+        assertEquals(1.0, Parameters.chestMinigameFailBreakChance);
+
+        load("""
+                lockpicking:
+                  chest:
+                    minigame: {rows: 0, columns: 0, pins: 0, fail-break-chance: -1}
+                """);
+        assertEquals(1, Parameters.chestMinigameRows);
+        assertEquals(1, Parameters.chestMinigameColumns);
+        assertEquals(1, Parameters.chestMinigamePins);
+        assertEquals(0.0, Parameters.chestMinigameFailBreakChance);
     }
 
     private void load(String yaml) throws Exception {

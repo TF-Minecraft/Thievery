@@ -24,6 +24,7 @@ import net.tfminecraft.thievery.player.InventoryManager;
 import net.tfminecraft.thievery.key.KeyCopyListener;
 import net.tfminecraft.thievery.key.KeychainListener;
 import net.tfminecraft.thievery.door.LockPickManager;
+import net.tfminecraft.thievery.door.PinGridManager;
 import net.tfminecraft.thievery.player.PickpocketManager;
 import net.tfminecraft.thievery.player.PlayerManager;
 import net.tfminecraft.thievery.player.RiskSetService;
@@ -42,6 +43,7 @@ public class Thievery extends JavaPlugin {
     private RobberyManager robberyManager;
     private PickpocketManager pickpocketManager;
     private LockPickManager lockPickManager;
+    private PinGridManager pinGridManager;
     private StealManager stealManager;
     private StealGuiUpdater stealGuiUpdater;
     private final ConfigLoader configLoader = new ConfigLoader();
@@ -59,6 +61,7 @@ public class Thievery extends JavaPlugin {
         stealManager = new StealManager();
         lockPickManager = new LockPickManager();
         doorManager = new DoorManager(lockPickManager);
+        pinGridManager = new PinGridManager(lockPickManager);
         robberyManager = new RobberyManager();
         pickpocketManager = new PickpocketManager();
         stealGuiUpdater = new StealGuiUpdater(stealManager);
@@ -80,6 +83,7 @@ public class Thievery extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new GraveStealListener(), this);
         getServer().getPluginManager().registerEvents(clearCluesManager, this);
         getServer().getPluginManager().registerEvents(containerManager, this);
+        getServer().getPluginManager().registerEvents(pinGridManager, this);
         getServer().getPluginManager().registerEvents(doorManager, this);
         getServer().getPluginManager().registerEvents(robberyManager, this);
         getServer().getPluginManager().registerEvents(pickpocketManager, this);
@@ -109,6 +113,9 @@ public class Thievery extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (pinGridManager != null) {
+            pinGridManager.cancelAll();
+        }
         if (stealGuiUpdater != null) {
             stealGuiUpdater.stop();
         }
@@ -139,6 +146,10 @@ public class Thievery extends JavaPlugin {
 
     public LockPickManager getLockPickManager() {
         return lockPickManager;
+    }
+
+    public PinGridManager getPinGridManager() {
+        return pinGridManager;
     }
 
     public ContainerManager getContainerManager() {

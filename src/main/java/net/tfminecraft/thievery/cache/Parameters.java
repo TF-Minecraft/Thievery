@@ -45,6 +45,18 @@ public final class Parameters {
     /** Per-slot break multiplier step (1st reveal = 1×step, 2nd = 2×step, … capped at full break chance). */
     public static double chestBreakChanceRampPerSlot = 0.1;
 
+    /** Pin memory minigame that must be solved before the chest probe menu opens. */
+    public static boolean chestMinigameEnabled = true;
+    public static int chestMinigameRows = 6;
+    public static int chestMinigameColumns = 6;
+    public static int chestMinigamePins = 14;
+    public static double chestMinigamePrepareSeconds = 1.0;
+    public static double chestMinigameMemoriseSeconds = 4.0;
+    public static double chestMinigameRecallSeconds = 6.0;
+    public static double chestMinigameRecallSecondsPerDexterity = 0.05;
+    public static int chestMinigameMistakesToFail = 3;
+    public static double chestMinigameFailBreakChance = 0.5;
+
     public static double maxSuccessChance = 0.95;
 
     public static double doorMaxDistance = 3.0;

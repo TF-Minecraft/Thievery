@@ -739,30 +739,24 @@ public class ContainerManager implements Listener {
             return;
         }
 
-        lockpickChest(event, container); // proceed to start the system
+        lockpickChest(event); // proceed to start the system
     }
 
-    private void lockpickChest(PlayerInteractEvent e, Container container) {
+    private void lockpickChest(PlayerInteractEvent e) {
         Block b = e.getClickedBlock();
         Player p = e.getPlayer();
 
         e.setCancelled(true);
 
-        for (ChestLockpickSession active : lockpickingSessions.values()) {
-            if (active.getChestBlock().equals(b)) {
-                p.sendMessage(ThieveryTexts.msg(ThieveryTexts.CRITICAL + "Someone is already picking this lock!"));
-                return;
-            }
+        if (isBeingPicked(b)) {
+            p.sendMessage(ThieveryTexts.msg(ThieveryTexts.CRITICAL + "Someone is already picking this lock!"));
+            return;
         }
 
         ItemStack heldLockpick = p.getInventory().getItemInMainHand();
-        LockpickDefinition lockpickDef = ToolResolver.resolveLockpick(heldLockpick);
-        if (lockpickDef == null) return;
+        if (ToolResolver.resolveLockpick(heldLockpick) == null) return;
 
-        Location chestLoc = b.getLocation();
-        ContainerData data = containerDataManager.loadContainerData(chestLoc);
-        UUID playerId = p.getUniqueId();
-
+        ContainerData data = containerDataManager.loadContainerData(b.getLocation());
         if (GuildAccessCooldown.isOnCooldown(data.getAccessMap(), p, Cache.cooldown)) {
             long millisRemaining = GuildAccessCooldown.getMillisRemaining(data.getAccessMap(), p, Cache.cooldown);
             p.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You must wait "
@@ -771,6 +765,27 @@ public class ContainerManager implements Listener {
             return;
         }
 
+        // The probe menu opens only once the pin minigame is solved.
+        Thievery.getInstance().getPinGridManager().start(p, b, () -> openLockpickSession(p, b));
+    }
+
+    private boolean isBeingPicked(Block b) {
+        for (ChestLockpickSession active : lockpickingSessions.values()) {
+            if (active.getChestBlock().equals(b)) {
+                return true;
+            }
+        }
+        return Thievery.getInstance().getPinGridManager().isPicking(b);
+    }
+
+    private void openLockpickSession(Player p, Block b) {
+        // The chest or the held lockpick may have changed while the minigame ran.
+        if (!(b.getState() instanceof Container container)) return;
+        LockpickDefinition lockpickDef = ToolResolver.resolveLockpick(p.getInventory().getItemInMainHand());
+        if (lockpickDef == null) return;
+
+        ContainerData data = containerDataManager.loadContainerData(b.getLocation());
+        UUID playerId = p.getUniqueId();
         Inventory chestInv = container.getInventory();
 
         int dexterity = RiskCalculator.getDexterity(p);
