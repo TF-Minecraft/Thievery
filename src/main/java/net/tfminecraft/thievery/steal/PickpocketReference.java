@@ -73,7 +73,7 @@ public class PickpocketReference extends HiddenStealReference {
     protected boolean validateTarget(Player thief) {
         Player victim = Bukkit.getPlayer(session.getVictimId());
         if (victim == null || !victim.isOnline()) {
-            thief.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "Your target is no longer available."));
+            thief.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "Your mark has slipped away."));
             StealManager.getInstance().endSession(thief.getUniqueId(), true);
             return false;
         }

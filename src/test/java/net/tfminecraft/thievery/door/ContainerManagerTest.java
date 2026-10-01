@@ -185,6 +185,30 @@ class ContainerManagerTest {
         try(var log=mockStatic(LockStateLog.class)) { manager.onShiftLeftClickContainer(toggle); log.verify(()->LockStateLog.record(player,chest.block().getLocation(),LockState.GUILD,false)); } assertEquals(LockState.GUILD,left.getLockState()); assertEquals(left.getLockState(),right.getLockState()); assertEquals(originalLeftOwner,left.getOwner()); assertEquals(player.getUniqueId(),right.getOwner());
         left.setOwner(UUID.randomUUID()); right.setOwner(UUID.randomUUID()); clearInvocations(storage); manager.onShiftLeftClickContainer(toggle); verify(storage,never()).saveContainerData(any());
     }
+    @Test void deniedPlayersHearHowTheLockBarsThemAndOnlyPickableChestsHintAtPicking() {
+        var barrel=block(0,Material.BARREL); var locked=lock(barrel,UUID.randomUUID()); var inventory=((Container)barrel.getState()).getInventory();
+        manager.onContainerRightClickAccessCheck(interact(barrel,Action.RIGHT_CLICK_BLOCK));
+        verify(player).sendMessage("§cIt's locked. Only its owner holds the key, though a steady hand and a pick might manage.");
+        locked.setLockState(LockState.GUILD); manager.onInventoryOpen(open(inventory));
+        verify(player).sendMessage("§cIt's sealed for members of its guild alone.");
+        locked.setLockState(LockState.FACTION); manager.onContainerRightClickAccessCheck(interact(barrel,Action.RIGHT_CLICK_BLOCK));
+        verify(player).sendMessage("§cIt's barred to all outside its faction.");
+        var saved=net.tfminecraft.thievery.cache.Parameters.excludedContainerMaterials;
+        try {
+            net.tfminecraft.thievery.cache.Parameters.excludedContainerMaterials=EnumSet.of(Material.BARREL); locked.setLockState(LockState.PRIVATE);
+            manager.onInventoryOpen(open(inventory));
+            verify(player).sendMessage("§cIt's locked. Only its owner holds the key.");
+        } finally { net.tfminecraft.thievery.cache.Parameters.excludedContainerMaterials=saved; }
+    }
+    @Test void mismatchedDoubleChestHalvesReportTheStricterLockThatBarsThePlayer() {
+        var chest=doubleChest(); var left=lock(chest.block(),UUID.randomUUID()); var right=lock(chest.right().getBlock(),UUID.randomUUID());
+        right.setLockState(LockState.GUILD); manager.onInventoryOpen(open(chest.inventory()));
+        left.setLockState(LockState.FACTION); right.setLockState(LockState.PRIVATE); manager.onContainerRightClickAccessCheck(interact(chest.block(),Action.RIGHT_CLICK_BLOCK));
+        verify(player,times(2)).sendMessage("§cIt's locked. Only its owner holds the key, though a steady hand and a pick might manage.");
+        data.put(chest.left().getLocation(),new ContainerData(chest.left().getLocation())); right.setLockState(LockState.GUILD);
+        manager.onInventoryOpen(open(chest.inventory()));
+        verify(player).sendMessage("§cIt's sealed for members of its guild alone.");
+    }
     @Test void staffCycleForeignLockStateWithoutTakingOwnershipOrShowingTheirTutorial() {
         when(player.hasPermission("thievery.admin")).thenReturn(true); when(player.isSneaking()).thenReturn(true);
         var barrel=block(0,Material.BARREL); UUID placer=MockBukkit.getMock().addPlayer("builder").getUniqueId(); var single=lock(barrel,placer);
@@ -207,7 +231,7 @@ class ContainerManagerTest {
         manager.onShiftLeftClickContainer(interact(chest.block(),Action.LEFT_CLICK_BLOCK));
         assertEquals(LockState.DEFAULT,unowned.getLockState()); assertEquals(LockState.DEFAULT,left.getLockState()); assertEquals(LockState.DEFAULT,right.getLockState());
         verify(storage,never()).saveContainerData(any());
-        verify(player,times(2)).sendMessage("§cYou can only change the lock state on containers you own.");
+        verify(player,times(2)).sendMessage("§cOnly the owner can change this lock.");
     }
     @Test void owningOnlyLeftDoubleChestHalfCyclesBothHalvesWithoutTransferringOwnership() {
         var chest = doubleChest();
@@ -234,7 +258,7 @@ class ContainerManagerTest {
         manager.onBlockBreak(denied);
 
         assertTrue(denied.isCancelled());
-        verify(player).sendMessage(contains("do not have access to break"));
+        verify(player).sendMessage("§cIt's locked. Only its owner holds the key.");
         locked.setOwner(player.getUniqueId());
         BlockBreakEvent allowed = new BlockBreakEvent(chest, player);
         manager.onBlockBreak(allowed);
@@ -286,7 +310,7 @@ class ContainerManagerTest {
 
         assertTrue(denied.isCancelled());
         verify(storage, never()).deleteContainerData(any());
-        verify(player).sendMessage(contains("do not have access to break"));
+        verify(player).sendMessage("§cIt's locked. Only its owner holds the key.");
         when(player.hasPermission("thievery.admin")).thenReturn(true);
         BlockBreakEvent allowed = new BlockBreakEvent(chest.block(), player);
         manager.onBlockBreak(allowed);
@@ -356,7 +380,7 @@ class ContainerManagerTest {
             sessions.when(net.tfminecraft.thievery.steal.StealManager::getInstance).thenReturn(stealManager); menus.when(()->net.tfminecraft.thievery.steal.StealGui.buildHiddenGui(any(),any(),anyString())).thenReturn(gui);
             var event=interact(barrel,Action.RIGHT_CLICK_BLOCK); manager.onRightClickChest(event); verify(event,atLeastOnce()).setCancelled(true); assertEquals(1,references.constructed().size()); verify(stealManager).openSession(player,references.constructed().getFirst(),gui); assertEquals("2026-09-26",locked.getLastAccess(player.getUniqueId())); evil.verify(()->net.tfminecraft.thievery.utils.EvilRpPlays.record(player));
             verify(storage,times(nearbyRadius < 0 ? 1 : 2)).saveContainerData(locked);
-            manager.onRightClickChest(event); verify(player).sendMessage("§4Someone is already lockpicking this container!"); verify(stealManager,times(1)).openSession(any(),any(),any());
+            manager.onRightClickChest(event); verify(player).sendMessage("§4Someone is already picking this lock!"); verify(stealManager,times(1)).openSession(any(),any(),any());
             Player other=mock(Player.class,RETURNS_DEEP_STUBS); when(other.getUniqueId()).thenReturn(UUID.randomUUID()); when(other.getName()).thenReturn("other thief"); when(other.getInventory().getItemInMainHand()).thenReturn(new ItemStack(Material.STICK));
             var second=lockpickBlock(4);var secondData=lock(second,UUID.randomUUID());var secondEvent=interact(second,Action.RIGHT_CLICK_BLOCK);when(secondEvent.getPlayer()).thenReturn(other);
             clues.when(()->net.tfminecraft.thievery.clue.ClueChecker.hasEnoughClues(other)).thenReturn(true);
@@ -364,14 +388,14 @@ class ContainerManagerTest {
             assertEquals(2,references.constructed().size());verify(stealManager).openSession(other,references.constructed().get(1),gui);
             assertEquals("2026-09-26",secondData.getLastAccess(other.getUniqueId()));
             assertEquals("2026-09-26",locked.getLastAccess(player.getUniqueId()));
-            manager.onRightClickChest(event);verify(player,times(2)).sendMessage("§4Someone is already lockpicking this container!");verify(stealManager,times(2)).openSession(any(),any(),any());
+            manager.onRightClickChest(event);verify(player,times(2)).sendMessage("§4Someone is already picking this lock!");verify(stealManager,times(2)).openSession(any(),any(),any());
         } finally { net.tfminecraft.thievery.cache.Cache.radius=radius; net.tfminecraft.thievery.cache.Cache.debugAllowOwnChest=own; net.tfminecraft.thievery.cache.Cache.requireOwnerOnline=online; net.tfminecraft.thievery.cache.Cache.traits=traits; }
     }
     @Test void lockpickingRejectsOwnedTargetsMissingCluesAndCooldownBeforeOpeningMenu() {
         boolean online=net.tfminecraft.thievery.cache.Cache.requireOwnerOnline; var traits=net.tfminecraft.thievery.cache.Cache.traits; net.tfminecraft.thievery.cache.Cache.requireOwnerOnline=false; net.tfminecraft.thievery.cache.Cache.traits=List.of();
         var barrel=lockpickBlock(); var locked=lock(barrel,player.getUniqueId()); var event=interact(barrel,Action.RIGHT_CLICK_BLOCK); tools.when(()->ToolResolver.isLockpick(any())).thenReturn(true);
         try(var clues=mockStatic(net.tfminecraft.thievery.clue.ClueChecker.class); var cooldown=mockStatic(net.tfminecraft.thievery.player.GuildAccessCooldown.class)) {
-            manager.onRightClickChest(event); verify(player).sendMessage("§cYou already have access to this container."); clues.verifyNoInteractions();
+            manager.onRightClickChest(event); verify(player).sendMessage("§cNo need for picks, it's already open to you."); clues.verifyNoInteractions();
             locked.setOwner(UUID.randomUUID()); manager.onRightClickChest(event); clues.verify(()->net.tfminecraft.thievery.clue.ClueChecker.sendInsufficientCluesMessage(player));
             clues.when(()->net.tfminecraft.thievery.clue.ClueChecker.hasEnoughClues(player)).thenReturn(true); manager.onRightClickChest(event); verify(storage,never()).saveContainerData(any());
             var pick=mock(net.tfminecraft.thievery.player.LockpickDefinition.class); tools.when(()->ToolResolver.resolveLockpick(any())).thenReturn(pick); cooldown.when(()->net.tfminecraft.thievery.player.GuildAccessCooldown.isOnCooldown(anyMap(),eq(player),anyInt())).thenReturn(true); cooldown.when(()->net.tfminecraft.thievery.player.GuildAccessCooldown.formatRemaining(anyLong())).thenReturn("one day");
@@ -450,7 +474,7 @@ class ContainerManagerTest {
             roleplay.when(()->net.tfminecraft.rpcharacters.managers.PlayerManager.get(player)).thenReturn(profile);
             manager.onRightClickChest(event);verify(event).setCancelled(true);clues.verifyNoInteractions();
             when(profile.hasActiveCharacter()).thenReturn(true);when(profile.getActiveCharacter()).thenReturn(character);when(character.getTraits()).thenReturn(List.of(other));
-            manager.onRightClickChest(event);verify(player).sendMessage("§cYou lack the needed character trait(s) to lockpick!");clues.verifyNoInteractions();
+            manager.onRightClickChest(event);verify(player).sendMessage("§cYou lack the training to pick locks!");clues.verifyNoInteractions();
             when(character.getTraits()).thenReturn(List.of(other,required));manager.onRightClickChest(event);
             clues.verify(()->net.tfminecraft.thievery.clue.ClueChecker.sendInsufficientCluesMessage(player));
             verify(storage,never()).saveContainerData(any());
@@ -462,7 +486,7 @@ class ContainerManagerTest {
         var chest=doubleChest();var left=lock(chest.block(),player.getUniqueId());var right=lock(chest.right().getBlock(),player.getUniqueId());var event=interact(chest.block(),Action.RIGHT_CLICK_BLOCK);
         tools.when(()->ToolResolver.isLockpick(any())).thenReturn(true);
         try(var clues=mockStatic(net.tfminecraft.thievery.clue.ClueChecker.class)) {
-            manager.onRightClickChest(event);verify(player).sendMessage("§cYou already have access to this container.");clues.verifyNoInteractions();
+            manager.onRightClickChest(event);verify(player).sendMessage("§cNo need for picks, it's already open to you.");clues.verifyNoInteractions();
             right.setOwner(UUID.randomUUID());manager.onRightClickChest(event);
             left.setOwner(UUID.randomUUID());right.setOwner(player.getUniqueId());manager.onRightClickChest(event);
             clues.verify(()->net.tfminecraft.thievery.clue.ClueChecker.sendInsufficientCluesMessage(player),times(2));

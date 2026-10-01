@@ -67,7 +67,7 @@ public class PickpocketManager implements Listener {
             return;
         }
         if (!RobberyUtil.isWithinRange(pickpocket, victim, PickpocketLoader.getMaxDistance())) {
-            pickpocket.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "That player is too far away."));
+            pickpocket.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "They are too far away."));
             return;
         }
 
@@ -78,7 +78,7 @@ public class PickpocketManager implements Listener {
                     pickpocket, PickpocketLoader.getCooldownMillis());
             pickpocket.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "Your guild must wait "
                     + GuildAccessCooldown.formatRemaining(remaining)
-                    + " before targeting this player again."));
+                    + " before targeting them again."));
             return;
         }
 

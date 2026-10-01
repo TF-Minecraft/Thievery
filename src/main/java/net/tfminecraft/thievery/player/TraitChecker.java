@@ -36,10 +36,10 @@ public final class TraitChecker {
     }
 
     public static void sendMissingTraitMessage(Player player, String context) {
-        player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You lack the needed character trait(s) for " + context + "!"));
+        player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You lack the training for " + context + "!"));
     }
 
     public static void sendMissingTraitMessage(Player player) {
-        player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You lack the needed character trait(s) for thievery!"));
+        player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You lack the training for thievery!"));
     }
 }
