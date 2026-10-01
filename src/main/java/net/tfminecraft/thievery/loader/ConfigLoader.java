@@ -88,7 +88,8 @@ public class ConfigLoader {
 
         Parameters.chestBaseSuccessChance = config.getDouble("lockpicking.chest.base-success-chance",
                 config.getDouble("lockpicking.chest.base-chance", 1.0));
-        Parameters.chestBreakChanceRampPerSlot = config.getDouble("lockpicking.chest.break-chance-ramp-per-slot", 0.1);
+        Parameters.chestSeizedDensity = Math.max(0.0, config.getDouble("lockpicking.chest.seized-density", 0.3));
+        Parameters.chestSeizedPerGridMistake = Math.max(0, config.getInt("lockpicking.chest.seized-per-grid-mistake", 1));
         loadChestMinigame(config);
         loadLockTypeProfiles(config);
         Parameters.maxSuccessChance = config.getDouble("lockpicking.max-success-chance", 0.95);

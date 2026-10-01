@@ -293,7 +293,7 @@ public final class StealGui {
 
     // --- Title (formerly StealGuiTitle) ---
 
-    public record TitleOptions(Double risk, Double critical, Long timerMs, StealBudget budget, Double breakChance) {}
+    public record TitleOptions(Double risk, Double critical, Long timerMs, StealBudget budget, Integer seizedPins) {}
 
     public static String formatTitle(TitleOptions opts) {
         StringBuilder title = new StringBuilder();
@@ -305,12 +305,11 @@ public final class StealGui {
             }
         }
 
-        if (opts.breakChance() != null) {
+        if (opts.seizedPins() != null) {
             if (title.length() > 0) {
                 title.append(" ");
             }
-            title.append(ThieveryTexts.ACCENT).append("Break: ")
-                    .append(RiskCalculator.formatPercentWhole(opts.breakChance()));
+            title.append(ThieveryTexts.ACCENT).append("Seized: ").append(opts.seizedPins());
         }
 
         if (opts.timerMs() != null) {
@@ -347,15 +346,15 @@ public final class StealGui {
     }
 
     public static String forChest(PlayerData thiefData, int dexterity, double lockpickStrength, StealBudget budget,
-            double successChance, boolean lockpickBroken, boolean criticalRisk) {
-        Double breakChance = lockpickBroken ? null : (1.0 - successChance);
+            int unmarkedSeizedPins, boolean lockpickBroken, boolean criticalRisk) {
+        Integer seized = lockpickBroken ? null : unmarkedSeizedPins;
         double critical = criticalRisk ? thiefData.getCriticalChance(dexterity, lockpickStrength) : 0.0;
         return formatTitle(new TitleOptions(
                 thiefData.getRisk(),
                 critical,
                 null,
                 budget,
-                breakChance));
+                seized));
     }
 
     public static String forRobbery(long remainingMs, StealBudget budget) {

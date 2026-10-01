@@ -44,6 +44,8 @@ class PinGridManagerTest {
     private PlayerMock player;
     private Block chest;
     private final AtomicInteger solved = new AtomicInteger();
+    private final AtomicInteger solvedMistakes = new AtomicInteger(-1);
+    private final java.util.function.IntConsumer onSolved = mistakes -> { solved.incrementAndGet(); solvedMistakes.set(mistakes); };
     private boolean enabled;
     private int rows, columns, pins, mistakes;
     private double prepare, memorise, recall, perDexterity, breakChance;
@@ -110,7 +112,7 @@ class PinGridManagerTest {
     }
 
     private PinGridManager.Game start() {
-        assertTrue(manager.start(player, chest, solved::incrementAndGet));
+        assertTrue(manager.start(player, chest, onSolved));
         return game();
     }
 
@@ -181,8 +183,9 @@ class PinGridManagerTest {
     @Test
     void disabledMinigameOpensTheChestStraightAway() {
         Parameters.chestMinigameEnabled = false;
-        assertTrue(manager.start(player, chest, solved::incrementAndGet));
+        assertTrue(manager.start(player, chest, onSolved));
         assertEquals(1, solved.get());
+        assertEquals(0, solvedMistakes.get());
         assertFalse(manager.isPicking(chest));
     }
 
@@ -219,6 +222,8 @@ class PinGridManagerTest {
         assertEquals(PinGridManager.Phase.RECALL, game.phase);
         ticks(1);
         assertTrue(game.bar.getProgress() < 1.0);
+        click(missSlot(game, lit, 0));
+        assertEquals(PinGridManager.Phase.RECALL, game.phase);
         click(lit.get(1));
         assertEquals(PinGridManager.Phase.SOLVED, game.phase);
         assertEquals("§aThe lock gives way", player.getOpenInventory().getTitle());
@@ -230,6 +235,7 @@ class PinGridManagerTest {
         assertEquals(0, solved.get());
         ticks(1);
         assertEquals(1, solved.get());
+        assertEquals(1, solvedMistakes.get());
         assertFalse(manager.isPicking(chest));
         assertTrue(game.bar.getPlayers().isEmpty());
         assertFalse(lockPicks.isOnCooldown(player.getUniqueId(), game.targetId));
@@ -268,7 +274,7 @@ class PinGridManagerTest {
         assertFalse(manager.isPicking(chest));
         assertEquals(0, solved.get());
 
-        assertFalse(manager.start(player, chest, solved::incrementAndGet));
+        assertFalse(manager.start(player, chest, onSolved));
         String wait = player.nextMessage();
         assertTrue(wait.startsWith("§cYour hands are still shaking. Try this lock again in "), wait);
         assertTrue(wait.endsWith("s."), wait);
@@ -393,7 +399,7 @@ class PinGridManagerTest {
         PlayerMock other = server.addPlayer();
         Block barrel = chest.getRelative(2, 0, 0);
         barrel.setType(Material.BARREL);
-        assertTrue(manager.start(other, barrel, solved::incrementAndGet));
+        assertTrue(manager.start(other, barrel, onSolved));
         other.openInventory(server.createInventory(null, 9, "Elsewhere"));
         manager.cancelAll();
         assertFalse(manager.isPicking(chest));

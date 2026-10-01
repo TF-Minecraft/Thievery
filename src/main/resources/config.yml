@@ -139,7 +139,12 @@ lockpicking:
 
   chest:
     base-success-chance: 1.0
-    break-chance-ramp-per-slot: 0.1
+    # The probe menu hides seized pins: probing one snaps the lockpick, and every safe probe counts the
+    # seized pins around it. Pins = slots x seized-density x break chance (1 - success chance from
+    # Dexterity and pick strength) x the lock type's break-chance-multiplier, plus
+    # seized-per-grid-mistake for each wrong cell on the pin grid.
+    seized-density: 0.3
+    seized-per-grid-mistake: 1
     # Pin memory minigame solved before the probe menu opens. Lit pins show for memorise-seconds,
     # then hide; set every pin from memory within recall-seconds (plus recall-seconds-per-dexterity
     # per dexterity level). The grid fits a chest menu: up to 6 rows and 9 columns.
@@ -157,6 +162,7 @@ lockpicking:
       fail-break-chance: 0.5
 
   # Multipliers on the chest steal bases. Omitted keys stay at 1.0, and critical-risk stays on.
+  # break-chance-multiplier scales the number of seized pins.
   lock-types:
     private: {}
     guild: {}

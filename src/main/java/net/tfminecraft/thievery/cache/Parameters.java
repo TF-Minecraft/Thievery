@@ -42,8 +42,11 @@ public final class Parameters {
 
     public static double chestBaseSuccessChance = 1.0;
 
-    /** Per-slot break multiplier step (1st reveal = 1×step, 2nd = 2×step, … capped at full break chance). */
-    public static double chestBreakChanceRampPerSlot = 0.1;
+    /** Share of a chest's slots hiding seized pins at a 100% break chance; better picks and Dexterity lower it. */
+    public static double chestSeizedDensity = 0.3;
+
+    /** Extra seized pins for each wrong cell on the pin grid. */
+    public static int chestSeizedPerGridMistake = 1;
 
     /** Pin memory minigame that must be solved before the chest probe menu opens. */
     public static boolean chestMinigameEnabled = true;

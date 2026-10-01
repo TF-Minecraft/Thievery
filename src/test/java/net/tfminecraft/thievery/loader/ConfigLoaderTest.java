@@ -82,7 +82,8 @@ class ConfigLoaderTest {
         assertFalse(Cache.debugAllowOwnChest);
         assertFalse(Cache.debugCluePreview);
         assertEquals(1, Parameters.chestBaseSuccessChance);
-        assertEquals(0.1, Parameters.chestBreakChanceRampPerSlot);
+        assertEquals(0.3, Parameters.chestSeizedDensity);
+        assertEquals(1, Parameters.chestSeizedPerGridMistake);
         assertEquals(0.95, Parameters.maxSuccessChance);
         assertTrue(Parameters.chestMinigameEnabled);
         assertEquals(6, Parameters.chestMinigameRows);
@@ -133,7 +134,7 @@ class ConfigLoaderTest {
                   take-clue-divisor: 0
                   critical-clue: '#56ccf2Clue {character_name}'
                 lockpicking:
-                  chest: {base-success-chance: 0.8, base-chance: 0.1, break-chance-ramp-per-slot: 0.2}
+                  chest: {base-success-chance: 0.8, base-chance: 0.1, seized-density: 0.2, seized-per-grid-mistake: 2}
                   max-success-chance: 0.9
                   dex-map: {'0': 0.2, '10': 0.8}
                   require-owner-online: true
@@ -188,7 +189,8 @@ class ConfigLoaderTest {
         assertEquals(1, Cache.takeClueDivisor);
         assertEquals(ThieveryTexts.formatGui("#56ccf2Clue {character_name}"), Cache.criticalClue);
         assertEquals(0.8, Parameters.chestBaseSuccessChance);
-        assertEquals(0.2, Parameters.chestBreakChanceRampPerSlot);
+        assertEquals(0.2, Parameters.chestSeizedDensity);
+        assertEquals(2, Parameters.chestSeizedPerGridMistake);
         assertEquals(0.9, Parameters.maxSuccessChance);
         assertEquals(0.5, RiskCalculator.getDexterityLerpValue(5), 1e-12);
         assertTrue(Cache.requireOwnerOnline);

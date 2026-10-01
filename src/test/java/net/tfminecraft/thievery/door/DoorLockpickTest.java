@@ -12,16 +12,13 @@ import org.bukkit.inventory.Inventory;
 import org.junit.jupiter.api.Test;
 
 class DoorLockpickTest {
-    @Test void successAndRampedBreakProbabilitiesClampInputsAndRespectDexterity() {
+    @Test void successProbabilitiesClampInputsAndRespectDexterity() {
         double maximum=Parameters.maxSuccessChance;
         try(var risk=mockStatic(RiskCalculator.class)) {
             Parameters.maxSuccessChance=.95; risk.when(()->RiskCalculator.getDexterityLerpValue(20)).thenReturn(1.5);
             assertEquals(.6,DoorLockpick.computeSuccessChance(20,.5,.8),1e-12);
             assertEquals(0,DoorLockpick.computeSuccessChance(20,-1,.8)); assertEquals(.95,DoorLockpick.computeSuccessChance(20,2,.8));
             assertEquals(0,DoorLockpick.computeSuccessChance(20,.5,-.8));
-            assertEquals(.04,DoorLockpick.computeRampedBreakChance(.6,0,.1),1e-12); assertEquals(.2,DoorLockpick.computeRampedBreakChance(.6,5,.1),1e-12);
-            assertEquals(.4,DoorLockpick.computeRampedBreakChance(.6,99,.1),1e-12); assertEquals(.8,DoorLockpick.computeRampedSuccessChance(.6,5,.1),1e-12); assertEquals(0,DoorLockpick.computeRampedBreakChance(2,1,.1));
-            assertEquals(1,DoorLockpick.computeRampedBreakChance(-2,10,.1));
             assertEquals(DoorLockpick.computeSuccessChance(20,.5,Parameters.chestBaseSuccessChance),ChestLockpickSession.computeSuccessChance(20,.5));
         } finally { Parameters.maxSuccessChance=maximum; }
     }
@@ -41,12 +38,14 @@ class DoorLockpickTest {
     }
     @Test void chestSessionTracksRevealsBudgetCluesAndBrokenTools() {
         UUID id=UUID.randomUUID(); var block=mock(Block.class); var pick=mock(LockpickDefinition.class); when(pick.getCapacity()).thenReturn(10); var inventory=mock(Inventory.class); when(inventory.getSize()).thenReturn(9);
-        var defaults=new ChestLockpickSession(id,block,pick,.8,inventory,"door",null); assertEquals(LockTypeProfile.IDENTITY,defaults.getLockType()); assertEquals(10,defaults.getCapacityRemaining());
-        var session=new ChestLockpickSession(id,block,pick,.8,inventory,"door",new LockTypeProfile(2,1,false,3));
-        assertEquals(id,session.getThiefId()); assertSame(block,session.getChestBlock()); assertSame(pick,session.getLockpickDef()); assertEquals(.8,session.getSuccessChance()); assertEquals(20,session.getCapacityRemaining());
-        session.addCapacityUsed(3); assertEquals(17,session.getCapacityRemaining()); assertEquals(1,session.getNextRevealAttempt());
-        session.markRevealed(session.getLayout().getGuiSlotForLogical(2)); assertEquals(java.util.Set.of(2),session.getRevealedChestSlots()); assertEquals(2,session.getNextRevealAttempt());
-        assertEquals(Math.min(1,DoorLockpick.computeRampedBreakChance(.8,2,Parameters.chestBreakChanceRampPerSlot)*3),session.getNextRevealBreakChance(),1e-12); assertEquals(1-session.getNextRevealBreakChance(),session.getNextRevealSuccessChance(),1e-12);
+        var defaults=new ChestLockpickSession(id,block,pick,-2,inventory,"door",null); assertEquals(0,defaults.getSeizedCount()); assertEquals(LockTypeProfile.IDENTITY,defaults.getLockType()); assertEquals(10,defaults.getCapacityRemaining());
+        var session=new ChestLockpickSession(id,block,pick,2,inventory,"door",new LockTypeProfile(2,1,false,3));
+        assertEquals(id,session.getThiefId()); assertSame(block,session.getChestBlock()); assertSame(pick,session.getLockpickDef()); assertEquals(2,session.getSeizedCount()); assertEquals(20,session.getCapacityRemaining());
+        session.addCapacityUsed(3); assertEquals(17,session.getCapacityRemaining());
+        session.markRevealed(session.getLayout().getGuiSlotForLogical(2)); assertEquals(java.util.Set.of(2),session.getRevealedChestSlots());
+        assertFalse(session.getSeizedPins().isPlaced()); session.getSeizedPins().place(session.getLayout().getGuiSlotForLogical(0),2,new java.util.Random(1)); assertEquals(2,session.getSeizedPins().seized().size());
+        assertEquals(2,session.getUnmarkedSeizedCount()); assertTrue(session.toggleMarked(4)); assertTrue(session.isMarked(4)); assertTrue(session.toggleMarked(5)); assertTrue(session.toggleMarked(6)); assertEquals(0,session.getUnmarkedSeizedCount());
+        assertFalse(session.toggleMarked(6)); assertFalse(session.isMarked(6)); assertEquals(0,session.getUnmarkedSeizedCount()); assertFalse(session.toggleMarked(5)); assertEquals(1,session.getUnmarkedSeizedCount());
         assertEquals(0,session.getSuccessfulClueDrops()); session.incrementSuccessfulClueDrops(); assertEquals(1,session.getSuccessfulClueDrops()); assertFalse(session.isLockpickBroken()); session.markLockpickBroken(); assertTrue(session.isLockpickBroken());
     }
 }

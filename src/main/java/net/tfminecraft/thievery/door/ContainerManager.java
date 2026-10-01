@@ -766,7 +766,7 @@ public class ContainerManager implements Listener {
         }
 
         // The probe menu opens only once the pin minigame is solved.
-        Thievery.getInstance().getPinGridManager().start(p, b, () -> openLockpickSession(p, b));
+        Thievery.getInstance().getPinGridManager().start(p, b, mistakes -> openLockpickSession(p, b, mistakes));
     }
 
     private boolean isBeingPicked(Block b) {
@@ -778,7 +778,7 @@ public class ContainerManager implements Listener {
         return Thievery.getInstance().getPinGridManager().isPicking(b);
     }
 
-    private void openLockpickSession(Player p, Block b) {
+    private void openLockpickSession(Player p, Block b, int gridMistakes) {
         // The chest or the held lockpick may have changed while the minigame ran.
         if (!(b.getState() instanceof Container container)) return;
         LockpickDefinition lockpickDef = ToolResolver.resolveLockpick(p.getInventory().getItemInMainHand());
@@ -789,11 +789,11 @@ public class ContainerManager implements Listener {
         Inventory chestInv = container.getInventory();
 
         int dexterity = RiskCalculator.getDexterity(p);
-        double successChance = ChestLockpickSession.computeSuccessChance(dexterity, lockpickDef.getStrength());
-
         String targetKey = TargetKeyResolver.resolve(getOwnerFromInventory(chestInv));
         LockTypeProfile lockType = Parameters.lockTypeProfile(data.getLockState());
-        ChestLockpickSession session = new ChestLockpickSession(playerId, b, lockpickDef, successChance, chestInv,
+        int seizedCount = ChestLockpickSession.computeSeizedCount(dexterity, lockpickDef.getStrength(), lockType,
+                chestInv.getSize(), gridMistakes);
+        ChestLockpickSession session = new ChestLockpickSession(playerId, b, lockpickDef, seizedCount, chestInv,
                 targetKey, lockType);
         lockpickingSessions.put(playerId, session);
         EvilRpPlays.record(p);

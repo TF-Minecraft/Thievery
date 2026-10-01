@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
+import java.util.function.IntConsumer;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -56,7 +57,7 @@ public class PinGridManager implements Listener {
         final String targetId;
         final PinGrid grid;
         final int recallTicks;
-        final Runnable onSolved;
+        final IntConsumer onSolved;
         final Inventory inventory;
         final BossBar bar;
         Phase phase = Phase.PREPARE;
@@ -66,7 +67,7 @@ public class PinGridManager implements Listener {
 
         // Keep the existing legacy text representation for inventory and boss bar titles.
         @SuppressWarnings("deprecation")
-        Game(UUID playerId, Block target, String targetId, PinGrid grid, int recallTicks, Runnable onSolved) {
+        Game(UUID playerId, Block target, String targetId, PinGrid grid, int recallTicks, IntConsumer onSolved) {
             this.playerId = playerId;
             this.target = target;
             this.targetId = targetId;
@@ -115,12 +116,13 @@ public class PinGridManager implements Listener {
     }
 
     /**
-     * Opens the pin grid, then runs {@code onSolved} once every pin is set. Runs it straight away when the
-     * minigame is off. Returns false when the thief is still on the fail cooldown for this lock.
+     * Opens the pin grid, then passes the number of wrong cells to {@code onSolved} once every pin is set.
+     * Passes 0 straight away when the minigame is off. Returns false when the thief is still on the fail
+     * cooldown for this lock.
      */
-    public boolean start(Player player, Block target, Runnable onSolved) {
+    public boolean start(Player player, Block target, IntConsumer onSolved) {
         if (!Parameters.chestMinigameEnabled) {
-            onSolved.run();
+            onSolved.accept(0);
             return true;
         }
         UUID playerId = player.getUniqueId();
@@ -187,7 +189,7 @@ public class PinGridManager implements Listener {
             if (game.ticksLeft <= 0) {
                 cancel(game.playerId);
                 if (game.phase == Phase.SOLVED) {
-                    game.onSolved.run();
+                    game.onSolved.accept(game.grid.mistakes());
                 }
             }
             return;

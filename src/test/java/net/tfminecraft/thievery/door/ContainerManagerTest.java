@@ -25,7 +25,7 @@ class ContainerManagerTest {
         var instance=mock(net.tfminecraft.thievery.Thievery.class); when(instance.isEnabled()).thenReturn(true); when(instance.getName()).thenReturn("Thievery"); when(instance.namespace()).thenReturn("thievery");
         plugin=mockStatic(net.tfminecraft.thievery.Thievery.class); plugin.when(net.tfminecraft.thievery.Thievery::getInstance).thenReturn(instance);
         // Solve the pin minigame straight away unless a test captures it.
-        pinGrids=mock(PinGridManager.class); when(pinGrids.start(any(),any(),any())).thenAnswer(call->{((Runnable)call.getArgument(2)).run(); return true;}); when(instance.getPinGridManager()).thenReturn(pinGrids);
+        pinGrids=mock(PinGridManager.class); when(pinGrids.start(any(),any(),any())).thenAnswer(call->{((java.util.function.IntConsumer)call.getArgument(2)).accept(0); return true;}); when(instance.getPinGridManager()).thenReturn(pinGrids);
         world=MockBukkit.getMock().addSimpleWorld("containers"); data=new HashMap<>();
         construction=mockConstruction(ContainerDataManager.class,(mock,context)-> {
             when(mock.loadContainerData(any())).thenAnswer(call->data.computeIfAbsent(call.getArgument(0),ContainerData::new));
@@ -398,9 +398,9 @@ class ContainerManagerTest {
         net.tfminecraft.thievery.cache.Cache.radius=-1; net.tfminecraft.thievery.cache.Cache.debugAllowOwnChest=false; net.tfminecraft.thievery.cache.Cache.requireOwnerOnline=false; net.tfminecraft.thievery.cache.Cache.traits=List.of();
         var barrel=lockpickBlock(); var locked=lock(barrel,UUID.randomUUID()); var pick=mock(net.tfminecraft.thievery.player.LockpickDefinition.class); when(pick.getCapacity()).thenReturn(10); when(pick.getStrength()).thenReturn(.5);
         tools.when(()->ToolResolver.isLockpick(any())).thenReturn(true); tools.when(()->ToolResolver.resolveLockpick(any())).thenReturn(pick);
-        List<Runnable> solved=new ArrayList<>(); doAnswer(call->{solved.add(call.getArgument(2)); return true;}).when(pinGrids).start(eq(player),eq(barrel),any());
-        var stealManager=mock(net.tfminecraft.thievery.steal.StealManager.class); var gui=mock(Inventory.class);
-        try(var clues=mockStatic(net.tfminecraft.thievery.clue.ClueChecker.class); var cooldown=mockStatic(net.tfminecraft.thievery.player.GuildAccessCooldown.class); var risk=mockStatic(net.tfminecraft.thievery.player.RiskCalculator.class); var targets=mockStatic(net.tfminecraft.thievery.player.TargetKeyResolver.class); var evil=mockStatic(net.tfminecraft.thievery.utils.EvilRpPlays.class); var sessions=mockStatic(net.tfminecraft.thievery.steal.StealManager.class); var menus=mockStatic(net.tfminecraft.thievery.steal.StealGui.class); var references=mockConstruction(net.tfminecraft.thievery.steal.ChestStealReference.class,(ref,context)->when(ref.buildTitle(any())).thenReturn("Search"))) {
+        List<java.util.function.IntConsumer> solved=new ArrayList<>(); doAnswer(call->{solved.add(call.getArgument(2)); return true;}).when(pinGrids).start(eq(player),eq(barrel),any());
+        var stealManager=mock(net.tfminecraft.thievery.steal.StealManager.class); var gui=mock(Inventory.class); List<ChestLockpickSession> opened=new ArrayList<>();
+        try(var clues=mockStatic(net.tfminecraft.thievery.clue.ClueChecker.class); var cooldown=mockStatic(net.tfminecraft.thievery.player.GuildAccessCooldown.class); var risk=mockStatic(net.tfminecraft.thievery.player.RiskCalculator.class); var targets=mockStatic(net.tfminecraft.thievery.player.TargetKeyResolver.class); var evil=mockStatic(net.tfminecraft.thievery.utils.EvilRpPlays.class); var sessions=mockStatic(net.tfminecraft.thievery.steal.StealManager.class); var menus=mockStatic(net.tfminecraft.thievery.steal.StealGui.class); var references=mockConstruction(net.tfminecraft.thievery.steal.ChestStealReference.class,(ref,context)->{opened.add((ChestLockpickSession)context.arguments().get(0)); when(ref.buildTitle(any())).thenReturn("Search");})) {
             clues.when(()->net.tfminecraft.thievery.clue.ClueChecker.hasEnoughClues(player)).thenReturn(true); cooldown.when(net.tfminecraft.thievery.player.GuildAccessCooldown::today).thenReturn("2026-10-01"); targets.when(()->net.tfminecraft.thievery.player.TargetKeyResolver.resolve(any())).thenReturn("target");
             sessions.when(net.tfminecraft.thievery.steal.StealManager::getInstance).thenReturn(stealManager); menus.when(()->net.tfminecraft.thievery.steal.StealGui.buildHiddenGui(any(),any(),anyString())).thenReturn(gui);
             var event=interact(barrel,Action.RIGHT_CLICK_BLOCK);
@@ -414,12 +414,14 @@ class ContainerManagerTest {
             assertEquals(1,solved.size()); verifyNoInteractions(stealManager); assertNull(locked.getLastAccess(player.getUniqueId())); evil.verifyNoInteractions();
 
             var state=barrel.getState(); when(barrel.getState()).thenReturn(mock(BlockState.class));
-            solved.getFirst().run(); verifyNoInteractions(stealManager);
+            solved.getFirst().accept(0); verifyNoInteractions(stealManager);
             when(barrel.getState()).thenReturn(state); tools.when(()->ToolResolver.resolveLockpick(any())).thenReturn(null);
-            solved.getFirst().run(); verifyNoInteractions(stealManager);
+            solved.getFirst().accept(0); verifyNoInteractions(stealManager);
 
             tools.when(()->ToolResolver.resolveLockpick(any())).thenReturn(pick);
-            solved.getFirst().run();
+            // A 27-slot barrel at a full break chance hides 8 pins, plus one per wrong grid cell.
+            solved.getFirst().accept(2);
+            assertEquals(10,opened.getFirst().getSeizedCount());
             verify(stealManager).openSession(player,references.constructed().getFirst(),gui); assertEquals("2026-10-01",locked.getLastAccess(player.getUniqueId())); evil.verify(()->net.tfminecraft.thievery.utils.EvilRpPlays.record(player));
         } finally { net.tfminecraft.thievery.cache.Cache.radius=radius; net.tfminecraft.thievery.cache.Cache.debugAllowOwnChest=own; net.tfminecraft.thievery.cache.Cache.requireOwnerOnline=online; net.tfminecraft.thievery.cache.Cache.traits=traits; }
     }
