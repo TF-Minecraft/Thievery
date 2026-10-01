@@ -35,9 +35,11 @@ public class ChestLockpickSession extends HiddenStealSession {
         this.thiefId = thiefId;
         this.chestBlock = chestBlock;
         this.lockpickDef = lockpickDef;
-        this.seizedCount = Math.max(0, seizedCount);
         this.lockType = lockType == null ? LockTypeProfile.IDENTITY : lockType;
         this.seizedPins = new SeizedPins(getLayout().getLogicalSlotToGuiSlot().values(), PinGrid.MENU_COLUMNS);
+        // The first probe is always clear, so at most every other slot can hold a pin.
+        int slots = getLayout().getLogicalSlotToGuiSlot().size();
+        this.seizedCount = Math.max(0, Math.min(seizedCount, slots - 1));
     }
 
     public UUID getThiefId() {

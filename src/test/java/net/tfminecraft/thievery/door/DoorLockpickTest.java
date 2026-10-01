@@ -38,7 +38,7 @@ class DoorLockpickTest {
     }
     @Test void chestSessionTracksRevealsBudgetCluesAndBrokenTools() {
         UUID id=UUID.randomUUID(); var block=mock(Block.class); var pick=mock(LockpickDefinition.class); when(pick.getCapacity()).thenReturn(10); var inventory=mock(Inventory.class); when(inventory.getSize()).thenReturn(9);
-        var defaults=new ChestLockpickSession(id,block,pick,-2,inventory,"door",null); assertEquals(0,defaults.getSeizedCount()); assertEquals(LockTypeProfile.IDENTITY,defaults.getLockType()); assertEquals(10,defaults.getCapacityRemaining());
+        var defaults=new ChestLockpickSession(id,block,pick,-2,inventory,"door",null); assertEquals(0,defaults.getSeizedCount()); assertEquals(8,new ChestLockpickSession(id,block,pick,40,inventory,"door",null).getSeizedCount()); assertEquals(LockTypeProfile.IDENTITY,defaults.getLockType()); assertEquals(10,defaults.getCapacityRemaining());
         var session=new ChestLockpickSession(id,block,pick,2,inventory,"door",new LockTypeProfile(2,1,false,3));
         assertEquals(id,session.getThiefId()); assertSame(block,session.getChestBlock()); assertSame(pick,session.getLockpickDef()); assertEquals(2,session.getSeizedCount()); assertEquals(20,session.getCapacityRemaining());
         session.addCapacityUsed(3); assertEquals(17,session.getCapacityRemaining());
