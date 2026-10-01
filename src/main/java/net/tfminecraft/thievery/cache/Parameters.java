@@ -60,6 +60,15 @@ public final class Parameters {
     public static int chestMinigameMistakesToFail = 3;
     public static double chestMinigameFailBreakChance = 0.5;
 
+    /** Share of chest locks that use the lockpick dial instead of the pin grid. */
+    public static double chestDialChance = 0.5;
+    public static int chestDialTumblers = 4;
+    public static int chestDialZoneSteps = 2;
+    public static int chestDialMinStepTicks = 2;
+    public static int chestDialMaxStepTicks = 4;
+    public static double chestDialStepTicksPerDexterity = 0.025;
+    public static int chestDialMaxLagTicks = 6;
+
     public static double maxSuccessChance = 0.95;
 
     public static double doorMaxDistance = 3.0;

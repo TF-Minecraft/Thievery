@@ -16,6 +16,7 @@ import net.tfminecraft.thievery.cache.Cache;
 import net.tfminecraft.thievery.cache.Parameters;
 import net.tfminecraft.thievery.door.LockState;
 import net.tfminecraft.thievery.door.LockTypeProfile;
+import net.tfminecraft.thievery.door.Dial;
 import net.tfminecraft.thievery.door.PinGrid;
 import net.tfminecraft.thievery.player.RiskCalculator;
 import net.tfminecraft.thievery.utils.ThieveryTexts;
@@ -141,6 +142,15 @@ public class ConfigLoader {
         Parameters.chestMinigameMistakesToFail = Math.max(1, config.getInt(path + "mistakes-to-fail", 3));
         Parameters.chestMinigameFailBreakChance = Math.max(0.0,
                 Math.min(1.0, config.getDouble(path + "fail-break-chance", 0.5)));
+        Parameters.chestDialChance = Math.max(0.0, Math.min(1.0, config.getDouble(path + "dial-chance", 0.5)));
+        Parameters.chestDialTumblers = Math.max(1, Math.min(Dial.ROWS, config.getInt(path + "dial.tumblers", 4)));
+        Parameters.chestDialZoneSteps = Math.max(1, Math.min(Dial.MAX_ZONE, config.getInt(path + "dial.zone-steps", 2)));
+        Parameters.chestDialMinStepTicks = Math.max(1, config.getInt(path + "dial.min-step-ticks", 2));
+        Parameters.chestDialMaxStepTicks = Math.max(Parameters.chestDialMinStepTicks,
+                config.getInt(path + "dial.max-step-ticks", 4));
+        Parameters.chestDialStepTicksPerDexterity = Math.max(0.0,
+                config.getDouble(path + "dial.step-ticks-per-dexterity", 0.025));
+        Parameters.chestDialMaxLagTicks = Math.max(0, config.getInt(path + "dial.max-lag-ticks", 6));
     }
 
     private static void loadLockTypeProfiles(FileConfiguration config) {

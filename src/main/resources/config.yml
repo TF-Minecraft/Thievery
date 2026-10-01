@@ -160,6 +160,19 @@ lockpicking:
       recall-seconds-per-dexterity: 0.05
       mistakes-to-fail: 3
       fail-break-chance: 0.5
+      # Share of locks that use the lockpick dial instead of the pin grid. The pick sweeps once round a
+      # 12-step ring; press the number key shown in the middle (1-4) while it is in the green zone.
+      # Each step takes min-step-ticks to max-step-ticks (picked per sweep), plus
+      # step-ticks-per-dexterity per Dexterity level. Presses are judged against where the pick was
+      # up to max-lag-ticks ago, from the thief's ping. Misses count towards mistakes-to-fail.
+      dial-chance: 0.5
+      dial:
+        tumblers: 4
+        zone-steps: 2
+        min-step-ticks: 2
+        max-step-ticks: 4
+        step-ticks-per-dexterity: 0.025
+        max-lag-ticks: 6
 
   # Multipliers on the chest steal bases. Omitted keys stay at 1.0, and critical-risk stays on.
   # break-chance-multiplier scales the number of seized pins.

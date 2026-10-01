@@ -17,7 +17,7 @@ import org.mockbukkit.mockbukkit.MockBukkit;
 import org.mockito.*;
 
 class ContainerManagerTest {
-    World world; Player player; ContainerManager manager; ContainerDataManager storage; Map<Location,ContainerData> data; PinGridManager pinGrids;
+    World world; Player player; ContainerManager manager; ContainerDataManager storage; Map<Location,ContainerData> data; LockMinigameManager pinGrids;
     MockedStatic<net.tfminecraft.thievery.Thievery> plugin;
     MockedConstruction<ContainerDataManager> construction; MockedStatic<GraveManager> graves; MockedStatic<ToolResolver> tools; MockedStatic<FactionLockTutorial> tutorial;
     @BeforeEach void setup() {
@@ -25,7 +25,7 @@ class ContainerManagerTest {
         var instance=mock(net.tfminecraft.thievery.Thievery.class); when(instance.isEnabled()).thenReturn(true); when(instance.getName()).thenReturn("Thievery"); when(instance.namespace()).thenReturn("thievery");
         plugin=mockStatic(net.tfminecraft.thievery.Thievery.class); plugin.when(net.tfminecraft.thievery.Thievery::getInstance).thenReturn(instance);
         // Solve the pin minigame straight away unless a test captures it.
-        pinGrids=mock(PinGridManager.class); when(pinGrids.start(any(),any(),any())).thenAnswer(call->{((java.util.function.IntConsumer)call.getArgument(2)).accept(0); return true;}); when(instance.getPinGridManager()).thenReturn(pinGrids);
+        pinGrids=mock(LockMinigameManager.class); when(pinGrids.start(any(),any(),any())).thenAnswer(call->{((java.util.function.IntConsumer)call.getArgument(2)).accept(0); return true;}); when(instance.getLockMinigameManager()).thenReturn(pinGrids);
         world=MockBukkit.getMock().addSimpleWorld("containers"); data=new HashMap<>();
         construction=mockConstruction(ContainerDataManager.class,(mock,context)-> {
             when(mock.loadContainerData(any())).thenAnswer(call->data.computeIfAbsent(call.getArgument(0),ContainerData::new));

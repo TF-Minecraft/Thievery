@@ -765,8 +765,8 @@ public class ContainerManager implements Listener {
             return;
         }
 
-        // The probe menu opens only once the pin minigame is solved.
-        Thievery.getInstance().getPinGridManager().start(p, b, mistakes -> openLockpickSession(p, b, mistakes));
+        // The probe menu opens only once the lock minigame is solved.
+        Thievery.getInstance().getLockMinigameManager().start(p, b, mistakes -> openLockpickSession(p, b, mistakes));
     }
 
     private boolean isBeingPicked(Block b) {
@@ -775,7 +775,7 @@ public class ContainerManager implements Listener {
                 return true;
             }
         }
-        return Thievery.getInstance().getPinGridManager().isPicking(b);
+        return Thievery.getInstance().getLockMinigameManager().isPicking(b);
     }
 
     private void openLockpickSession(Player p, Block b, int gridMistakes) {

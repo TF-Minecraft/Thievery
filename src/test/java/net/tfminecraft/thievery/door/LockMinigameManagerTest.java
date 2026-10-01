@@ -34,13 +34,13 @@ import org.mockbukkit.mockbukkit.ServerMock;
 import org.mockbukkit.mockbukkit.entity.PlayerMock;
 import org.mockito.MockedStatic;
 
-class PinGridManagerTest {
+class LockMinigameManagerTest {
     private ServerMock server;
     private MockedStatic<Thievery> plugin;
     private MockedStatic<RiskCalculator> risk;
     private LockPickManager lockPicks;
     private Random random;
-    private PinGridManager manager;
+    private LockMinigameManager manager;
     private PlayerMock player;
     private Block chest;
     private final AtomicInteger solved = new AtomicInteger();
@@ -50,6 +50,7 @@ class PinGridManagerTest {
     private int rows, columns, pins, mistakes;
     private double prepare, memorise, recall, perDexterity, breakChance;
     private long failCooldown;
+    private double dialChance;
 
     @BeforeEach
     void setUp() {
@@ -71,6 +72,8 @@ class PinGridManagerTest {
         perDexterity = Parameters.chestMinigameRecallSecondsPerDexterity;
         breakChance = Parameters.chestMinigameFailBreakChance;
         failCooldown = Parameters.lockpickFailCooldownMs;
+        dialChance = Parameters.chestDialChance;
+        Parameters.chestDialChance = 0.0;
         Parameters.chestMinigameEnabled = true;
         Parameters.chestMinigameRows = 2;
         Parameters.chestMinigameColumns = 3;
@@ -85,7 +88,7 @@ class PinGridManagerTest {
         lockPicks = new LockPickManager();
         random = mock(Random.class);
         when(random.nextDouble()).thenReturn(0.9);
-        manager = new PinGridManager(lockPicks, random);
+        manager = new LockMinigameManager(lockPicks, random);
         World world = server.addSimpleWorld("vault");
         chest = world.getBlockAt(0, 64, 0);
         chest.setType(Material.CHEST);
@@ -106,18 +109,19 @@ class PinGridManagerTest {
         Parameters.chestMinigameRecallSecondsPerDexterity = perDexterity;
         Parameters.chestMinigameFailBreakChance = breakChance;
         Parameters.lockpickFailCooldownMs = failCooldown;
+        Parameters.chestDialChance = dialChance;
         risk.close();
         plugin.close();
         MockBukkit.unmock();
     }
 
-    private PinGridManager.Game start() {
+    private PinGridGame start() {
         assertTrue(manager.start(player, chest, onSolved));
         return game();
     }
 
-    private PinGridManager.Game game() {
-        return (PinGridManager.Game) player.getOpenInventory().getTopInventory().getHolder();
+    private PinGridGame game() {
+        return (PinGridGame) player.getOpenInventory().getTopInventory().getHolder();
     }
 
     private void ticks(int count) {
@@ -125,12 +129,12 @@ class PinGridManagerTest {
     }
 
     /** Runs the prepare and memorise phases, returning the slots that were lit. */
-    private List<Integer> memorise(PinGridManager.Game game) {
+    private List<Integer> memorise(PinGridGame game) {
         ticks(1);
-        assertEquals(PinGridManager.Phase.MEMORISE, game.phase);
+        assertEquals(PinGridGame.Phase.MEMORISE, game.phase);
         List<Integer> lit = slotsOf(game.inventory, Material.LIME_STAINED_GLASS_PANE);
         ticks(2);
-        assertEquals(PinGridManager.Phase.RECALL, game.phase);
+        assertEquals(PinGridGame.Phase.RECALL, game.phase);
         assertTrue(slotsOf(game.inventory, Material.LIME_STAINED_GLASS_PANE).isEmpty());
         return lit;
     }
@@ -157,7 +161,7 @@ class PinGridManagerTest {
         return event;
     }
 
-    private int missSlot(PinGridManager.Game game, List<Integer> lit, int skip) {
+    private int missSlot(PinGridGame game, List<Integer> lit, int skip) {
         int found = 0;
         for (int slot = 0; slot < game.inventory.getSize(); slot++) {
             if (game.grid.cellAt(slot) >= 0 && !lit.contains(slot) && found++ == skip) {
@@ -173,11 +177,11 @@ class PinGridManagerTest {
 
     @Test
     void targetIdsNameTheChestBlock() {
-        assertEquals("chest:vault:0:64:0", PinGridManager.targetId(chest.getLocation()));
-        assertEquals("", PinGridManager.targetId(null));
-        assertEquals("", PinGridManager.targetId(new Location(null, 1, 2, 3)));
-        assertEquals(1, PinGridManager.ticks(0));
-        assertEquals(30, PinGridManager.ticks(1.5));
+        assertEquals("chest:vault:0:64:0", LockMinigameManager.targetId(chest.getLocation()));
+        assertEquals("", LockMinigameManager.targetId(null));
+        assertEquals("", LockMinigameManager.targetId(new Location(null, 1, 2, 3)));
+        assertEquals(1, LockMinigame.ticks(0));
+        assertEquals(30, LockMinigame.ticks(1.5));
     }
 
     @Test
@@ -192,12 +196,12 @@ class PinGridManagerTest {
     @Test
     void solvingEveryPinShowsSuccessThenRunsTheCallback() {
         risk.when(() -> RiskCalculator.getDexterity(player)).thenReturn(10);
-        PinGridManager.Game game = start();
+        PinGridGame game = start();
         assertTrue(manager.isPicking(chest));
         assertFalse(manager.isPicking(chest.getRelative(1, 0, 0)));
         assertEquals(18, game.inventory.getSize());
         assertEquals(30, game.recallTicks);
-        assertEquals(PinGridManager.Phase.PREPARE, game.phase);
+        assertEquals(PinGridGame.Phase.PREPARE, game.phase);
         assertEquals(12, slotsOf(game.inventory, Material.BLACK_STAINED_GLASS_PANE).size());
         assertEquals(6, slotsOf(game.inventory, Material.GRAY_STAINED_GLASS_PANE).size());
         assertEquals(" ", game.inventory.getItem(0).getItemMeta().getDisplayName());
@@ -214,24 +218,24 @@ class PinGridManagerTest {
 
         assertTrue(click(0).isCancelled());
         assertTrue(click(18).isCancelled());
-        assertEquals(PinGridManager.Phase.RECALL, game.phase);
+        assertEquals(PinGridGame.Phase.RECALL, game.phase);
         click(lit.get(0));
         assertEquals(Material.LIME_STAINED_GLASS_PANE, game.inventory.getItem(lit.get(0)).getType());
         player.assertSoundHeard(Sound.BLOCK_TRIPWIRE_CLICK_ON);
         click(lit.get(0));
-        assertEquals(PinGridManager.Phase.RECALL, game.phase);
+        assertEquals(PinGridGame.Phase.RECALL, game.phase);
         ticks(1);
         assertTrue(game.bar.getProgress() < 1.0);
         click(missSlot(game, lit, 0));
-        assertEquals(PinGridManager.Phase.RECALL, game.phase);
+        assertEquals(PinGridGame.Phase.RECALL, game.phase);
         click(lit.get(1));
-        assertEquals(PinGridManager.Phase.SOLVED, game.phase);
+        assertEquals(LockMinigame.Outcome.SOLVED, game.outcome);
         assertEquals("§aThe lock gives way", player.getOpenInventory().getTitle());
         player.assertSoundHeard(Sound.BLOCK_IRON_TRAPDOOR_OPEN);
 
         close();
         assertTrue(manager.isPicking(chest));
-        ticks(PinGridManager.SOLVED_TICKS - 1);
+        ticks(LockMinigame.SOLVED_TICKS - 1);
         assertEquals(0, solved.get());
         ticks(1);
         assertEquals(1, solved.get());
@@ -239,7 +243,7 @@ class PinGridManagerTest {
         assertFalse(manager.isPicking(chest));
         assertTrue(game.bar.getPlayers().isEmpty());
         assertFalse(lockPicks.isOnCooldown(player.getUniqueId(), game.targetId));
-        ticks(PinGridManager.SOLVED_TICKS);
+        ticks(LockMinigame.SOLVED_TICKS);
         assertEquals(1, solved.get());
     }
 
@@ -247,16 +251,16 @@ class PinGridManagerTest {
     void tooManyMistakesRevealsMissedPinsAppliesTheCooldownAndMayBreakThePick() {
         when(random.nextDouble()).thenReturn(0.1);
         player.getInventory().getItemInMainHand().setAmount(2);
-        PinGridManager.Game game = start();
+        PinGridGame game = start();
         List<Integer> lit = memorise(game);
         click(lit.get(0));
         int first = missSlot(game, lit, 0);
         click(first);
         assertEquals(Material.RED_STAINED_GLASS_PANE, game.inventory.getItem(first).getType());
         player.assertSoundHeard(Sound.BLOCK_NOTE_BLOCK_BASS);
-        assertEquals(PinGridManager.Phase.RECALL, game.phase);
+        assertEquals(PinGridGame.Phase.RECALL, game.phase);
         click(missSlot(game, lit, 1));
-        assertEquals(PinGridManager.Phase.FAILED, game.phase);
+        assertEquals(LockMinigame.Outcome.FAILED, game.outcome);
         assertEquals(Material.YELLOW_STAINED_GLASS_PANE, game.inventory.getItem(lit.get(1)).getType());
         assertEquals(Material.LIME_STAINED_GLASS_PANE, game.inventory.getItem(lit.get(0)).getType());
         assertEquals("§cThe pins slip", player.getOpenInventory().getTitle());
@@ -267,7 +271,7 @@ class PinGridManagerTest {
         assertTrue(lockPicks.isOnCooldown(player.getUniqueId(), game.targetId));
 
         click(lit.get(1));
-        ticks(PinGridManager.FAILED_TICKS - 1);
+        ticks(LockMinigame.FAILED_TICKS - 1);
         assertSame(game, game());
         ticks(1);
         assertEquals(InventoryType.CRAFTING, player.getOpenInventory().getType());
@@ -286,26 +290,26 @@ class PinGridManagerTest {
         Parameters.chestMinigameRecallSeconds = 5.0;
         Parameters.chestMinigameRecallSecondsPerDexterity = 0.0;
         when(random.nextDouble()).thenReturn(0.1);
-        PinGridManager.Game game = start();
+        PinGridGame game = start();
         memorise(game);
         ticks(game.recallTicks - 61);
         assertEquals(BarColor.GREEN, game.bar.getColor());
         ticks(1);
         assertEquals(BarColor.RED, game.bar.getColor());
         ticks(59);
-        assertEquals(PinGridManager.Phase.RECALL, game.phase);
+        assertEquals(PinGridGame.Phase.RECALL, game.phase);
         ticks(1);
-        assertEquals(PinGridManager.Phase.FAILED, game.phase);
+        assertEquals(LockMinigame.Outcome.FAILED, game.outcome);
         assertTrue(player.getInventory().getItemInMainHand().getType().isAir());
         player.assertSoundHeard(Sound.ENTITY_ITEM_BREAK);
     }
 
     @Test
     void failingWithoutABreakOrWithAnEmptyHandOnlySlipsThePins() {
-        PinGridManager.Game game = start();
+        PinGridGame game = start();
         memorise(game);
         ticks(game.recallTicks);
-        assertEquals(PinGridManager.Phase.FAILED, game.phase);
+        assertEquals(LockMinigame.Outcome.FAILED, game.outcome);
         assertEquals(Material.TRIPWIRE_HOOK, player.getInventory().getItemInMainHand().getType());
         assertEquals("§cThe pins slip back into place.", player.nextMessage());
         player.assertSoundHeard(Sound.BLOCK_CHEST_LOCKED);
@@ -322,21 +326,21 @@ class PinGridManagerTest {
     @Test
     void closingTheGridEarlyCountsAsAFailedAttempt() {
         when(random.nextDouble()).thenReturn(0.1);
-        PinGridManager.Game game = start();
+        PinGridGame game = start();
         close();
         assertFalse(manager.isPicking(chest));
         assertTrue(game.task.isCancelled());
         assertTrue(lockPicks.isOnCooldown(player.getUniqueId(), game.targetId));
         assertTrue(player.getInventory().getItemInMainHand().getType().isAir());
         assertEquals("§cThe pins slip and your lockpick snaps!", player.nextMessage());
-        assertEquals(PinGridManager.Phase.PREPARE, game.phase);
+        assertEquals(PinGridGame.Phase.PREPARE, game.phase);
 
         lockPicks.clearCooldown(player.getUniqueId());
         game = start();
         List<Integer> lit = memorise(game);
         click(missSlot(game, lit, 0));
         click(missSlot(game, lit, 1));
-        assertEquals(PinGridManager.Phase.FAILED, game.phase);
+        assertEquals(LockMinigame.Outcome.FAILED, game.outcome);
         player.nextMessage();
         close();
         assertFalse(manager.isPicking(chest));
@@ -345,7 +349,7 @@ class PinGridManagerTest {
 
     @Test
     void unrelatedClicksDragsAndClosesAreLeftAlone() {
-        PinGridManager.Game game = start();
+        PinGridGame game = start();
         InventoryView view = player.getOpenInventory();
 
         Inventory other = server.createInventory(null, 9, "Other");
@@ -388,13 +392,13 @@ class PinGridManagerTest {
 
     @Test
     void cancellingEndsGamesWithoutAPenalty() {
-        PinGridManager.Game first = start();
-        PinGridManager.Game second = start();
+        PinGridGame first = start();
+        PinGridGame second = start();
         assertNotSame(first, second);
         assertTrue(first.task.isCancelled());
         assertTrue(manager.isPicking(chest));
         manager.tick(player, first);
-        assertEquals(PinGridManager.Phase.PREPARE, first.phase);
+        assertEquals(PinGridGame.Phase.PREPARE, first.phase);
 
         PlayerMock other = server.addPlayer();
         Block barrel = chest.getRelative(2, 0, 0);
@@ -413,7 +417,7 @@ class PinGridManagerTest {
 
     @Test
     void brokenChestsAndDepartedThievesEndTheGameQuietly() {
-        PinGridManager.Game game = start();
+        PinGridGame game = start();
         chest.setType(Material.STONE);
         ticks(1);
         assertFalse(manager.isPicking(chest));
@@ -430,23 +434,23 @@ class PinGridManagerTest {
     @Test
     void prepareHoldsTheGridBlankUntilItsTimeRunsOut() {
         Parameters.chestMinigamePrepareSeconds = 1.0;
-        PinGridManager.Game game = start();
+        PinGridGame game = start();
         assertSame(game.inventory, game.getInventory());
         assertEquals("§7Steady your hands...", player.getOpenInventory().getTitle());
         ticks(19);
-        assertEquals(PinGridManager.Phase.PREPARE, game.phase);
+        assertEquals(PinGridGame.Phase.PREPARE, game.phase);
         assertEquals(1.0 / 20, game.bar.getProgress(), 1e-9);
         ticks(1);
-        assertEquals(PinGridManager.Phase.MEMORISE, game.phase);
+        assertEquals(PinGridGame.Phase.MEMORISE, game.phase);
         assertEquals("§eMemorise the pins", player.getOpenInventory().getTitle());
     }
 
     @Test
     void phaseChangesSkipTheTitleWhenAnotherMenuIsOpen() {
-        PinGridManager.Game game = start();
+        PinGridGame game = start();
         player.openInventory(server.createInventory(null, 9, "Elsewhere"));
         ticks(1);
-        assertEquals(PinGridManager.Phase.MEMORISE, game.phase);
+        assertEquals(PinGridGame.Phase.MEMORISE, game.phase);
         assertEquals("Elsewhere", player.getOpenInventory().getTitle());
         assertEquals(2, slotsOf(game.inventory, Material.LIME_STAINED_GLASS_PANE).size());
     }
