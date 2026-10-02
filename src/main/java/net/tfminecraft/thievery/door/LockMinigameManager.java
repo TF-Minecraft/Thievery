@@ -32,6 +32,12 @@ import net.tfminecraft.thievery.utils.ThieveryTexts;
  */
 public class LockMinigameManager implements Listener {
 
+    /** A lock minigame forced by staff testing; {@code null} means the configured random choice. */
+    public enum Mode {
+        GRID,
+        DIAL
+    }
+
     private final LockPickManager lockPickManager;
     private final Random random;
     private final Map<UUID, LockMinigame> games = new HashMap<>();
@@ -61,7 +67,12 @@ public class LockMinigameManager implements Listener {
      * this lock.
      */
     public boolean start(Player player, Block target, IntConsumer onSolved) {
-        if (!Parameters.chestMinigameEnabled) {
+        return start(player, target, null, onSolved);
+    }
+
+    /** As {@link #start(Player, Block, IntConsumer)}, but a forced {@code mode} runs even when the minigame is off. */
+    public boolean start(Player player, Block target, Mode mode, IntConsumer onSolved) {
+        if (mode == null && !Parameters.chestMinigameEnabled) {
             onSolved.accept(0);
             return true;
         }
@@ -76,7 +87,8 @@ public class LockMinigameManager implements Listener {
 
         int dexterity = RiskCalculator.getDexterity(player);
         LockMinigame game;
-        if (random.nextDouble() < Parameters.chestDialChance) {
+        boolean dial = mode == null ? random.nextDouble() < Parameters.chestDialChance : mode == Mode.DIAL;
+        if (dial) {
             game = new DialGame(this, playerId, target, targetId, random, dexterity, onSolved);
         } else {
             PinGrid grid = new PinGrid(Parameters.chestMinigameRows, Parameters.chestMinigameColumns,

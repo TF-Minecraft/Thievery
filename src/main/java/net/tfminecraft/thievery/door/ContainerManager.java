@@ -769,6 +769,26 @@ public class ContainerManager implements Listener {
         Thievery.getInstance().getLockMinigameManager().start(p, b, mistakes -> openLockpickSession(p, b, mistakes));
     }
 
+    /**
+     * Staff testing: runs a lock minigame on any container, skipping the trait, clue, ownership and access checks,
+     * then opens the probe menu as a real pick would.
+     */
+    public void testPick(Player p, Block b, LockMinigameManager.Mode mode) {
+        if (b == null || !(b.getState() instanceof Container) || Parameters.excludedContainerMaterials.contains(b.getType())) {
+            p.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "Look at a container within 5 blocks."));
+            return;
+        }
+        if (ToolResolver.resolveLockpick(p.getInventory().getItemInMainHand()) == null) {
+            p.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "Hold a lockpick to test a pick."));
+            return;
+        }
+        if (isBeingPicked(b)) {
+            p.sendMessage(ThieveryTexts.msg(ThieveryTexts.CRITICAL + "Someone is already picking this lock!"));
+            return;
+        }
+        Thievery.getInstance().getLockMinigameManager().start(p, b, mode, mistakes -> openLockpickSession(p, b, mistakes));
+    }
+
     private boolean isBeingPicked(Block b) {
         for (ChestLockpickSession active : lockpickingSessions.values()) {
             if (active.getChestBlock().equals(b)) {

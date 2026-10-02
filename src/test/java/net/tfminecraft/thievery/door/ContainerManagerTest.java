@@ -25,7 +25,7 @@ class ContainerManagerTest {
         var instance=mock(net.tfminecraft.thievery.Thievery.class); when(instance.isEnabled()).thenReturn(true); when(instance.getName()).thenReturn("Thievery"); when(instance.namespace()).thenReturn("thievery");
         plugin=mockStatic(net.tfminecraft.thievery.Thievery.class); plugin.when(net.tfminecraft.thievery.Thievery::getInstance).thenReturn(instance);
         // Solve the pin minigame straight away unless a test captures it.
-        pinGrids=mock(LockMinigameManager.class); when(pinGrids.start(any(),any(),any())).thenAnswer(call->{((java.util.function.IntConsumer)call.getArgument(2)).accept(0); return true;}); when(instance.getLockMinigameManager()).thenReturn(pinGrids);
+        pinGrids=mock(LockMinigameManager.class); when(pinGrids.start(any(),any(),any())).thenAnswer(call->{((java.util.function.IntConsumer)call.getArgument(2)).accept(0); return true;}); when(pinGrids.start(any(),any(),any(),any())).thenAnswer(call->{((java.util.function.IntConsumer)call.getArgument(3)).accept(0); return true;}); when(instance.getLockMinigameManager()).thenReturn(pinGrids);
         world=MockBukkit.getMock().addSimpleWorld("containers"); data=new HashMap<>();
         construction=mockConstruction(ContainerDataManager.class,(mock,context)-> {
             when(mock.loadContainerData(any())).thenAnswer(call->data.computeIfAbsent(call.getArgument(0),ContainerData::new));
@@ -424,6 +424,27 @@ class ContainerManagerTest {
             assertEquals(10,opened.getFirst().getSeizedCount());
             verify(stealManager).openSession(player,references.constructed().getFirst(),gui); assertEquals("2026-10-01",locked.getLastAccess(player.getUniqueId())); evil.verify(()->net.tfminecraft.thievery.utils.EvilRpPlays.record(player));
         } finally { net.tfminecraft.thievery.cache.Cache.radius=radius; net.tfminecraft.thievery.cache.Cache.debugAllowOwnChest=own; net.tfminecraft.thievery.cache.Cache.requireOwnerOnline=online; net.tfminecraft.thievery.cache.Cache.traits=traits; }
+    }
+    @Test void staffTestPickSkipsThiefChecksButStillNeedsAContainerAndALockpick() {
+        var traits=net.tfminecraft.thievery.cache.Cache.traits; net.tfminecraft.thievery.cache.Cache.traits=List.of("thief");
+        var barrel=lockpickBlock(); var locked=lock(barrel,player.getUniqueId()); var pick=mock(net.tfminecraft.thievery.player.LockpickDefinition.class); when(pick.getCapacity()).thenReturn(10); when(pick.getStrength()).thenReturn(.5);
+        var stealManager=mock(net.tfminecraft.thievery.steal.StealManager.class); var gui=mock(Inventory.class); var saved=net.tfminecraft.thievery.cache.Parameters.excludedContainerMaterials;
+        try(var clues=mockStatic(net.tfminecraft.thievery.clue.ClueChecker.class); var cooldown=mockStatic(net.tfminecraft.thievery.player.GuildAccessCooldown.class); var risk=mockStatic(net.tfminecraft.thievery.player.RiskCalculator.class); var targets=mockStatic(net.tfminecraft.thievery.player.TargetKeyResolver.class); var evil=mockStatic(net.tfminecraft.thievery.utils.EvilRpPlays.class); var sessions=mockStatic(net.tfminecraft.thievery.steal.StealManager.class); var menus=mockStatic(net.tfminecraft.thievery.steal.StealGui.class); var references=mockConstruction(net.tfminecraft.thievery.steal.ChestStealReference.class,(ref,context)->when(ref.buildTitle(any())).thenReturn("Search"))) {
+            cooldown.when(net.tfminecraft.thievery.player.GuildAccessCooldown::today).thenReturn("2026-10-02"); targets.when(()->net.tfminecraft.thievery.player.TargetKeyResolver.resolve(any())).thenReturn("target");
+            sessions.when(net.tfminecraft.thievery.steal.StealManager::getInstance).thenReturn(stealManager); menus.when(()->net.tfminecraft.thievery.steal.StealGui.buildHiddenGui(any(),any(),anyString())).thenReturn(gui);
+            manager.testPick(player,null,LockMinigameManager.Mode.DIAL);
+            manager.testPick(player,block(6,Material.STONE),LockMinigameManager.Mode.DIAL);
+            net.tfminecraft.thievery.cache.Parameters.excludedContainerMaterials=Set.of(Material.BARREL); manager.testPick(player,barrel,LockMinigameManager.Mode.DIAL); net.tfminecraft.thievery.cache.Parameters.excludedContainerMaterials=saved;
+            verify(player,times(3)).sendMessage("§cLook at a container within 5 blocks.");
+            manager.testPick(player,barrel,LockMinigameManager.Mode.DIAL); verify(player).sendMessage("§cHold a lockpick to test a pick.");
+            tools.when(()->ToolResolver.resolveLockpick(any())).thenReturn(pick);
+            when(pinGrids.isPicking(barrel)).thenReturn(true); manager.testPick(player,barrel,LockMinigameManager.Mode.DIAL); verify(player).sendMessage("§4Someone is already picking this lock!");
+            when(pinGrids.isPicking(barrel)).thenReturn(false); verify(pinGrids,never()).start(any(),any(),any(),any());
+            manager.testPick(player,barrel,LockMinigameManager.Mode.DIAL);
+            verify(pinGrids).start(eq(player),eq(barrel),eq(LockMinigameManager.Mode.DIAL),any());
+            verify(stealManager).openSession(player,references.constructed().getFirst(),gui); clues.verifyNoInteractions();
+            assertEquals("2026-10-02",locked.getLastAccess(player.getUniqueId()));
+        } finally { net.tfminecraft.thievery.cache.Cache.traits=traits; net.tfminecraft.thievery.cache.Parameters.excludedContainerMaterials=saved; }
     }
     @Test void lockpickingRejectsOwnedTargetsMissingCluesAndCooldownBeforeOpeningMenu() {
         boolean online=net.tfminecraft.thievery.cache.Cache.requireOwnerOnline; var traits=net.tfminecraft.thievery.cache.Cache.traits; net.tfminecraft.thievery.cache.Cache.requireOwnerOnline=false; net.tfminecraft.thievery.cache.Cache.traits=List.of();

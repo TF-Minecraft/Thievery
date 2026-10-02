@@ -194,6 +194,21 @@ class LockMinigameManagerTest {
     }
 
     @Test
+    void staffCanForceEitherMinigameEvenWhenTheMinigameIsOff() {
+        assertTrue(manager.start(player, chest, LockMinigameManager.Mode.DIAL, onSolved));
+        assertInstanceOf(DialGame.class, player.getOpenInventory().getTopInventory().getHolder());
+        manager.cancel(player.getUniqueId());
+        Parameters.chestMinigameEnabled = false;
+        Parameters.chestDialChance = 1.0;
+        assertTrue(manager.start(player, chest, LockMinigameManager.Mode.GRID, onSolved));
+        assertInstanceOf(PinGridGame.class, game());
+        assertEquals(0, solved.get());
+        manager.cancel(player.getUniqueId());
+        assertTrue(manager.start(player, chest, null, onSolved));
+        assertEquals(1, solved.get());
+    }
+
+    @Test
     void solvingEveryPinShowsSuccessThenRunsTheCallback() {
         risk.when(() -> RiskCalculator.getDexterity(player)).thenReturn(10);
         PinGridGame game = start();
