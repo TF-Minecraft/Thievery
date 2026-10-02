@@ -19,6 +19,7 @@ import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityMountEvent;
 import org.bukkit.event.player.PlayerInputEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
@@ -306,6 +307,45 @@ class LockMinigameManagerTest {
     }
 
     @Test
+    void teleportingYourselfAwayIsAFailedAttempt() {
+        Location here = player.getLocation();
+        Location away = here.clone().add(20, 0, 0);
+        manager.onCommand(new PlayerCommandPreprocessEvent(player, "/spawn"));
+
+        assertTrue(start(LockMinigameManager.Mode.GRID));
+        LockMinigame game = manager.game(player.getUniqueId());
+        assertFalse(game.ranCommand);
+        manager.onCommand(new PlayerCommandPreprocessEvent(player, "/spawn"));
+        assertTrue(game.ranCommand);
+        manager.onTeleport(new PlayerTeleportEvent(player, here, away, PlayerTeleportEvent.TeleportCause.COMMAND));
+        assertFalse(manager.isPlaying(player.getUniqueId()));
+        assertTrue(lockPicks.isOnCooldown(player.getUniqueId(), game.targetId));
+        assertEquals("§cThe pins slip back into place.", ((PlayerMock) player).nextMessage());
+        assertEquals("§7You were pulled away from the lock.", ((PlayerMock) player).nextMessage());
+
+        for (PlayerTeleportEvent.TeleportCause cause : new PlayerTeleportEvent.TeleportCause[] {
+                PlayerTeleportEvent.TeleportCause.ENDER_PEARL, PlayerTeleportEvent.TeleportCause.CONSUMABLE_EFFECT}) {
+            lockPicks.clearCooldown(player.getUniqueId());
+            assertTrue(start(LockMinigameManager.Mode.DIAL));
+            manager.onTeleport(new PlayerTeleportEvent(player, here, away, cause));
+            assertTrue(lockPicks.isOnCooldown(player.getUniqueId(), game.targetId), cause.name());
+        }
+
+        // A staff /tp is a command too, but not the thief's own, and a teleport after the lock gave way costs nothing.
+        lockPicks.clearCooldown(player.getUniqueId());
+        assertTrue(start(LockMinigameManager.Mode.DIAL));
+        manager.onTeleport(new PlayerTeleportEvent(player, here, away, PlayerTeleportEvent.TeleportCause.COMMAND));
+        assertFalse(lockPicks.isOnCooldown(player.getUniqueId(), game.targetId));
+        assertTrue(start(LockMinigameManager.Mode.DIAL));
+        LockMinigame solved = manager.game(player.getUniqueId());
+        solved.ranCommand = true;
+        solved.outcome = LockMinigame.Outcome.SOLVED;
+        manager.onTeleport(new PlayerTeleportEvent(player, here, away, PlayerTeleportEvent.TeleportCause.ENDER_PEARL));
+        assertFalse(manager.isPlaying(player.getUniqueId()));
+        assertFalse(lockPicks.isOnCooldown(player.getUniqueId(), game.targetId));
+    }
+
+    @Test
     void aRingThiefIsHeldInPlaceButMayLookAroundAndStillFalls() {
         assertTrue(start(LockMinigameManager.Mode.DIAL));
         Location from = new Location(world, 1, 64, 1, 0, 0);
@@ -357,6 +397,10 @@ class LockMinigameManagerTest {
         var mount = new EntityMountEvent(player, horse);
         manager.onMount(mount);
         assertTrue(mount.isCancelled());
+        var pearl = new org.bukkit.event.player.PlayerInteractEvent(player, org.bukkit.event.block.Action.RIGHT_CLICK_AIR,
+                new ItemStack(Material.ENDER_PEARL), null, org.bukkit.block.BlockFace.SELF, org.bukkit.inventory.EquipmentSlot.OFF_HAND);
+        manager.onInteract(pearl);
+        assertEquals(org.bukkit.event.Event.Result.DENY, pearl.useItemInHand());
         var riderless = new EntityMountEvent(mock(org.bukkit.entity.Entity.class), horse);
         manager.onMount(riderless);
         assertFalse(riderless.isCancelled());
@@ -365,6 +409,10 @@ class LockMinigameManagerTest {
         var mountFree = new EntityMountEvent(player, horse);
         manager.onMount(mountFree);
         assertFalse(mountFree.isCancelled());
+        var eat = new org.bukkit.event.player.PlayerInteractEvent(player, org.bukkit.event.block.Action.RIGHT_CLICK_AIR,
+                new ItemStack(Material.BREAD), null, org.bukkit.block.BlockFace.SELF, org.bukkit.inventory.EquipmentSlot.OFF_HAND);
+        manager.onInteract(eat);
+        assertNotEquals(org.bukkit.event.Event.Result.DENY, eat.useItemInHand());
         var free = new org.bukkit.event.player.PlayerItemHeldEvent(player, 0, 3);
         manager.onHotbar(free);
         assertFalse(free.isCancelled());

@@ -19,7 +19,9 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityMountEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerInputEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
@@ -230,7 +232,20 @@ public class LockMinigameManager implements Listener {
         }
     }
 
-    /** Being moved away mid-pick, by a command or another plugin, ends the attempt without a penalty. */
+    /** Remembers that the thief typed a command mid-pick, such as {@code /spawn} or a {@code /home} with a warm-up. */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onCommand(PlayerCommandPreprocessEvent event) {
+        LockMinigame game = playing(event.getPlayer());
+        if (game != null) {
+            game.ranCommand = true;
+        }
+    }
+
+    /**
+     * Being moved away mid-pick ends the attempt. A teleport the thief brought on themselves (their own command,
+     * an ender pearl or chorus fruit) counts as a failed attempt, so it is no free escape from a slip; one done
+     * to them, by staff or another plugin, ends it without a penalty.
+     */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onTeleport(PlayerTeleportEvent event) {
         Player player = event.getPlayer();
@@ -240,9 +255,18 @@ public class LockMinigameManager implements Listener {
         Location from = event.getFrom();
         Location to = event.getTo();
         if (from.getWorld() != to.getWorld() || from.distanceSquared(to) > 1.0) {
+            LockMinigame running = playing(player);
+            if (running != null && (running.ranCommand || selfTeleport(event.getCause()))) {
+                penalise(player, running);
+            }
             player.sendMessage(ThieveryTexts.msg(ThieveryTexts.MUTED + "You were pulled away from the lock."));
             cancel(player.getUniqueId());
         }
+    }
+
+    private static boolean selfTeleport(PlayerTeleportEvent.TeleportCause cause) {
+        return cause == PlayerTeleportEvent.TeleportCause.ENDER_PEARL
+                || cause == PlayerTeleportEvent.TeleportCause.CONSUMABLE_EFFECT;
     }
 
     /**
@@ -292,6 +316,17 @@ public class LockMinigameManager implements Listener {
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
     public void onSwapHands(PlayerSwapHandItemsEvent event) {
+        if (handsOnTheLock(event.getPlayer())) {
+            event.setCancelled(true);
+        }
+    }
+
+    /**
+     * The off hand is free, so without this a ring thief could throw a pearl, eat or place blocks mid-pick. Clicks
+     * at the air arrive already cancelled but still use the item, so cancelled events are handled too.
+     */
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void onInteract(PlayerInteractEvent event) {
         if (handsOnTheLock(event.getPlayer())) {
             event.setCancelled(true);
         }

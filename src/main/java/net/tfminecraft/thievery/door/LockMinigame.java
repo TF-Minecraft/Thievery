@@ -42,6 +42,8 @@ public abstract class LockMinigame {
     BukkitTask task;
     Outcome outcome = Outcome.NONE;
     int endTicks;
+    /** The thief ran a command while the game was on, so a teleport that follows is their own doing. */
+    boolean ranCommand;
 
     LockMinigame(LockMinigameManager manager, UUID playerId, Block target, String targetId, IntConsumer onSolved) {
         this.manager = manager;
