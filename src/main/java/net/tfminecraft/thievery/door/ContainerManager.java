@@ -748,6 +748,10 @@ public class ContainerManager implements Listener {
 
         e.setCancelled(true);
 
+        if (Thievery.getInstance().getLockMinigameManager().isPlaying(p.getUniqueId())) {
+            p.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You're already working a lock."));
+            return;
+        }
         if (isBeingPicked(b)) {
             p.sendMessage(ThieveryTexts.msg(ThieveryTexts.CRITICAL + "Someone is already picking this lock!"));
             return;
@@ -780,6 +784,10 @@ public class ContainerManager implements Listener {
         }
         if (ToolResolver.resolveLockpick(p.getInventory().getItemInMainHand()) == null) {
             p.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "Hold a lockpick to test a pick."));
+            return;
+        }
+        if (Thievery.getInstance().getLockMinigameManager().isPlaying(p.getUniqueId())) {
+            p.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You're already working a lock."));
             return;
         }
         if (isBeingPicked(b)) {

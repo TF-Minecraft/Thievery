@@ -16,10 +16,16 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
-import org.bukkit.event.inventory.ClickType;
+import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
-import org.bukkit.event.inventory.InventoryCloseEvent;
-import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.event.player.PlayerDropItemEvent;
+import org.bukkit.event.player.PlayerInputEvent;
+import org.bukkit.event.player.PlayerItemHeldEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerSwapHandItemsEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.inventory.ItemStack;
 
 import net.tfminecraft.thievery.Thievery;
@@ -28,8 +34,9 @@ import net.tfminecraft.thievery.player.RiskCalculator;
 import net.tfminecraft.thievery.utils.ThieveryTexts;
 
 /**
- * Runs the lock minigame that must be solved before a chest lockpick session opens: the pin grid or, for
- * {@code dial-chance} of locks, the lockpick dial. Handles the menu events, the fail cooldown and penalties.
+ * Runs the lock minigame that must be solved before a chest lockpick session opens: the pin grid dialog or, for
+ * {@code dial-chance} of locks, the floating lockpick ring. Handles the fail cooldown, penalties, and everything
+ * that can interrupt a pick: leaving, being hit, being moved, a crash, a reload.
  */
 public class LockMinigameManager implements Listener {
 
@@ -42,6 +49,9 @@ public class LockMinigameManager implements Listener {
     private final LockPickManager lockPickManager;
     private final Random random;
     private final Map<UUID, LockMinigame> games = new HashMap<>();
+    PinGridGame.GridScreens gridScreens = GridDialogs::show;
+    RingDialGame.RingViews ringViews = (player, lockpick, tumblers, slips) ->
+            RingView.open(Thievery.getInstance(), player, lockpick, tumblers, slips);
 
     public LockMinigameManager(LockPickManager lockPickManager) {
         this(lockPickManager, new Random());
@@ -64,8 +74,8 @@ public class LockMinigameManager implements Listener {
 
     /**
      * Opens a lock minigame, then passes the number of mistakes to {@code onSolved} once it is solved. Passes 0
-     * straight away when the minigame is off. Returns false when the thief is still on the fail cooldown for
-     * this lock.
+     * straight away when the minigame is off. Returns false when the thief cannot start: still on the fail
+     * cooldown for this lock, or riding or gliding when the ring needs them still.
      */
     public boolean start(Player player, Block target, IntConsumer onSolved) {
         return start(player, target, null, onSolved);
@@ -84,26 +94,31 @@ public class LockMinigameManager implements Listener {
                     + lockPickManager.getCooldownRemainingSeconds(playerId, targetId) + "s."));
             return false;
         }
+        boolean dial = mode == null ? random.nextDouble() < Parameters.chestDialChance : mode == Mode.DIAL;
+        if (dial && (player.isInsideVehicle() || player.isGliding())) {
+            player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You need both feet on the ground to work this lock."));
+            return false;
+        }
         cancel(playerId);
 
         int dexterity = RiskCalculator.getDexterity(player);
         LockMinigame game;
-        boolean dial = mode == null ? random.nextDouble() < Parameters.chestDialChance : mode == Mode.DIAL;
         if (dial) {
-            game = new DialGame(this, playerId, target, targetId, random, dexterity, onSolved);
+            ItemStack lockpick = player.getInventory().getItemInMainHand();
+            game = new RingDialGame(this, playerId, target, targetId, random, lockpick, dexterity, ringViews, onSolved);
         } else {
             PinGrid grid = new PinGrid(Parameters.chestMinigameRows, Parameters.chestMinigameColumns,
                     Parameters.chestMinigamePins, random);
             int recallTicks = LockMinigame.ticks(Parameters.chestMinigameRecallSeconds
                     + dexterity * Parameters.chestMinigameRecallSecondsPerDexterity);
-            game = new PinGridGame(this, playerId, target, targetId, grid, recallTicks, onSolved);
+            game = new PinGridGame(this, playerId, target, targetId, grid, recallTicks, gridScreens, onSolved);
         }
-        game.render();
+        game.player = player;
         LockMinigame started = game;
         game.task = Bukkit.getScheduler().runTaskTimer(Thievery.getInstance(), () -> tick(player, started), 1L, 1L);
         games.put(playerId, game);
-        player.openInventory(game.inventory);
         game.bar.addPlayer(player);
+        game.begin(player);
         return true;
     }
 
@@ -116,16 +131,19 @@ public class LockMinigameManager implements Listener {
         return false;
     }
 
-    /** Ends a game without a penalty, for example on reload or shutdown. */
+    public boolean isPlaying(UUID playerId) {
+        return games.containsKey(playerId);
+    }
+
+    LockMinigame game(UUID playerId) {
+        return games.get(playerId);
+    }
+
+    /** Ends a game without a penalty, for example on reload, shutdown or being pulled away. */
     public void cancel(UUID playerId) {
         LockMinigame game = games.get(playerId);
-        if (game == null) {
-            return;
-        }
-        finish(game);
-        Player player = Bukkit.getPlayer(playerId);
-        if (player != null && player.getOpenInventory().getTopInventory().getHolder() == game) {
-            player.closeInventory();
+        if (game != null) {
+            finish(game, game.player);
         }
     }
 
@@ -155,49 +173,128 @@ public class LockMinigameManager implements Listener {
         }
     }
 
-    @EventHandler(priority = EventPriority.LOWEST)
-    public void onInventoryClick(InventoryClickEvent event) {
-        if (!(event.getView().getTopInventory().getHolder() instanceof LockMinigame game)) {
-            return;
-        }
-        event.setCancelled(true);
-        if (!(event.getWhoClicked() instanceof Player player)) {
-            return;
-        }
-        if (event.getClick() == ClickType.NUMBER_KEY || event.getClick() == ClickType.SWAP_OFFHAND) {
-            // The client shows a cancelled hotbar or offhand swap as done until the inventory is sent again.
-            Bukkit.getScheduler().runTask(Thievery.getInstance(), player::updateInventory);
-        }
-        if (games.get(player.getUniqueId()) != game) {
-            return;
-        }
-        if (game.outcome == LockMinigame.Outcome.NONE) {
-            game.click(player, event);
+    /** The thief gave up: it counts as a failed attempt, the same as letting the pins slip. */
+    void giveUp(Player player, LockMinigame game) {
+        if (games.get(game.playerId) == game && game.outcome == LockMinigame.Outcome.NONE) {
+            player.sendMessage(ThieveryTexts.msg(ThieveryTexts.MUTED + "You ease the pick back out."));
+            game.fail(player);
         }
     }
 
-    @EventHandler(priority = EventPriority.LOWEST)
-    public void onInventoryDrag(InventoryDragEvent event) {
-        if (event.getView().getTopInventory().getHolder() instanceof LockMinigame) {
+    private LockMinigame playing(Player player) {
+        LockMinigame game = games.get(player.getUniqueId());
+        return game != null && game.outcome == LockMinigame.Outcome.NONE ? game : null;
+    }
+
+    @EventHandler
+    public void onInput(PlayerInputEvent event) {
+        LockMinigame game = playing(event.getPlayer());
+        if (game != null) {
+            game.input(event.getPlayer(), event.getInput());
+        }
+    }
+
+    /** Walking out mid-pick counts as a failed attempt, so logging out is no free retry. */
+    @EventHandler
+    public void onQuit(PlayerQuitEvent event) {
+        Player player = event.getPlayer();
+        LockMinigame game = playing(player);
+        if (game != null) {
+            penalise(player, game);
+        }
+        LockMinigame any = games.get(player.getUniqueId());
+        if (any != null) {
+            finish(any, player);
+        }
+    }
+
+    /** Undoes a freeze left behind by a crash or restart mid-pick. */
+    @EventHandler
+    public void onJoin(PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+        if (!isPlaying(player.getUniqueId()) && LockFreeze.isFrozen(player)) {
+            LockFreeze.release(player);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onDamage(EntityDamageEvent event) {
+        if (!(event.getEntity() instanceof Player player)) {
+            return;
+        }
+        LockMinigame game = playing(player);
+        if (game != null && event.getFinalDamage() > 0) {
+            player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You flinch and lose the pins."));
+            game.fail(player);
+        }
+    }
+
+    /** Being moved away mid-pick, by a command or another plugin, ends the attempt without a penalty. */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onTeleport(PlayerTeleportEvent event) {
+        Player player = event.getPlayer();
+        if (!isPlaying(player.getUniqueId())) {
+            return;
+        }
+        Location from = event.getFrom();
+        Location to = event.getTo();
+        if (from.getWorld() != to.getWorld() || from.distanceSquared(to) > 1.0) {
+            player.sendMessage(ThieveryTexts.msg(ThieveryTexts.MUTED + "You were pulled away from the lock."));
+            cancel(player.getUniqueId());
+        }
+    }
+
+    /** Keeps a ring thief in place, so knockback or a nudge cannot drift them away; looking around is fine. */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onMove(PlayerMoveEvent event) {
+        LockMinigame game = games.get(event.getPlayer().getUniqueId());
+        if (game == null || !game.holdsStill()) {
+            return;
+        }
+        Location from = event.getFrom();
+        Location to = event.getTo();
+        if (from.getX() != to.getX() || from.getY() != to.getY() || from.getZ() != to.getZ()) {
+            Location held = from.clone();
+            held.setYaw(to.getYaw());
+            held.setPitch(to.getPitch());
+            event.setTo(held);
+        }
+    }
+
+    /**
+     * Keeps the lockpick in hand while the ring is up: no scrolling the hotbar, dropping, swapping hands or moving
+     * items, any of which could leave the solved lock with no pick to open it.
+     */
+    private boolean handsOnTheLock(org.bukkit.entity.HumanEntity player) {
+        LockMinigame game = games.get(player.getUniqueId());
+        return game != null && game.holdsStill();
+    }
+
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    public void onHotbar(PlayerItemHeldEvent event) {
+        if (handsOnTheLock(event.getPlayer())) {
             event.setCancelled(true);
         }
     }
 
-    @EventHandler
-    public void onInventoryClose(InventoryCloseEvent event) {
-        if (!(event.getPlayer() instanceof Player player)) {
-            return;
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    public void onDrop(PlayerDropItemEvent event) {
+        if (handsOnTheLock(event.getPlayer())) {
+            event.setCancelled(true);
         }
-        LockMinigame game = games.get(player.getUniqueId());
-        if (game == null || event.getInventory().getHolder() != game) {
-            return;
+    }
+
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    public void onSwapHands(PlayerSwapHandItemsEvent event) {
+        if (handsOnTheLock(event.getPlayer())) {
+            event.setCancelled(true);
         }
-        // A solved lock still opens once the short success display ends.
-        if (game.outcome != LockMinigame.Outcome.SOLVED) {
-            finish(game);
-            if (game.outcome == LockMinigame.Outcome.NONE) {
-                penalise(player, game);
-            }
+    }
+
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    public void onInventoryClick(InventoryClickEvent event) {
+        if (handsOnTheLock(event.getWhoClicked())) {
+            event.setCancelled(true);
         }
     }
 
@@ -212,10 +309,11 @@ public class LockMinigameManager implements Listener {
         }
     }
 
-    private void finish(LockMinigame game) {
+    private void finish(LockMinigame game, Player player) {
         games.remove(game.playerId);
         game.task.cancel();
         game.bar.removeAll();
+        game.cleanup(player);
     }
 
     private static boolean breakLockpick(Player player) {

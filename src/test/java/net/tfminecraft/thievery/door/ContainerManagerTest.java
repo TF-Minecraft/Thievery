@@ -425,6 +425,21 @@ class ContainerManagerTest {
             verify(stealManager).openSession(player,references.constructed().getFirst(),gui); assertEquals("2026-10-01",locked.getLastAccess(player.getUniqueId())); evil.verify(()->net.tfminecraft.thievery.utils.EvilRpPlays.record(player));
         } finally { net.tfminecraft.thievery.cache.Cache.radius=radius; net.tfminecraft.thievery.cache.Cache.debugAllowOwnChest=own; net.tfminecraft.thievery.cache.Cache.requireOwnerOnline=online; net.tfminecraft.thievery.cache.Cache.traits=traits; }
     }
+    @Test void aThiefAlreadyWorkingALockCannotStartAnother() {
+        var traits=net.tfminecraft.thievery.cache.Cache.traits; boolean online=net.tfminecraft.thievery.cache.Cache.requireOwnerOnline, own=net.tfminecraft.thievery.cache.Cache.debugAllowOwnChest;
+        net.tfminecraft.thievery.cache.Cache.traits=List.of(); net.tfminecraft.thievery.cache.Cache.requireOwnerOnline=false; net.tfminecraft.thievery.cache.Cache.debugAllowOwnChest=false;
+        var barrel=lockpickBlock(); lock(barrel,UUID.randomUUID()); var pick=mock(net.tfminecraft.thievery.player.LockpickDefinition.class);
+        tools.when(()->ToolResolver.isLockpick(any())).thenReturn(true); tools.when(()->ToolResolver.resolveLockpick(any())).thenReturn(pick);
+        when(pinGrids.isPlaying(player.getUniqueId())).thenReturn(true);
+        try(var clues=mockStatic(net.tfminecraft.thievery.clue.ClueChecker.class)) {
+            clues.when(()->net.tfminecraft.thievery.clue.ClueChecker.hasEnoughClues(player)).thenReturn(true);
+            manager.onRightClickChest(interact(barrel,Action.RIGHT_CLICK_BLOCK));
+            manager.testPick(player,barrel,LockMinigameManager.Mode.DIAL);
+            verify(player,times(2)).sendMessage("\u00a7cYou're already working a lock.");
+            verify(pinGrids,never()).start(any(),any(),any());
+            verify(pinGrids,never()).start(any(),any(),any(),any());
+        } finally { net.tfminecraft.thievery.cache.Cache.traits=traits; net.tfminecraft.thievery.cache.Cache.requireOwnerOnline=online; net.tfminecraft.thievery.cache.Cache.debugAllowOwnChest=own; }
+    }
     @Test void staffTestPickSkipsThiefChecksButStillNeedsAContainerAndALockpick() {
         var traits=net.tfminecraft.thievery.cache.Cache.traits; net.tfminecraft.thievery.cache.Cache.traits=List.of("thief");
         var barrel=lockpickBlock(); var locked=lock(barrel,player.getUniqueId()); var pick=mock(net.tfminecraft.thievery.player.LockpickDefinition.class); when(pick.getCapacity()).thenReturn(10); when(pick.getStrength()).thenReturn(.5);

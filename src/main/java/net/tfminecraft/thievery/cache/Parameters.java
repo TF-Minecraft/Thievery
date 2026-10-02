@@ -60,14 +60,26 @@ public final class Parameters {
     public static int chestMinigameMistakesToFail = 3;
     public static double chestMinigameFailBreakChance = 0.5;
 
-    /** Share of chest locks that use the lockpick dial instead of the pin grid. */
+    /** Draw the pin grid's cells as block textures; off draws coloured squares. */
+    public static boolean chestGridSprites = true;
+
+    /** Share of chest locks that use the lockpick ring instead of the pin grid. */
     public static double chestDialChance = 0.5;
     public static int chestDialTumblers = 4;
-    public static int chestDialZoneSteps = 2;
-    public static int chestDialMinStepTicks = 2;
-    public static int chestDialMaxStepTicks = 4;
-    public static double chestDialStepTicksPerDexterity = 0.025;
+    /** Share of the ring the green zone covers for the first tumbler. */
+    public static double chestDialZoneWidth = 0.14;
+    /** How much each set tumbler narrows the zone, as a share of its first width. */
+    public static double chestDialZoneShrinkPerTumbler = 0.15;
+    public static double chestDialMinLapSeconds = 1.8;
+    public static double chestDialMaxLapSeconds = 2.6;
+    public static double chestDialLapSecondsPerDexterity = 0.01;
+    /** Reverse the sweep after each set tumbler, like a combination lock. */
+    public static boolean chestDialAlternate = true;
     public static int chestDialMaxLagTicks = 6;
+    /** How far in front of the eyes the ring floats, in blocks. */
+    public static double chestDialDistance = 2.4;
+    /** Where the lockpick item's tip points when unturned, in clockwise degrees from up. */
+    public static double chestDialPickTipDegrees = 45.0;
 
     public static double maxSuccessChance = 0.95;
 

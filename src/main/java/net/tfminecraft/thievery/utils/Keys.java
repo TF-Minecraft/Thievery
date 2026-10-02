@@ -20,6 +20,9 @@ public final class Keys {
     public static final NamespacedKey keyCopyKind = new NamespacedKey(Thievery.getInstance(), "key_copy_kind");
     public static final NamespacedKey keySourceStrength = new NamespacedKey(Thievery.getInstance(), "key_source_strength");
     public static final NamespacedKey keySourceKeyId = new NamespacedKey(Thievery.getInstance(), "key_source_key_id");
+    public static final NamespacedKey lockpickWalkSpeed = new NamespacedKey(Thievery.getInstance(), "lockpick_walk_speed");
+    public static final NamespacedKey lockpickFlying = new NamespacedKey(Thievery.getInstance(), "lockpick_flying");
+    public static final NamespacedKey lockpickJump = new NamespacedKey(Thievery.getInstance(), "lockpick_jump");
 
     public static final String COPY_KIND_PERMANENT = "permanent";
     public static final String COPY_KIND_PAPER = "paper";

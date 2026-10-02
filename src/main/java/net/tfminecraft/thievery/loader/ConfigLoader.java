@@ -16,7 +16,6 @@ import net.tfminecraft.thievery.cache.Cache;
 import net.tfminecraft.thievery.cache.Parameters;
 import net.tfminecraft.thievery.door.LockState;
 import net.tfminecraft.thievery.door.LockTypeProfile;
-import net.tfminecraft.thievery.door.Dial;
 import net.tfminecraft.thievery.door.PinGrid;
 import net.tfminecraft.thievery.player.RiskCalculator;
 import net.tfminecraft.thievery.utils.ThieveryTexts;
@@ -126,6 +125,8 @@ public class ConfigLoader {
                 config.getDouble("lockpicking.display-lock-strength", 0.5)));
     }
 
+    static final int MAX_TUMBLERS = 6;
+
     private static void loadChestMinigame(FileConfiguration config) {
         String path = "lockpicking.chest.minigame.";
         Parameters.chestMinigameEnabled = config.getBoolean(path + "enabled", true);
@@ -143,14 +144,20 @@ public class ConfigLoader {
         Parameters.chestMinigameFailBreakChance = Math.max(0.0,
                 Math.min(1.0, config.getDouble(path + "fail-break-chance", 0.5)));
         Parameters.chestDialChance = Math.max(0.0, Math.min(1.0, config.getDouble(path + "dial-chance", 0.5)));
-        Parameters.chestDialTumblers = Math.max(1, Math.min(Dial.ROWS, config.getInt(path + "dial.tumblers", 4)));
-        Parameters.chestDialZoneSteps = Math.max(1, Math.min(Dial.MAX_ZONE, config.getInt(path + "dial.zone-steps", 2)));
-        Parameters.chestDialMinStepTicks = Math.max(1, config.getInt(path + "dial.min-step-ticks", 2));
-        Parameters.chestDialMaxStepTicks = Math.max(Parameters.chestDialMinStepTicks,
-                config.getInt(path + "dial.max-step-ticks", 4));
-        Parameters.chestDialStepTicksPerDexterity = Math.max(0.0,
-                config.getDouble(path + "dial.step-ticks-per-dexterity", 0.025));
+        Parameters.chestGridSprites = config.getBoolean(path + "grid.sprites", true);
+        Parameters.chestDialTumblers = Math.max(1, Math.min(MAX_TUMBLERS, config.getInt(path + "dial.tumblers", 4)));
+        Parameters.chestDialZoneWidth = Math.max(0.02, Math.min(0.25, config.getDouble(path + "dial.zone-width", 0.14)));
+        Parameters.chestDialZoneShrinkPerTumbler = Math.max(0.0,
+                Math.min(0.5, config.getDouble(path + "dial.zone-shrink-per-tumbler", 0.15)));
+        Parameters.chestDialMinLapSeconds = Math.max(0.5, config.getDouble(path + "dial.min-lap-seconds", 1.8));
+        Parameters.chestDialMaxLapSeconds = Math.max(Parameters.chestDialMinLapSeconds,
+                config.getDouble(path + "dial.max-lap-seconds", 2.6));
+        Parameters.chestDialLapSecondsPerDexterity = Math.max(0.0,
+                config.getDouble(path + "dial.lap-seconds-per-dexterity", 0.01));
+        Parameters.chestDialAlternate = config.getBoolean(path + "dial.alternate-direction", true);
         Parameters.chestDialMaxLagTicks = Math.max(0, config.getInt(path + "dial.max-lag-ticks", 6));
+        Parameters.chestDialDistance = Math.max(1.0, Math.min(4.0, config.getDouble(path + "dial.distance", 2.4)));
+        Parameters.chestDialPickTipDegrees = config.getDouble(path + "dial.pick-tip-degrees", 45.0);
     }
 
     private static void loadLockTypeProfiles(FileConfiguration config) {
