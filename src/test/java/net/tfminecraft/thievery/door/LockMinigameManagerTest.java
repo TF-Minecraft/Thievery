@@ -16,6 +16,7 @@ import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityMountEvent;
 import org.bukkit.event.player.PlayerInputEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
@@ -305,7 +306,7 @@ class LockMinigameManagerTest {
     }
 
     @Test
-    void aRingThiefIsHeldInPlaceButMayLookAround() {
+    void aRingThiefIsHeldInPlaceButMayLookAroundAndStillFalls() {
         assertTrue(start(LockMinigameManager.Mode.DIAL));
         Location from = new Location(world, 1, 64, 1, 0, 0);
         PlayerMoveEvent drift = new PlayerMoveEvent(player, from, new Location(world, 1.4, 64, 1, 30, 10));
@@ -313,12 +314,14 @@ class LockMinigameManagerTest {
         assertEquals(from.getX(), drift.getTo().getX());
         assertEquals(30f, drift.getTo().getYaw());
         assertEquals(10f, drift.getTo().getPitch());
-        for (Location to : new Location[] {new Location(world, 1, 64.5, 1), new Location(world, 1, 64, 1.5)}) {
-            PlayerMoveEvent nudge = new PlayerMoveEvent(player, from, to);
-            manager.onMove(nudge);
-            assertEquals(from.getY(), nudge.getTo().getY());
-            assertEquals(from.getZ(), nudge.getTo().getZ());
-        }
+        PlayerMoveEvent nudge = new PlayerMoveEvent(player, from, new Location(world, 1, 63.5, 1.5));
+        manager.onMove(nudge);
+        assertEquals(from.getZ(), nudge.getTo().getZ());
+        assertEquals(63.5, nudge.getTo().getY());
+        Location landing = new Location(world, 1, 63, 1);
+        PlayerMoveEvent fall = new PlayerMoveEvent(player, from, landing);
+        manager.onMove(fall);
+        assertSame(landing, fall.getTo());
         PlayerMoveEvent look = new PlayerMoveEvent(player, from, new Location(world, 1, 64, 1, 90, 0));
         manager.onMove(look);
         assertEquals(90f, look.getTo().getYaw());
@@ -350,8 +353,18 @@ class LockMinigameManagerTest {
         when(click.getWhoClicked()).thenReturn(player);
         manager.onInventoryClick(click);
         verify(click).setCancelled(true);
+        var horse = mock(org.bukkit.entity.Entity.class);
+        var mount = new EntityMountEvent(player, horse);
+        manager.onMount(mount);
+        assertTrue(mount.isCancelled());
+        var riderless = new EntityMountEvent(mock(org.bukkit.entity.Entity.class), horse);
+        manager.onMount(riderless);
+        assertFalse(riderless.isCancelled());
 
         assertTrue(start(LockMinigameManager.Mode.GRID));
+        var mountFree = new EntityMountEvent(player, horse);
+        manager.onMount(mountFree);
+        assertFalse(mountFree.isCancelled());
         var free = new org.bukkit.event.player.PlayerItemHeldEvent(player, 0, 3);
         manager.onHotbar(free);
         assertFalse(free.isCancelled());

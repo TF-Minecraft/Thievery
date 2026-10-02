@@ -17,6 +17,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityMountEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInputEvent;
@@ -244,7 +245,11 @@ public class LockMinigameManager implements Listener {
         }
     }
 
-    /** Keeps a ring thief in place, so knockback or a nudge cannot drift them away; looking around is fine. */
+    /**
+     * Keeps a ring thief in place, so knockback, water or a nudge cannot drift them away; looking around is fine.
+     * Only the horizontal position is held, so a thief who started mid-jump still lands instead of hovering until
+     * the server kicks them for flying.
+     */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onMove(PlayerMoveEvent event) {
         LockMinigame game = games.get(event.getPlayer().getUniqueId());
@@ -253,8 +258,9 @@ public class LockMinigameManager implements Listener {
         }
         Location from = event.getFrom();
         Location to = event.getTo();
-        if (from.getX() != to.getX() || from.getY() != to.getY() || from.getZ() != to.getZ()) {
+        if (from.getX() != to.getX() || from.getZ() != to.getZ()) {
             Location held = from.clone();
+            held.setY(to.getY());
             held.setYaw(to.getYaw());
             held.setPitch(to.getPitch());
             event.setTo(held);
@@ -287,6 +293,14 @@ public class LockMinigameManager implements Listener {
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
     public void onSwapHands(PlayerSwapHandItemsEvent event) {
         if (handsOnTheLock(event.getPlayer())) {
+            event.setCancelled(true);
+        }
+    }
+
+    /** A frozen thief can still right-click a horse or a boat, which would carry them off with the ring. */
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    public void onMount(EntityMountEvent event) {
+        if (event.getEntity() instanceof org.bukkit.entity.HumanEntity rider && handsOnTheLock(rider)) {
             event.setCancelled(true);
         }
     }
