@@ -149,15 +149,15 @@ public class ConfigLoader {
         Parameters.chestDialZoneWidth = Math.max(0.02, Math.min(0.25, config.getDouble(path + "dial.zone-width", 0.14)));
         Parameters.chestDialZoneShrinkPerTumbler = Math.max(0.0,
                 Math.min(0.5, config.getDouble(path + "dial.zone-shrink-per-tumbler", 0.15)));
-        Parameters.chestDialMinLapSeconds = Math.max(0.5, config.getDouble(path + "dial.min-lap-seconds", 1.8));
+        Parameters.chestDialMinLapSeconds = Math.max(0.5, config.getDouble(path + "dial.min-lap-seconds", 1.44));
         Parameters.chestDialMaxLapSeconds = Math.max(Parameters.chestDialMinLapSeconds,
-                config.getDouble(path + "dial.max-lap-seconds", 2.6));
+                config.getDouble(path + "dial.max-lap-seconds", 2.08));
         Parameters.chestDialLapSecondsPerDexterity = Math.max(0.0,
-                config.getDouble(path + "dial.lap-seconds-per-dexterity", 0.01));
+                config.getDouble(path + "dial.lap-seconds-per-dexterity", 0.008));
+        Parameters.chestDialMistakesToFail = Math.max(1, config.getInt(path + "dial.mistakes-to-fail", 1));
         Parameters.chestDialAlternate = config.getBoolean(path + "dial.alternate-direction", true);
         Parameters.chestDialMaxLagTicks = Math.max(0, config.getInt(path + "dial.max-lag-ticks", 6));
         Parameters.chestDialDistance = Math.max(1.0, Math.min(4.0, config.getDouble(path + "dial.distance", 2.4)));
-        Parameters.chestDialPickTipDegrees = config.getDouble(path + "dial.pick-tip-degrees", 45.0);
     }
 
     private static void loadLockTypeProfiles(FileConfiguration config) {

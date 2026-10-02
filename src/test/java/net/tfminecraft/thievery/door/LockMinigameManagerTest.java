@@ -71,7 +71,7 @@ class LockMinigameManagerTest {
         manager = new LockMinigameManager(lockPicks, random);
         manager.gridScreens = (who, screen, onCell, onGiveUp) -> {};
         view = mock(RingView.class);
-        manager.ringViews = (who, lockpick, tumblers, slips) -> view;
+        manager.ringViews = (who, tumblers, slips) -> view;
         world = server.addSimpleWorld("vault");
         chest = world.getBlockAt(0, 64, 0);
         chest.setType(Material.CHEST);
@@ -99,11 +99,10 @@ class LockMinigameManagerTest {
     @Test
     void theRealRingIsOpenedForThePluginAndStaleGiveUpsAreIgnored() {
         LockMinigameManager real = new LockMinigameManager(lockPicks);
-        ItemStack pick = new ItemStack(Material.STICK);
         try (MockedStatic<RingView> views = mockStatic(RingView.class)) {
-            views.when(() -> RingView.open(any(), any(), any(), anyInt(), anyInt())).thenReturn(view);
-            assertSame(view, real.ringViews.open(player, pick, 4, 3));
-            views.verify(() -> RingView.open(Thievery.getInstance(), player, pick, 4, 3));
+            views.when(() -> RingView.open(any(), any(), anyInt(), anyInt())).thenReturn(view);
+            assertSame(view, real.ringViews.open(player, 4, 3));
+            views.verify(() -> RingView.open(Thievery.getInstance(), player, 4, 3));
         }
         assertTrue(start(LockMinigameManager.Mode.GRID));
         LockMinigame old = manager.game(player.getUniqueId());

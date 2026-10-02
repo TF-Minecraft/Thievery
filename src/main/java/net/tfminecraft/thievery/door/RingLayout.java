@@ -18,7 +18,7 @@ public final class RingLayout {
     /** Every part of the ring floats at most this share of the way to the block behind it, so none of it sinks in. */
     static final double CLEARANCE = 0.6;
     /**
-     * The ring's outline in its own plane at full size, with a margin: the pick swinging round the dots, the pins
+     * The ring's outline in its own plane at full size, with a margin: the pointer swinging round the dots, the pins
      * and hint above them, and the widest label.
      */
     static final float HALF_WIDTH = 1.1f;
@@ -44,8 +44,8 @@ public final class RingLayout {
     }
 
     /**
-     * Turns the pick at {@code degrees} round the ring so its tip faces the centre. {@code tipDegrees} is where
-     * the tip points when unturned; item sprites usually point to the top right, at 45.
+     * Turns a pointer at {@code degrees} round the ring so its tip faces the centre. {@code tipDegrees} is where
+     * the tip points when unturned, in clockwise degrees from up: 180 for an arrowhead pointing down.
      */
     public static Quaternionf pointInward(double degrees, double tipDegrees) {
         // Positive z rotation turns anticlockwise for the viewer, so turn by minus the clockwise angle needed.

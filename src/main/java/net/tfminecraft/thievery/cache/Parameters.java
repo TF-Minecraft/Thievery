@@ -70,16 +70,16 @@ public final class Parameters {
     public static double chestDialZoneWidth = 0.14;
     /** How much each set tumbler narrows the zone, as a share of its first width. */
     public static double chestDialZoneShrinkPerTumbler = 0.15;
-    public static double chestDialMinLapSeconds = 1.8;
-    public static double chestDialMaxLapSeconds = 2.6;
-    public static double chestDialLapSecondsPerDexterity = 0.01;
+    public static double chestDialMinLapSeconds = 1.44;
+    public static double chestDialMaxLapSeconds = 2.08;
+    public static double chestDialLapSecondsPerDexterity = 0.008;
+    /** Slips that fail the ring; the pin grid has its own {@link #chestMinigameMistakesToFail}. */
+    public static int chestDialMistakesToFail = 1;
     /** Reverse the sweep after each set tumbler, like a combination lock. */
     public static boolean chestDialAlternate = true;
     public static int chestDialMaxLagTicks = 6;
     /** How far in front of the eyes the ring floats, in blocks. */
     public static double chestDialDistance = 2.4;
-    /** Where the lockpick item's tip points when unturned, in clockwise degrees from up. */
-    public static double chestDialPickTipDegrees = 45.0;
 
     public static double maxSuccessChance = 0.95;
 

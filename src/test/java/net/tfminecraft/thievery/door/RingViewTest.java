@@ -13,14 +13,12 @@ import net.kyori.adventure.text.format.TextColor;
 import net.tfminecraft.thievery.cache.Parameters;
 import org.bukkit.FluidCollisionMode;
 import org.bukkit.Location;
-import org.bukkit.Material;
 import org.bukkit.Particle;
 import org.bukkit.World;
 import org.bukkit.entity.Display;
 import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.TextDisplay;
-import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.util.RayTraceResult;
 import org.bukkit.util.Transformation;
@@ -39,18 +37,14 @@ class RingViewTest {
     private final List<Display> spawned = new ArrayList<>();
     private final Map<Display, Component> texts = new HashMap<>();
     private final Map<Display, Transformation> transforms = new HashMap<>();
-    private ItemStack lockpick;
     private double distance;
-    private double tip;
 
     @BeforeEach
     @SuppressWarnings({"unchecked", "rawtypes"})
     void setUp() {
         MockBukkit.mock();
         distance = Parameters.chestDialDistance;
-        tip = Parameters.chestDialPickTipDegrees;
         Parameters.chestDialDistance = 2.4;
-        Parameters.chestDialPickTipDegrees = 45;
         plugin = mock(Plugin.class);
         viewer = mock(Player.class);
         world = mock(World.class);
@@ -68,18 +62,16 @@ class RingViewTest {
             spawned.add(display);
             return display;
         });
-        lockpick = new ItemStack(Material.TRIPWIRE_HOOK, 3);
     }
 
     @AfterEach
     void tearDown() {
         Parameters.chestDialDistance = distance;
-        Parameters.chestDialPickTipDegrees = tip;
         MockBukkit.unmock();
     }
 
     private RingView open() {
-        return RingView.open(plugin, viewer, lockpick, 4, 3);
+        return RingView.open(plugin, viewer, 4, 3);
     }
 
     private List<TextDisplay> textsWith(String glyph) {
@@ -93,8 +85,17 @@ class RingViewTest {
         return found;
     }
 
-    private ItemDisplay pick() {
-        return (ItemDisplay) spawned.stream().filter(d -> d instanceof ItemDisplay).findFirst().orElseThrow();
+    /** The needle's dark edge and then the needle itself, both drawn as backdrops around a space. */
+    private List<TextDisplay> bars() {
+        List<TextDisplay> found = textsWith(" ");
+        assertEquals(2, found.size());
+        return found;
+    }
+
+    private static void assertVector(Vector3f expected, Vector3f actual) {
+        assertEquals(expected.x, actual.x, 1e-5);
+        assertEquals(expected.y, actual.y, 1e-5);
+        assertEquals(expected.z, actual.z, 1e-5);
     }
 
     @Test
@@ -102,7 +103,7 @@ class RingViewTest {
         RingView view = open();
         verify(world, times(RingLayout.SIGHT_LINES * RingLayout.SIGHT_LINES)).rayTraceBlocks(any(Location.class),
                 any(Vector.class), anyDouble(), eq(FluidCollisionMode.NEVER), eq(true));
-        assertEquals(24 + 4 + 3 + 1 + 1 + 1, spawned.size());
+        assertEquals(24 + 4 + 3 + 1 + 1 + 2, spawned.size());
         assertEquals(spawned, view.displays());
         ArgumentCaptor<Location> where = ArgumentCaptor.forClass(Location.class);
         verify(world, atLeastOnce()).spawn(where.capture(), any(Class.class), any(Consumer.class));
@@ -121,16 +122,19 @@ class RingViewTest {
         assertEquals(24, textsWith(RingView.DOT).size());
         assertEquals(4, textsWith(RingView.PIN).size());
         assertEquals(3, textsWith("○").size());
-        ItemDisplay pick = pick();
-        ArgumentCaptor<ItemStack> shown = ArgumentCaptor.forClass(ItemStack.class);
-        verify(pick).setItemStack(shown.capture());
-        assertEquals(Material.TRIPWIRE_HOOK, shown.getValue().getType());
-        assertEquals(1, shown.getValue().getAmount());
-        assertEquals(3, lockpick.getAmount());
-        verify(pick).setGlowing(true);
-        verify(pick).setGlowColorOverride(RingView.PICK_GLOW);
-        verify(pick).setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.FIXED);
-        assertEquals(new Vector3f(RingView.PICK_SIZE, RingView.PICK_SIZE, RingView.PICK_SIZE), transforms.get(pick).getScale());
+        assertTrue(spawned.stream().noneMatch(d -> d instanceof ItemDisplay));
+        TextDisplay edge = bars().get(0);
+        TextDisplay needle = bars().get(1);
+        verify(edge).setBackgroundColor(RingView.NEEDLE_EDGE);
+        verify(needle).setBackgroundColor(RingView.NEEDLE);
+        verify(needle).setShadowed(false);
+        Transformation start = transforms.get(needle);
+        assertVector(new Vector3f(RingView.NEEDLE_WIDTH / RingView.BACKDROP_WIDTH,
+                RingView.NEEDLE_LENGTH / RingView.BACKDROP_HEIGHT, 1), start.getScale());
+        assertVector(new Vector3f(0, RingView.NEEDLE_RADIUS - RingView.NEEDLE_LENGTH / 2, 0.02f), start.getTranslation());
+        float wide = RingView.NEEDLE_WIDTH + 2 * RingView.NEEDLE_EDGE_WIDTH;
+        assertEquals(wide / RingView.BACKDROP_WIDTH, transforms.get(edge).getScale().x, 1e-5);
+        assertEquals(0.015f, transforms.get(edge).getTranslation().z, 1e-6);
     }
 
     @Test
@@ -176,19 +180,33 @@ class RingViewTest {
     }
 
     @Test
-    void thePickGlidesOrSnapsAndPointsInward() {
+    void theNeedleAndItsEdgeGlideTogetherAcrossTheDotsAtAnyAngle() {
         RingView view = open();
-        ItemDisplay pick = pick();
+        float half = RingView.NEEDLE_LENGTH / 2;
         view.pick(90, 2);
-        verify(pick).setInterpolationDelay(0);
-        verify(pick).setInterpolationDuration(2);
-        Transformation at = transforms.get(pick);
-        assertEquals(RingView.PICK_RADIUS, at.getTranslation().x, 1e-5);
+        for (TextDisplay bar : bars()) {
+            verify(bar).setInterpolationDelay(0);
+            verify(bar).setInterpolationDuration(2);
+        }
+        Transformation at = transforms.get(bars().get(1));
+        assertEquals(RingView.NEEDLE_RADIUS - half, at.getTranslation().x, 1e-5);
         assertEquals(0, at.getTranslation().y, 1e-5);
-        assertEquals(RingLayout.pointInward(90, 45), at.getLeftRotation());
         view.pick(180, 0);
-        verify(pick).setInterpolationDuration(0);
-        assertEquals(-RingView.PICK_RADIUS, transforms.get(pick).getTranslation().y, 1e-5);
+        verify(bars().get(1)).setInterpolationDuration(0);
+        assertEquals(-RingView.NEEDLE_RADIUS + half, transforms.get(bars().get(1)).getTranslation().y, 1e-5);
+        for (double degrees = 0; degrees < 360; degrees += 30) {
+            for (float edge : new float[] {0, RingView.NEEDLE_EDGE_WIDTH}) {
+                Transformation turned = view.needleTransform(degrees, edge, 0.02f);
+                // The backdrop grows up from its origin: turned, it lies along the radius, centred on the ring.
+                Vector3f along = turned.getLeftRotation().transform(new Vector3f(0, 1, 0));
+                Vector3f outward = RingLayout.onRing(degrees, 1);
+                assertEquals(1, Math.abs(along.dot(outward)), 1e-5);
+                float length = RingView.NEEDLE_LENGTH + 2 * edge;
+                Vector3f middle = new Vector3f(turned.getTranslation())
+                        .add(turned.getLeftRotation().transform(new Vector3f(0, length / 2, 0)));
+                assertVector(RingLayout.onRing(degrees, RingView.NEEDLE_RADIUS).add(0, 0, 0.02f), middle);
+            }
+        }
     }
 
     @Test
@@ -213,14 +231,14 @@ class RingViewTest {
     }
 
     @Test
-    void burstsAppearAtThePickForTheViewerOnly() {
+    void burstsAppearAtThePointerForTheViewerOnly() {
         RingView view = open();
         view.pick(90, 0);
         view.burst(Particle.HAPPY_VILLAGER, 3);
         ArgumentCaptor<Location> at = ArgumentCaptor.forClass(Location.class);
         verify(viewer).spawnParticle(eq(Particle.HAPPY_VILLAGER), at.capture(), eq(3), anyDouble(), anyDouble(), anyDouble(), anyDouble());
-        // Facing south, the ring's right is west, so a pick at three o'clock sits towards -x.
-        assertEquals(0.5 - RingView.PICK_RADIUS, at.getValue().getX(), 1e-5);
+        // Facing south, the ring's right is west, so a pointer at three o'clock sits towards -x.
+        assertEquals(0.5 - RingView.NEEDLE_RADIUS, at.getValue().getX(), 1e-5);
         verify(world, never()).spawnParticle(any(Particle.class), any(Location.class), anyInt());
     }
 

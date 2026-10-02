@@ -53,8 +53,8 @@ public class LockMinigameManager implements Listener {
     private final Random random;
     private final Map<UUID, LockMinigame> games = new HashMap<>();
     PinGridGame.GridScreens gridScreens = GridDialogs::show;
-    RingDialGame.RingViews ringViews = (player, lockpick, tumblers, slips) ->
-            RingView.open(Thievery.getInstance(), player, lockpick, tumblers, slips);
+    RingDialGame.RingViews ringViews = (player, tumblers, slips) ->
+            RingView.open(Thievery.getInstance(), player, tumblers, slips);
 
     public LockMinigameManager(LockPickManager lockPickManager) {
         this(lockPickManager, new Random());
@@ -107,8 +107,7 @@ public class LockMinigameManager implements Listener {
         int dexterity = RiskCalculator.getDexterity(player);
         LockMinigame game;
         if (dial) {
-            ItemStack lockpick = player.getInventory().getItemInMainHand();
-            game = new RingDialGame(this, playerId, target, targetId, random, lockpick, dexterity, ringViews, onSolved);
+            game = new RingDialGame(this, playerId, target, targetId, random, dexterity, ringViews, onSolved);
         } else {
             PinGrid grid = new PinGrid(Parameters.chestMinigameRows, Parameters.chestMinigameColumns,
                     Parameters.chestMinigamePins, random);

@@ -69,13 +69,15 @@ class RingDialGameTest {
         Parameters.chestDialLapSecondsPerDexterity = 0.01;
         Parameters.chestDialAlternate = true;
         Parameters.chestDialMaxLagTicks = 6;
+        // Three slips here so the tests can walk through each kind; the real default is one.
+        Parameters.chestDialMistakesToFail = 3;
         lockPicks = new LockPickManager();
         // Rolls of 0: every pass takes the shortest lap (36 ticks), starts its zone a third of the way round
         // (ticks 12 to 17) and asks for the first key, forward.
         manager = new LockMinigameManager(lockPicks, mock(Random.class));
         view = mock(RingView.class);
-        manager.ringViews = (who, lockpick, tumblers, slips) -> {
-            opened.add(new Object[] {who, lockpick, tumblers, slips});
+        manager.ringViews = (who, tumblers, slips) -> {
+            opened.add(new Object[] {who, tumblers, slips});
             return view;
         };
         chest = server.addSimpleWorld("vault").getBlockAt(0, 64, 0);
@@ -136,16 +138,15 @@ class RingDialGameTest {
     }
 
     @Test
-    void openingFreezesTheThiefAndFloatsTheirOwnLockpick() {
+    void openingFreezesTheThiefAndFloatsTheRing() {
         RingDialGame game = start();
         assertTrue(game.holdsStill());
         assertEquals(0f, player.getWalkSpeed());
         assertTrue(LockFreeze.isFrozen(player));
         assertEquals(1, opened.size());
         assertSame(player, opened.get(0)[0]);
-        assertEquals(Material.TRIPWIRE_HOOK, ((ItemStack) opened.get(0)[1]).getType());
-        assertEquals(4, opened.get(0)[2]);
-        assertEquals(3, opened.get(0)[3]);
+        assertEquals(4, opened.get(0)[1]);
+        assertEquals(3, opened.get(0)[2]);
         verify(view).label(Component.text("Steady...", NamedTextColor.GRAY), 1.1f);
         assertTrue(game.bar.getTitle().contains("Pick the lock"));
         assertEquals(RingDialGame.Phase.PREPARE, game.phase);
@@ -263,6 +264,18 @@ class RingDialGameTest {
     }
 
     @Test
+    void byDefaultOneSlipFailsTheRing() {
+        Parameters.chestDialMistakesToFail = 1;
+        RingDialGame game = start();
+        assertEquals(1, opened.get(0)[2]);
+        turnTo(game, 14);
+        tap(2);
+        assertEquals(1, game.slips);
+        assertEquals(LockMinigame.Outcome.FAILED, game.outcome);
+        assertTrue(lockPicks.isOnCooldown(player.getUniqueId(), game.targetId));
+    }
+
+    @Test
     void lateAndMissedPassesAreSlipsToo() {
         RingDialGame game = start();
         turnTo(game, 20);
@@ -348,7 +361,7 @@ class RingDialGameTest {
     @Test
     void cleanupCopesWithAGameThatNeverOpened() {
         RingDialGame game = new RingDialGame(manager, player.getUniqueId(), chest, "chest", mock(Random.class),
-                new ItemStack(Material.STICK), -3, manager.ringViews, mistakes -> {});
+                -3, manager.ringViews, mistakes -> {});
         assertEquals(0, game.dexterity);
         assertDoesNotThrow(() -> game.cleanup(null));
         game.cleanup(player);

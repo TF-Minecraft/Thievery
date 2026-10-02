@@ -10,7 +10,6 @@ import org.bukkit.Sound;
 import org.bukkit.block.Block;
 import org.bukkit.boss.BarColor;
 import org.bukkit.entity.Player;
-import org.bukkit.inventory.ItemStack;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -21,16 +20,17 @@ import net.tfminecraft.thievery.cache.Parameters;
 import net.tfminecraft.thievery.utils.ThieveryTexts;
 
 /**
- * Lockpick ring minigame, modelled on the NoPixel lockpick. A ring floats in front of the thief and their own
- * lockpick sweeps round it. They press the movement key shown in the middle while the pick is in the green zone.
- * Each set tumbler narrows the zone and, by default, reverses the sweep like a combination lock.
+ * Lockpick ring minigame, modelled on the NoPixel lockpick. A ring floats in front of the thief and a pointer
+ * sweeps round it. They press the movement key shown in the middle while the pointer is in the green zone. Each
+ * set tumbler narrows the zone and, by default, reverses the sweep like a combination lock. One slip, by default,
+ * and the pins give.
  *
  * <p>Keys are read as movement input, so they work with any keyboard layout or binding, and the thief is held
  * still so nothing moves on screen. The middle shows each player's own key for that movement.
  */
 final class RingDialGame extends LockMinigame {
 
-    /** The server sends the pick's position this many ticks ahead and lets the client glide there. */
+    /** The server sends the pointer's position this many ticks ahead and lets the client glide there. */
     static final int LEAD_TICKS = 2;
     static final int PAUSE_TICKS = 12;
     static final double MIN_ZONE_SHARE = 0.4;
@@ -43,7 +43,6 @@ final class RingDialGame extends LockMinigame {
     }
 
     final Random random;
-    final ItemStack lockpick;
     final int dexterity;
     final RingViews views;
     final int tumblers = Parameters.chestDialTumblers;
@@ -58,10 +57,9 @@ final class RingDialGame extends LockMinigame {
     boolean[] held = new boolean[5];
 
     RingDialGame(LockMinigameManager manager, UUID playerId, Block target, String targetId, Random random,
-            ItemStack lockpick, int dexterity, RingViews views, IntConsumer onSolved) {
+            int dexterity, RingViews views, IntConsumer onSolved) {
         super(manager, playerId, target, targetId, onSolved);
         this.random = random;
-        this.lockpick = lockpick;
         this.dexterity = Math.max(0, dexterity);
         this.views = views;
         this.ticksLeft = ticks(Parameters.chestMinigamePrepareSeconds);
@@ -71,7 +69,7 @@ final class RingDialGame extends LockMinigame {
     void begin(Player player) {
         LockFreeze.freeze(player);
         held = keys(player.getCurrentInput());
-        view = views.open(player, lockpick, tumblers, Parameters.chestMinigameMistakesToFail);
+        view = views.open(player, tumblers, Parameters.chestDialMistakesToFail);
         view.label(Component.text("Steady...", NamedTextColor.GRAY), 1.1f);
         status(ThieveryTexts.MUTED + "Pick the lock", BarColor.WHITE);
     }
@@ -185,7 +183,7 @@ final class RingDialGame extends LockMinigame {
         view.zone(sweep, RingView.RED);
         view.burst(Particle.SMOKE, 4);
         player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.8f, 0.6f);
-        if (slips >= Parameters.chestMinigameMistakesToFail) {
+        if (slips >= Parameters.chestDialMistakesToFail) {
             fail(player);
             return;
         }
@@ -223,6 +221,6 @@ final class RingDialGame extends LockMinigame {
 
     /** Opens the floating ring; the display entity implementation is {@link RingView#open}. */
     interface RingViews {
-        RingView open(Player player, ItemStack lockpick, int tumblers, int maxSlips);
+        RingView open(Player player, int tumblers, int maxSlips);
     }
 }

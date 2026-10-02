@@ -100,13 +100,13 @@ class ConfigLoaderTest {
         assertTrue(Parameters.chestGridSprites);
         assertEquals(0.14, Parameters.chestDialZoneWidth);
         assertEquals(0.15, Parameters.chestDialZoneShrinkPerTumbler);
-        assertEquals(1.8, Parameters.chestDialMinLapSeconds);
-        assertEquals(2.6, Parameters.chestDialMaxLapSeconds);
-        assertEquals(0.01, Parameters.chestDialLapSecondsPerDexterity);
+        assertEquals(1.44, Parameters.chestDialMinLapSeconds);
+        assertEquals(2.08, Parameters.chestDialMaxLapSeconds);
+        assertEquals(0.008, Parameters.chestDialLapSecondsPerDexterity);
+        assertEquals(1, Parameters.chestDialMistakesToFail);
         assertTrue(Parameters.chestDialAlternate);
         assertEquals(6, Parameters.chestDialMaxLagTicks);
         assertEquals(2.4, Parameters.chestDialDistance);
-        assertEquals(45.0, Parameters.chestDialPickTipDegrees);
         assertEquals(LockTypeProfile.IDENTITY, Parameters.lockTypeProfile(LockState.PRIVATE));
         assertEquals(Set.of(Material.ENDER_CHEST), Parameters.excludedContainerMaterials);
         assertTrue(Parameters.lockableFurnitureIds.isEmpty());
@@ -376,7 +376,7 @@ class ConfigLoaderTest {
                       fail-break-chance: 0.25
                       dial-chance: 0.75
                       grid: {sprites: false}
-                      dial: {tumblers: 5, zone-width: 0.2, zone-shrink-per-tumbler: 0.1, min-lap-seconds: 2, max-lap-seconds: 3, lap-seconds-per-dexterity: 0.02, alternate-direction: false, max-lag-ticks: 4, distance: 3, pick-tip-degrees: 90}
+                      dial: {tumblers: 5, zone-width: 0.2, zone-shrink-per-tumbler: 0.1, min-lap-seconds: 2, max-lap-seconds: 3, lap-seconds-per-dexterity: 0.02, alternate-direction: false, max-lag-ticks: 4, distance: 3, mistakes-to-fail: 2}
                 """);
         assertEquals(0.75, Parameters.chestDialChance);
         assertEquals(5, Parameters.chestDialTumblers);
@@ -389,7 +389,7 @@ class ConfigLoaderTest {
         assertFalse(Parameters.chestDialAlternate);
         assertEquals(4, Parameters.chestDialMaxLagTicks);
         assertEquals(3.0, Parameters.chestDialDistance);
-        assertEquals(90.0, Parameters.chestDialPickTipDegrees);
+        assertEquals(2, Parameters.chestDialMistakesToFail);
         assertFalse(Parameters.chestMinigameEnabled);
         assertEquals(4, Parameters.chestMinigameRows);
         assertEquals(5, Parameters.chestMinigameColumns);
@@ -415,7 +415,7 @@ class ConfigLoaderTest {
                       mistakes-to-fail: 0
                       fail-break-chance: 3
                       dial-chance: 2
-                      dial: {tumblers: 9, zone-width: 1, zone-shrink-per-tumbler: 2, min-lap-seconds: 4, max-lap-seconds: 1, lap-seconds-per-dexterity: -1, max-lag-ticks: -1, distance: 9}
+                      dial: {tumblers: 9, zone-width: 1, zone-shrink-per-tumbler: 2, min-lap-seconds: 4, max-lap-seconds: 1, lap-seconds-per-dexterity: -1, max-lag-ticks: -1, distance: 9, mistakes-to-fail: 0}
                 """);
         assertEquals(1.0, Parameters.chestDialChance);
         assertEquals(6, Parameters.chestDialTumblers);
@@ -424,6 +424,7 @@ class ConfigLoaderTest {
         assertEquals(4.0, Parameters.chestDialMinLapSeconds);
         assertEquals(4.0, Parameters.chestDialMaxLapSeconds);
         assertEquals(0.0, Parameters.chestDialLapSecondsPerDexterity);
+        assertEquals(1, Parameters.chestDialMistakesToFail);
         assertEquals(0, Parameters.chestDialMaxLagTicks);
         assertEquals(4.0, Parameters.chestDialDistance);
         assertEquals(6, Parameters.chestMinigameRows);
@@ -446,7 +447,7 @@ class ConfigLoaderTest {
         assertEquals(0.02, Parameters.chestDialZoneWidth);
         assertEquals(0.0, Parameters.chestDialZoneShrinkPerTumbler);
         assertEquals(0.5, Parameters.chestDialMinLapSeconds);
-        assertEquals(2.6, Parameters.chestDialMaxLapSeconds);
+        assertEquals(2.08, Parameters.chestDialMaxLapSeconds);
         assertEquals(1.0, Parameters.chestDialDistance);
         assertEquals(1, Parameters.chestMinigameRows);
         assertEquals(1, Parameters.chestMinigameColumns);
