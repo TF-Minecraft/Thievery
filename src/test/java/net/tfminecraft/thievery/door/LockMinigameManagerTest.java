@@ -363,6 +363,26 @@ class LockMinigameManagerTest {
     }
 
     @Test
+    void cancelledHotbarAndOffhandSwapsResendTheInventory() {
+        PinGridGame game = start();
+        org.bukkit.entity.Player clicker = mock(org.bukkit.entity.Player.class);
+        when(clicker.getUniqueId()).thenReturn(player.getUniqueId());
+        InventoryView view = mock(InventoryView.class);
+        when(view.getTopInventory()).thenReturn(game.inventory);
+        for (ClickType type : new ClickType[] {ClickType.NUMBER_KEY, ClickType.SWAP_OFFHAND, ClickType.LEFT}) {
+            InventoryClickEvent event = mock(InventoryClickEvent.class);
+            when(event.getView()).thenReturn(view);
+            when(event.getWhoClicked()).thenReturn(clicker);
+            when(event.getClick()).thenReturn(type);
+            manager.onInventoryClick(event);
+            verify(event).setCancelled(true);
+        }
+        verify(clicker, never()).updateInventory();
+        ticks(1);
+        verify(clicker, times(2)).updateInventory();
+    }
+
+    @Test
     void unrelatedClicksDragsAndClosesAreLeftAlone() {
         PinGridGame game = start();
         InventoryView view = player.getOpenInventory();

@@ -142,8 +142,12 @@ class DialGameTest {
         ticks(1);
         assertEquals(DialGame.Phase.TURN, game.phase);
         assertEquals("§ePress 1 in the green", player.getOpenInventory().getTitle());
-        assertEquals(1, game.inventory.getItem(Dial.keySlots()[3]).getAmount());
-        assertEquals(Material.GOLD_NUGGET, at(game, Dial.keySlots()[3]));
+        assertEquals(Material.GOLD_NUGGET, at(game, Dial.keySlots()[0]));
+        for (int key = 1; key <= Dial.KEYS; key++) {
+            assertEquals(key, game.inventory.getItem(Dial.keySlots()[key - 1]).getAmount());
+        }
+        assertEquals(Material.IRON_NUGGET, at(game, Dial.keySlots()[1]));
+        assertEquals(Material.IRON_NUGGET, at(game, Dial.keySlots()[3]));
         assertEquals(Material.TRIPWIRE_HOOK, at(game, Dial.slotOf(0)));
         assertEquals(Material.CYAN_STAINED_GLASS_PANE, at(game, Dial.slotOf(4)));
         assertEquals(Material.CYAN_STAINED_GLASS_PANE, at(game, Dial.slotOf(5)));

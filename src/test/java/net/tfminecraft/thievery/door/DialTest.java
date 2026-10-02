@@ -35,7 +35,7 @@ class DialTest {
             ring.add(Dial.slotOf(step));
         }
         assertEquals(12, ring.size());
-        assertArrayEquals(new int[] {21, 22, 30, 31}, Dial.keySlots());
+        assertArrayEquals(new int[] {20, 21, 22, 23}, Dial.keySlots());
         for (int slot : Dial.keySlots()) {
             assertFalse(ring.contains(slot));
         }

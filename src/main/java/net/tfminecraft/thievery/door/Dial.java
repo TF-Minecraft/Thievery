@@ -39,10 +39,10 @@ public final class Dial {
         return cell[0] * PinGrid.MENU_COLUMNS + OFFSET + cell[1];
     }
 
-    /** Menu slots in the middle of the ring that show the key to press. */
+    /** Key caps 1 to 4 across the middle of the ring, in hotbar order. */
     public static int[] keySlots() {
-        return new int[] {2 * PinGrid.MENU_COLUMNS + OFFSET + 2, 2 * PinGrid.MENU_COLUMNS + OFFSET + 3,
-                3 * PinGrid.MENU_COLUMNS + OFFSET + 2, 3 * PinGrid.MENU_COLUMNS + OFFSET + 3};
+        int row = 2 * PinGrid.MENU_COLUMNS + OFFSET;
+        return new int[] {row + 1, row + 2, row + 3, row + 4};
     }
 
     /** Starts a new sweep with a fresh key, zone and speed. The zone sits between four and eight o'clock. */

@@ -79,10 +79,13 @@ final class DialGame extends LockMinigame {
         dial.spin(random, Parameters.chestDialMinStepTicks + slowerSteps,
                 Parameters.chestDialMaxStepTicks + slowerSteps, Parameters.chestDialZoneSteps);
         phase = Phase.TURN;
-        ItemStack key = named(Material.GOLD_NUGGET, dial.key(),
-                ThieveryTexts.gui(ThieveryTexts.WARN + "Hover here and press " + dial.key()));
-        for (int slot : Dial.keySlots()) {
-            inventory.setItem(slot, key);
+        // A stack of one shows no number, so the caps sit in hotbar order and the key to press is gold.
+        int[] caps = Dial.keySlots();
+        for (int key = 1; key <= Dial.KEYS; key++) {
+            boolean press = key == dial.key();
+            inventory.setItem(caps[key - 1], named(press ? Material.GOLD_NUGGET : Material.IRON_NUGGET, key,
+                    ThieveryTexts.gui(press ? ThieveryTexts.WARN + "Hover here and press " + key
+                            : ThieveryTexts.MUTED + "Key " + key)));
         }
         drawRing(null);
         show(player, ThieveryTexts.WARN + "Press " + dial.key() + " in the green", BarColor.YELLOW);

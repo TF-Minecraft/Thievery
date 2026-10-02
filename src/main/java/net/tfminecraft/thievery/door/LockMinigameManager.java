@@ -16,6 +16,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
@@ -160,7 +161,14 @@ public class LockMinigameManager implements Listener {
             return;
         }
         event.setCancelled(true);
-        if (!(event.getWhoClicked() instanceof Player player) || games.get(player.getUniqueId()) != game) {
+        if (!(event.getWhoClicked() instanceof Player player)) {
+            return;
+        }
+        if (event.getClick() == ClickType.NUMBER_KEY || event.getClick() == ClickType.SWAP_OFFHAND) {
+            // The client shows a cancelled hotbar or offhand swap as done until the inventory is sent again.
+            Bukkit.getScheduler().runTask(Thievery.getInstance(), player::updateInventory);
+        }
+        if (games.get(player.getUniqueId()) != game) {
             return;
         }
         if (game.outcome == LockMinigame.Outcome.NONE) {
