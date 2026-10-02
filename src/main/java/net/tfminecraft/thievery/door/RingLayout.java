@@ -14,9 +14,23 @@ public final class RingLayout {
     public static final float RADIUS = 0.62f;
     /** The ring is sized for this distance; closer rings shrink so they look the same size. */
     public static final double DISTANCE = 2.4;
-    static final double MIN_DISTANCE = 0.6;
-    /** The ring floats at most this share of the way to whatever the thief is looking at, so it never sinks in. */
+    static final double MIN_DISTANCE = 0.25;
+    /** Every part of the ring floats at most this share of the way to the block behind it, so none of it sinks in. */
     static final double CLEARANCE = 0.6;
+    /**
+     * The ring's outline in its own plane at full size, with a margin: the pick swinging round the dots, the pins
+     * and hint above them, and the widest label.
+     */
+    static final float HALF_WIDTH = 1.1f;
+    static final float TOP = 1.3f;
+    static final float BOTTOM = -0.95f;
+    /** Sight lines checked across each side of the outline. */
+    static final int SIGHT_LINES = 5;
+
+    /** How far along a sight line from the eye the first block is, or infinity when none is within reach. */
+    public interface Obstacles {
+        double along(Vector direction, double reach);
+    }
 
     private RingLayout() {}
 
@@ -39,11 +53,29 @@ public final class RingLayout {
     }
 
     /**
-     * How far in front of the eye to float the ring: the configured distance, or well short of a block in the
-     * way, such as the chest being picked, but never closer than {@link #MIN_DISTANCE}.
+     * How far in front of an eye at yaw and pitch to float the ring, lifted by {@code lift}: the wanted distance,
+     * or well short of any block behind any part of it, but never closer than {@link #MIN_DISTANCE}.
+     *
+     * <p>Checking only the crosshair is not enough. Looking down at a chest, its lid comes closer towards the
+     * bottom of the view, so the bottom of the ring would sink into it; looking up, the same happens at the top.
+     * The ring shrinks with its distance, so each of its points stays on one sight line from the eye, and keeping
+     * a grid of sight lines across the outline clear keeps the whole ring clear.
      */
-    public static double fitDistance(double wanted, double blockDistance) {
-        return Math.max(MIN_DISTANCE, Math.min(wanted, blockDistance * CLEARANCE));
+    public static double fitDistance(double wanted, float yaw, float pitch, float lift, Obstacles obstacles) {
+        Vector forward = worldOffset(yaw, pitch, new Vector3f(0, 0, -1)).multiply(DISTANCE);
+        double distance = wanted;
+        for (int column = 0; column < SIGHT_LINES; column++) {
+            for (int row = 0; row < SIGHT_LINES; row++) {
+                float x = -HALF_WIDTH + 2 * HALF_WIDTH * column / (SIGHT_LINES - 1);
+                float y = BOTTOM + (TOP - BOTTOM) * row / (SIGHT_LINES - 1) + lift;
+                // Where this point of the outline is when the ring is at full size and distance.
+                Vector line = forward.clone().add(worldOffset(yaw, pitch, new Vector3f(x, y, 0)));
+                double length = line.length();
+                double blocked = obstacles.along(line, wanted * length / (DISTANCE * CLEARANCE));
+                distance = Math.min(distance, blocked * CLEARANCE * DISTANCE / length);
+            }
+        }
+        return Math.max(MIN_DISTANCE, distance);
     }
 
     /** World offset from the ring centre of a point in the ring plane, for a ring facing an eye at yaw and pitch. */

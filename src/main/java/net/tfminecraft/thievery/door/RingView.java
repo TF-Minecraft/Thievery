@@ -6,6 +6,7 @@ import java.util.List;
 import org.bukkit.Color;
 import org.bukkit.FluidCollisionMode;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.Particle;
 import org.bukkit.entity.Display;
 import org.bukkit.entity.Entity;
@@ -70,10 +71,13 @@ final class RingView {
     /** Floats the ring in front of the viewer's eyes, closer if a block is in the way. */
     static RingView open(Plugin plugin, Player viewer, ItemStack lockpick, int tumblers, int maxSlips) {
         Location eye = viewer.getEyeLocation();
-        RayTraceResult hit = viewer.getWorld().rayTraceBlocks(eye, eye.getDirection(), Parameters.chestDialDistance,
-                FluidCollisionMode.NEVER, true);
-        double blocked = hit == null ? Double.MAX_VALUE : hit.getHitPosition().distance(eye.toVector());
-        double distance = RingLayout.fitDistance(Parameters.chestDialDistance, blocked);
+        World world = viewer.getWorld();
+        double distance = RingLayout.fitDistance(Parameters.chestDialDistance, eye.getYaw(), eye.getPitch(), LIFT,
+                (line, reach) -> {
+                    RayTraceResult hit = world.rayTraceBlocks(eye, line.clone().normalize(), reach,
+                            FluidCollisionMode.NEVER, true);
+                    return hit == null ? Double.POSITIVE_INFINITY : hit.getHitPosition().distance(eye.toVector());
+                });
         float scale = (float) (distance / RingLayout.DISTANCE);
         // Lifted a little above the crosshair so the bottom of the ring clears the action bar.
         Location centre = eye.clone().add(eye.getDirection().multiply(distance))

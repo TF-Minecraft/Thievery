@@ -100,7 +100,8 @@ class RingViewTest {
     @Test
     void ringFloatsAtFullSizeWithEveryPartHiddenFromOthers() {
         RingView view = open();
-        verify(world).rayTraceBlocks(any(Location.class), any(Vector.class), eq(2.4), eq(FluidCollisionMode.NEVER), eq(true));
+        verify(world, times(RingLayout.SIGHT_LINES * RingLayout.SIGHT_LINES)).rayTraceBlocks(any(Location.class),
+                any(Vector.class), anyDouble(), eq(FluidCollisionMode.NEVER), eq(true));
         assertEquals(24 + 4 + 3 + 1 + 1 + 1, spawned.size());
         assertEquals(spawned, view.displays());
         ArgumentCaptor<Location> where = ArgumentCaptor.forClass(Location.class);
@@ -134,8 +135,14 @@ class RingViewTest {
 
     @Test
     void aBlockInTheWayPullsTheRingCloserAndShrinksIt() {
+        // A wall across z = 2.5, two blocks in front of the eye.
         when(world.rayTraceBlocks(any(Location.class), any(Vector.class), anyDouble(), any(FluidCollisionMode.class), anyBoolean()))
-                .thenReturn(new RayTraceResult(new Vector(0.5, 65.62, 2.5)));
+                .thenAnswer(call -> {
+                    Vector eye = call.<Location>getArgument(0).toVector();
+                    Vector direction = call.getArgument(1);
+                    assertEquals(1.0, direction.length(), 1e-9);
+                    return new RayTraceResult(eye.add(direction.clone().multiply(2.0 / direction.getZ())));
+                });
         open();
         ArgumentCaptor<Location> where = ArgumentCaptor.forClass(Location.class);
         verify(world, atLeastOnce()).spawn(where.capture(), any(Class.class), any(Consumer.class));
