@@ -45,7 +45,7 @@ public final class Parameters {
     /** Share of a chest's slots hiding seized pins at a 100% break chance; better picks and Dexterity lower it. */
     public static double chestSeizedDensity = 0.3;
 
-    /** Extra seized pins for each wrong cell on the pin grid. */
+    /** Extra seized pins for each mistake in the lock minigame: a wrong cell on the grid, or a slip on the ring. */
     public static int chestSeizedPerGridMistake = 1;
 
     /** Pin memory minigame that must be solved before the chest probe menu opens. */

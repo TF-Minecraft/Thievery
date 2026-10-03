@@ -128,6 +128,8 @@ public class Thievery extends JavaPlugin {
     }
 
     public void reload() {
+        // Running picks would carry on under the new settings; end them without a penalty, as a shutdown does.
+        lockMinigameManager.cancelAll();
         playerManager.unloadAll();
         loadConfigs();
         setPlugins();

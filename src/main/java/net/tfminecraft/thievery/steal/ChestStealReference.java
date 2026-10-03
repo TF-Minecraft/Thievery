@@ -75,11 +75,13 @@ public class ChestStealReference extends HiddenStealReference {
         int guiSlot = event.getSlot();
         if (event.getClickedInventory() == guiInv && !session.isRevealed(guiSlot)
                 && session.getLayout().getLogicalForGui(guiSlot) != null) {
-            if (event.getClick() == ClickType.RIGHT) {
+            ClickType click = event.getClick();
+            if (click.isRightClick()) {
                 toggleMark(thief, guiInv, guiSlot);
                 return;
             }
-            if (session.isMarked(guiSlot)) {
+            // Only a deliberate left click probes: a stray number key, drop or double click must not snap the pick.
+            if (session.isMarked(guiSlot) || !click.isLeftClick() || click == ClickType.DOUBLE_CLICK) {
                 return;
             }
         }

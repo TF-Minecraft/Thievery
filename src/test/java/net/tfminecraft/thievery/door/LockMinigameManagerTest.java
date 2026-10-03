@@ -69,7 +69,7 @@ class LockMinigameManagerTest {
         lockPicks = new LockPickManager();
         random = mock(Random.class);
         manager = new LockMinigameManager(lockPicks, random);
-        manager.gridScreens = (who, screen, onCell, onGiveUp) -> {};
+        manager.gridScreens = (onCell, onGiveUp) -> (who, screen) -> {};
         view = mock(RingView.class);
         manager.ringViews = (who, tumblers, slips) -> view;
         world = server.addSimpleWorld("vault");
@@ -413,10 +413,18 @@ class LockMinigameManagerTest {
                 new ItemStack(Material.BREAD), null, org.bukkit.block.BlockFace.SELF, org.bukkit.inventory.EquipmentSlot.OFF_HAND);
         manager.onInteract(eat);
         assertNotEquals(org.bukkit.event.Event.Result.DENY, eat.useItemInHand());
-        var free = new org.bukkit.event.player.PlayerItemHeldEvent(player, 0, 3);
-        manager.onHotbar(free);
-        assertFalse(free.isCancelled());
+        // The grid keeps the pick in hand too, against a modified client, but leaves clicks and mounts alone.
+        var gridHotbar = new org.bukkit.event.player.PlayerItemHeldEvent(player, 0, 3);
+        manager.onHotbar(gridHotbar);
+        assertTrue(gridHotbar.isCancelled());
         manager.cancel(player.getUniqueId());
+        var hotbarIdle = new org.bukkit.event.player.PlayerItemHeldEvent(player, 0, 3);
+        manager.onHotbar(hotbarIdle);
+        assertFalse(hotbarIdle.isCancelled());
+        var eatIdle = new org.bukkit.event.player.PlayerInteractEvent(player, org.bukkit.event.block.Action.RIGHT_CLICK_AIR,
+                new ItemStack(Material.BREAD), null, org.bukkit.block.BlockFace.SELF, org.bukkit.inventory.EquipmentSlot.OFF_HAND);
+        manager.onInteract(eatIdle);
+        assertNotEquals(org.bukkit.event.Event.Result.DENY, eatIdle.useItemInHand());
         var idle = new org.bukkit.event.player.PlayerDropItemEvent(player, mock(org.bukkit.entity.Item.class));
         manager.onDrop(idle);
         assertFalse(idle.isCancelled());
@@ -444,5 +452,22 @@ class LockMinigameManagerTest {
         manager.penalise(player, game);
         assertEquals("§cThe pins slip back into place.", ((PlayerMock) player).nextMessage());
         assertTrue(lockPicks.isOnCooldown(player.getUniqueId(), game.targetId));
+        // Only the pick the thief started with can snap, never whatever else ends up in hand.
+        player.getInventory().setItemInMainHand(new ItemStack(Material.DIAMOND_SWORD));
+        manager.penalise(player, game);
+        assertEquals(Material.DIAMOND_SWORD, player.getInventory().getItemInMainHand().getType());
+        assertEquals("§cThe pins slip back into place.", ((PlayerMock) player).nextMessage());
+    }
+
+    @Test
+    void otherListenersCanTellWhenAThiefIsWorkingALock() {
+        Thievery instance = Thievery.getInstance();
+        assertFalse(LockMinigameManager.isWorkingALock(player));
+        when(instance.getLockMinigameManager()).thenReturn(manager);
+        assertFalse(LockMinigameManager.isWorkingALock(player));
+        assertTrue(start(LockMinigameManager.Mode.GRID));
+        assertTrue(LockMinigameManager.isWorkingALock(player));
+        plugin.when(Thievery::getInstance).thenReturn(null);
+        assertFalse(LockMinigameManager.isWorkingALock(player));
     }
 }

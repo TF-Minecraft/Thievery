@@ -132,7 +132,7 @@ public class ConfigLoader {
         Parameters.chestMinigameEnabled = config.getBoolean(path + "enabled", true);
         Parameters.chestMinigameRows = Math.max(1, Math.min(PinGrid.MAX_ROWS, config.getInt(path + "rows", 6)));
         Parameters.chestMinigameColumns = Math.max(1,
-                Math.min(PinGrid.MENU_COLUMNS, config.getInt(path + "columns", 6)));
+                Math.min(PinGrid.MAX_COLUMNS, config.getInt(path + "columns", 6)));
         Parameters.chestMinigamePins = Math.max(1, Math.min(Parameters.chestMinigameRows * Parameters.chestMinigameColumns,
                 config.getInt(path + "pins", 14)));
         Parameters.chestMinigamePrepareSeconds = Math.max(0.0, config.getDouble(path + "prepare-seconds", 1.0));

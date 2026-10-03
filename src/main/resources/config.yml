@@ -142,13 +142,14 @@ lockpicking:
     # The probe menu hides seized pins: probing one snaps the lockpick, and every safe probe counts the
     # seized pins around it. Pins = slots x seized-density x break chance (1 - success chance from
     # Dexterity and pick strength) x the lock type's break-chance-multiplier, plus
-    # seized-per-grid-mistake for each wrong cell on the pin grid.
+    # seized-per-grid-mistake for each mistake in the lock minigame.
     seized-density: 0.3
     seized-per-grid-mistake: 1
     # Pin memory minigame solved before the probe menu opens. Lit pins show for memorise-seconds,
     # then hide; set every pin from memory within recall-seconds (plus recall-seconds-per-dexterity
-    # per dexterity level). The grid fits a chest menu: up to 6 rows and 9 columns.
-    # Failing, timing out, or closing the grid applies fail-cooldown-ms to that chest and may break the lockpick.
+    # per dexterity level). The grid is up to 6 rows and 9 columns.
+    # Failing either minigame, running out of time or giving up applies fail-cooldown-ms to that chest
+    # (both halves of a double chest) and may break the lockpick (fail-break-chance).
     minigame:
       enabled: true
       rows: 6

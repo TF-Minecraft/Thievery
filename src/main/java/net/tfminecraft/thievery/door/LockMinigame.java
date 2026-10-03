@@ -11,6 +11,7 @@ import org.bukkit.boss.BarColor;
 import org.bukkit.boss.BarStyle;
 import org.bukkit.boss.BossBar;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.scheduler.BukkitTask;
 
 import net.tfminecraft.thievery.utils.ThieveryTexts;
@@ -23,7 +24,6 @@ public abstract class LockMinigame {
 
     static final int SOLVED_TICKS = 15;
     static final int FAILED_TICKS = 30;
-    static final String PREPARE_TEXT = ThieveryTexts.MUTED + "Steady your hands...";
 
     enum Outcome {
         NONE,
@@ -39,6 +39,8 @@ public abstract class LockMinigame {
     final BossBar bar;
     /** The thief; kept so the game is always taken down for the same player it was opened for. */
     Player player;
+    /** The lockpick in hand when the game began; a failed pick breaks it only if it is still the one held. */
+    ItemStack pick;
     BukkitTask task;
     Outcome outcome = Outcome.NONE;
     int endTicks;
@@ -51,7 +53,7 @@ public abstract class LockMinigame {
         this.target = target;
         this.targetId = targetId;
         this.onSolved = onSolved;
-        this.bar = Bukkit.createBossBar(ThieveryTexts.msg(PREPARE_TEXT), BarColor.WHITE, BarStyle.SOLID);
+        this.bar = Bukkit.createBossBar("", BarColor.WHITE, BarStyle.SOLID);
     }
 
     /** Opens the puzzle for the thief. */

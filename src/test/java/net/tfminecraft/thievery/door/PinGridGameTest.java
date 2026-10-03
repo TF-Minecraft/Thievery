@@ -16,7 +16,6 @@ import net.tfminecraft.thievery.player.RiskCalculator;
 import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.block.Block;
-import org.bukkit.boss.BarColor;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.junit.jupiter.api.AfterEach;
@@ -68,7 +67,7 @@ class PinGridGameTest {
         lockPicks = new LockPickManager();
         // Rolls of 0 shuffle the six cells to 1, 2, 3, 4, 5, 0: the pins are cells 1 and 2.
         manager = new LockMinigameManager(lockPicks, mock(Random.class));
-        manager.gridScreens = (who, screen, onCell, onGiveUp) -> shown.add(new Shown(screen, onCell, onGiveUp));
+        manager.gridScreens = (onCell, onGiveUp) -> (who, screen) -> shown.add(new Shown(screen, onCell, onGiveUp));
         chest = server.addSimpleWorld("vault").getBlockAt(0, 64, 0);
         chest.setType(Material.CHEST);
         player = server.addPlayer();
@@ -138,7 +137,7 @@ class PinGridGameTest {
         assertEquals("Pins set 0/2    Slips 0/2", text(last().screen().status()));
 
         ticks(1);
-        assertEquals(BarColor.YELLOW, game.bar.getColor());
+        assertEquals(PinGridGame.Phase.SCAN, game.phase);
         ticks(1);
         assertEquals(2, shown.size());
         assertEquals("Memorise the pins · 1", text(last().screen().title()));
@@ -162,7 +161,6 @@ class PinGridGameTest {
         assertEquals(PinGridGame.RED, last().screen().title().color());
         assertEquals(GridScreen.Timer.URGENT, last().screen().timer());
         assertFalse(last().screen().cells().contains(GridScreen.Cell.LIT));
-        assertEquals(BarColor.GREEN, game.bar.getColor());
         player.assertSoundHeard(Sound.BLOCK_TRIPWIRE_CLICK_OFF);
     }
 
@@ -233,7 +231,7 @@ class PinGridGameTest {
         assertEquals("The pins slip", text(last().screen().title()));
         assertEquals(GridScreen.Cell.MISSED, last().screen().cells().get(1));
         assertEquals(GridScreen.Cell.MISS, last().screen().cells().get(3));
-        assertEquals(BarColor.RED, game.bar.getColor());
+        assertEquals(GridScreen.Timer.NONE, last().screen().timer());
         assertTrue(lockPicks.isOnCooldown(player.getUniqueId(), game.targetId));
         assertEquals(1, player.getInventory().getItemInMainHand().getAmount());
         assertEquals("§cThe pins slip and your lockpick snaps!", player.nextMessage());
@@ -249,12 +247,13 @@ class PinGridGameTest {
         PinGridGame game = start();
         reachRecall(game);
         ticks(game.recallTicks - 61);
-        assertEquals(BarColor.GREEN, game.bar.getColor());
+        assertEquals(GridScreen.Timer.RECALL, game.screen().timer());
         ticks(1);
-        assertEquals(BarColor.RED, game.bar.getColor());
+        assertEquals(GridScreen.Timer.URGENT, game.screen().timer());
+        player.assertSoundHeard(Sound.BLOCK_NOTE_BLOCK_HAT);
         ticks(59);
         assertEquals(LockMinigame.Outcome.NONE, game.outcome);
-        assertTrue(game.bar.getProgress() < 0.05);
+        assertTrue(game.screen().timeLeft() < 0.05);
         ticks(1);
         assertEquals(LockMinigame.Outcome.FAILED, game.outcome);
         assertEquals("§cThe pins slip back into place.", player.nextMessage());
@@ -310,7 +309,7 @@ class PinGridGameTest {
                 RingDialGameTest.input(true, true, true, true, true)));
         ticks(19);
         assertEquals(PinGridGame.Phase.PREPARE, game.phase);
-        assertEquals(1.0 / 20, game.bar.getProgress(), 1e-9);
+        assertEquals(1, game.ticksLeft);
         assertEquals(LockMinigame.Outcome.NONE, game.outcome);
         ticks(1);
         assertEquals(PinGridGame.Phase.SCAN, game.phase);

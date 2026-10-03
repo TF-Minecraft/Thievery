@@ -470,6 +470,9 @@ class StealReferencesTest {
         var below=click(inv,slot,unknown,ClickType.RIGHT);when(below.getClickedInventory()).thenReturn(thief.getInventory());ref.handleClick(below,thief);assertFalse(session.isMarked(slot));
 
         int probe=java.util.stream.IntStream.range(0,18).map(logical->session.getLayout().getGuiSlotForLogical(logical)).filter(cell->cell!=slot&&!session.isRevealed(cell)&&!session.getSeizedPins().isSeized(cell)).findFirst().orElseThrow();
+        // Stray number keys and double clicks never probe; a shift-right-click marks like a right-click.
+        ref.handleClick(click(inv,probe,unknown,ClickType.NUMBER_KEY),thief);ref.handleClick(click(inv,probe,unknown,ClickType.DOUBLE_CLICK),thief);assertFalse(session.isRevealed(probe));
+        ref.handleClick(click(inv,probe,unknown,ClickType.SHIFT_RIGHT),thief);assertTrue(session.isMarked(probe));ref.handleClick(click(inv,probe,inv.getItem(probe),ClickType.SHIFT_RIGHT),thief);assertFalse(session.isMarked(probe));
         ref.handleClick(click(inv,probe,unknown,ClickType.LEFT),thief);assertTrue(session.isRevealed(probe));assertFalse(session.isLockpickBroken());
         session.markLockpickBroken();ref.handleClick(click(inv,slot,unknown,ClickType.RIGHT),thief);assertFalse(session.isMarked(slot));assertEquals(unknown,inv.getItem(slot));
     }

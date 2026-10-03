@@ -96,7 +96,7 @@ class GridDialogsTest {
     private GridScreen screen() {
         return new GridScreen(Component.text("Set the pins"), Component.text("Pins set 0/2"),
                 List.of(GridScreen.Cell.HIDDEN, GridScreen.Cell.LIT, GridScreen.Cell.SET, GridScreen.Cell.MISS),
-                2);
+                2, GridScreen.Timer.NONE, 0.0);
     }
 
     @Test
@@ -105,18 +105,25 @@ class GridDialogsTest {
         Player player = mock(Player.class);
         List<Integer> clicked = new ArrayList<>();
         int[] gaveUp = {0};
-        GridDialogs.show(player, screen(), clicked::add, () -> gaveUp[0]++);
+        PinGridGame.GridFrames frames = GridDialogs.frames(clicked::add, () -> gaveUp[0]++);
+        frames.show(player, screen());
         verify(player).showDialog(dialog);
         assertEquals(5, labels.size());
         assertEquals(List.of(20, 20, 20, 20, 90), widths);
         assertEquals("Give up", ((TextComponent) labels.get(4)).content());
+        // Give up's action first, then one per cell.
         assertEquals(5, callbacks.size());
-        callbacks.get(2).accept(mock(io.papermc.paper.dialog.DialogResponseView.class), mock(Audience.class));
-        callbacks.get(0).accept(mock(io.papermc.paper.dialog.DialogResponseView.class), mock(Audience.class));
+        callbacks.get(3).accept(mock(io.papermc.paper.dialog.DialogResponseView.class), mock(Audience.class));
+        callbacks.get(1).accept(mock(io.papermc.paper.dialog.DialogResponseView.class), mock(Audience.class));
         assertEquals(List.of(2, 0), clicked);
-        callbacks.get(4).accept(mock(io.papermc.paper.dialog.DialogResponseView.class), mock(Audience.class));
+        callbacks.get(0).accept(mock(io.papermc.paper.dialog.DialogResponseView.class), mock(Audience.class));
         assertEquals(1, gaveUp[0]);
-        actions.verify(() -> DialogAction.customClick(any(DialogActionCallback.class), eq(GridDialogs.ONE_CLICK)), times(5));
+        actions.verify(() -> DialogAction.customClick(any(DialogActionCallback.class), eq(GridDialogs.CLICKS)), times(5));
+        // Later frames reuse the game's actions rather than registering new callbacks.
+        frames.show(player, screen());
+        frames.show(player, screen());
+        assertEquals(5, callbacks.size());
+        verify(player, times(3)).showDialog(dialog);
 
         DialogRegistryEntry.Builder entry = mock(DialogRegistryEntry.Builder.class, RETURNS_SELF);
         io.papermc.paper.registry.RegistryBuilderFactory<Dialog, DialogRegistryEntry.Builder> factory =
@@ -161,7 +168,7 @@ class GridDialogsTest {
     void thePackDrawsTheGridAsABoardClosedByTheGiveUpStrip() {
         Parameters.chestGridPack = true;
         int[] gaveUp = {0};
-        GridDialogs.show(mock(Player.class), screen(), cell -> {}, () -> gaveUp[0]++);
+        GridDialogs.frames(cell -> {}, () -> gaveUp[0]++).show(mock(Player.class), screen());
         assertEquals(GridDialogs.tile(GridScreen.Cell.HIDDEN, GridDialogs.TOP | GridDialogs.LEFT), labels.get(0));
         assertEquals(GridDialogs.tile(GridScreen.Cell.LIT, GridDialogs.TOP | GridDialogs.RIGHT)
                 .append(GridDialogs.timerStrip(screen())), labels.get(1));
@@ -177,7 +184,7 @@ class GridDialogsTest {
         ArgumentCaptor<List<ActionButton>> all = ArgumentCaptor.forClass(List.class);
         types.verify(() -> DialogType.multiAction(all.capture(), isNull(), eq(2)));
         assertEquals(5, all.getValue().size());
-        callbacks.get(4).accept(mock(io.papermc.paper.dialog.DialogResponseView.class), mock(Audience.class));
+        callbacks.get(0).accept(mock(io.papermc.paper.dialog.DialogResponseView.class), mock(Audience.class));
         assertEquals(1, gaveUp[0]);
     }
 
@@ -210,7 +217,7 @@ class GridDialogsTest {
     @Test
     void theTimerStripRunsFromTheBoardsLeftAndReturnsThePen() {
         GridScreen idle = new GridScreen(Component.empty(), Component.empty(),
-                List.of(GridScreen.Cell.HIDDEN, GridScreen.Cell.HIDDEN), 2);
+                List.of(GridScreen.Cell.HIDDEN, GridScreen.Cell.HIDDEN), 2, GridScreen.Timer.NONE, 0.0);
         assertEquals(GridScreen.Timer.NONE, idle.timer());
         // Two columns: the strip is 42 pixels of track, from 32 left of the last button's centre.
         String track = "\ue305" + GridDialogs.space(-1) + "\ue303" + GridDialogs.space(-1) + "\ue301" + GridDialogs.space(-1);
@@ -262,7 +269,7 @@ class GridDialogsTest {
     @Test
     void screensCopyTheirCells() {
         List<GridScreen.Cell> cells = new ArrayList<>(List.of(GridScreen.Cell.HIDDEN));
-        GridScreen screen = new GridScreen(Component.empty(), Component.empty(), cells, 1);
+        GridScreen screen = new GridScreen(Component.empty(), Component.empty(), cells, 1, GridScreen.Timer.NONE, 0.0);
         cells.add(GridScreen.Cell.LIT);
         assertEquals(1, screen.cells().size());
         assertThrows(UnsupportedOperationException.class, () -> screen.cells().add(GridScreen.Cell.SET));

@@ -244,8 +244,4 @@ final class RingView {
         }
         all.clear();
     }
-
-    List<Display> displays() {
-        return all;
-    }
 }

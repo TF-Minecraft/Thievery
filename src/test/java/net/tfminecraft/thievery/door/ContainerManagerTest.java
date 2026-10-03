@@ -419,11 +419,30 @@ class ContainerManagerTest {
             solved.getFirst().accept(0); verifyNoInteractions(stealManager);
 
             tools.when(()->ToolResolver.resolveLockpick(any())).thenReturn(pick);
+            // A guildmate's pick nearby started the access cooldown while this lock was being worked.
+            cooldown.when(()->net.tfminecraft.thievery.player.GuildAccessCooldown.isOnCooldown(anyMap(),eq(player),anyInt())).thenReturn(true); cooldown.when(()->net.tfminecraft.thievery.player.GuildAccessCooldown.formatRemaining(anyLong())).thenReturn("a day");
+            solved.getFirst().accept(0); verifyNoInteractions(stealManager); verify(player).sendMessage("\u00a7cYou must wait a day before attempting to lockpick this again.");
+            cooldown.when(()->net.tfminecraft.thievery.player.GuildAccessCooldown.isOnCooldown(anyMap(),eq(player),anyInt())).thenReturn(false);
             // A 27-slot barrel at a full break chance hides 8 pins, plus one per wrong grid cell.
             solved.getFirst().accept(2);
             assertEquals(10,opened.getFirst().getSeizedCount());
             verify(stealManager).openSession(player,references.constructed().getFirst(),gui); assertEquals("2026-10-01",locked.getLastAccess(player.getUniqueId())); evil.verify(()->net.tfminecraft.thievery.utils.EvilRpPlays.record(player));
         } finally { net.tfminecraft.thievery.cache.Cache.radius=radius; net.tfminecraft.thievery.cache.Cache.debugAllowOwnChest=own; net.tfminecraft.thievery.cache.Cache.requireOwnerOnline=online; net.tfminecraft.thievery.cache.Cache.traits=traits; }
+    }
+    @Test void bothHalvesOfADoubleChestAreOneLock() {
+        var pair=doubleChest();
+        assertSame(pair.block(),ContainerManager.lockBlock(pair.block()));
+        assertSame(pair.block(),ContainerManager.lockBlock(pair.right().getBlock()));
+        var barrel=lockpickBlock(); assertSame(barrel,ContainerManager.lockBlock(barrel));
+        var stone=block(6,Material.STONE); assertSame(stone,ContainerManager.lockBlock(stone));
+        // A double chest inventory without a holder, or whose left side is not a chest, is its own lock.
+        var odd=mock(Block.class); var oddChest=mock(Chest.class); var oddInventory=mock(DoubleChestInventory.class);
+        when(odd.getState()).thenReturn(oddChest); when(oddChest.getInventory()).thenReturn(oddInventory);
+        assertSame(odd,ContainerManager.lockBlock(odd));
+        var leftless=mock(Inventory.class); var notChest=mock(org.bukkit.inventory.InventoryHolder.class);
+        when(leftless.getHolder()).thenReturn(notChest); when(leftless.getHolder(false)).thenReturn(notChest);
+        when(oddInventory.getLeftSide()).thenReturn(leftless); when(oddInventory.getHolder()).thenReturn(new DoubleChest(oddInventory));
+        assertSame(odd,ContainerManager.lockBlock(odd));
     }
     @Test void aThiefAlreadyWorkingALockCannotStartAnother() {
         var traits=net.tfminecraft.thievery.cache.Cache.traits; boolean online=net.tfminecraft.thievery.cache.Cache.requireOwnerOnline, own=net.tfminecraft.thievery.cache.Cache.debugAllowOwnChest;

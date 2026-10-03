@@ -9,11 +9,12 @@ import java.util.Set;
 
 /**
  * Pin memory puzzle for chest lockpicking: remember the lit pins, then pick them all from memory.
- * Cells are numbered row by row and centred in a nine-column chest menu.
+ * Cells are numbered row by row.
  */
 public final class PinGrid {
 
-    public static final int MENU_COLUMNS = 9;
+    /** As many as fit the dialog and the lockpick font's board. */
+    public static final int MAX_COLUMNS = 9;
     public static final int MAX_ROWS = 6;
 
     public enum Pick {
@@ -24,15 +25,13 @@ public final class PinGrid {
 
     private final int rows;
     private final int columns;
-    private final int offset;
     private final Set<Integer> pins;
     private final Set<Integer> picked = new HashSet<>();
     private int mistakes;
 
     public PinGrid(int rows, int columns, int pinCount, Random random) {
         this.rows = Math.max(1, Math.min(MAX_ROWS, rows));
-        this.columns = Math.max(1, Math.min(MENU_COLUMNS, columns));
-        this.offset = (MENU_COLUMNS - this.columns) / 2;
+        this.columns = Math.max(1, Math.min(MAX_COLUMNS, columns));
         List<Integer> cells = new ArrayList<>(cellCount());
         for (int cell = 0; cell < cellCount(); cell++) {
             cells.add(cell);
@@ -52,26 +51,6 @@ public final class PinGrid {
 
     public int cellCount() {
         return rows * columns;
-    }
-
-    public int menuSize() {
-        return rows * MENU_COLUMNS;
-    }
-
-    public int slotOf(int cell) {
-        return (cell / columns) * MENU_COLUMNS + offset + cell % columns;
-    }
-
-    /** Returns the cell shown in a menu slot, or -1 for the filler around the grid. */
-    public int cellAt(int slot) {
-        if (slot < 0 || slot >= menuSize()) {
-            return -1;
-        }
-        int column = slot % MENU_COLUMNS - offset;
-        if (column < 0 || column >= columns) {
-            return -1;
-        }
-        return (slot / MENU_COLUMNS) * columns + column;
     }
 
     public Set<Integer> pins() {

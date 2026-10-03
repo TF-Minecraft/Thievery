@@ -112,7 +112,8 @@ final class RingDialGame extends LockMinigame {
             return;
         }
         turnTicks++;
-        if (sweep.isOver(turnTicks)) {
+        // A laggy thief's press for the end of the zone arrives a few ticks late, so the pass waits for it.
+        if (sweep.isOver(turnTicks - lagTicks(player))) {
             slip(player, "Too late");
             return;
         }
@@ -128,6 +129,11 @@ final class RingDialGame extends LockMinigame {
                     sweet ? 1.9f : 1.2f);
         }
         progress(1.0 - progress);
+    }
+
+    /** How many ticks behind the server the thief sees the needle, from their ping, up to the configured cap. */
+    static int lagTicks(Player player) {
+        return Math.min(Parameters.chestDialMaxLagTicks, Math.round(player.getPing() / 50.0f));
     }
 
     private void spin(Player player) {
@@ -183,8 +189,7 @@ final class RingDialGame extends LockMinigame {
             slip(player, "Wrong key");
             return;
         }
-        int lag = Math.min(Parameters.chestDialMaxLagTicks, Math.round(player.getPing() / 50.0f));
-        Sweep.Result result = sweep.judge(turnTicks, lag);
+        Sweep.Result result = sweep.judge(turnTicks, lagTicks(player));
         if (result != Sweep.Result.HIT) {
             slip(player, result == Sweep.Result.EARLY ? "Too soon" : "Too late");
             return;

@@ -7,7 +7,6 @@ import java.util.function.IntConsumer;
 
 import org.bukkit.Sound;
 import org.bukkit.block.Block;
-import org.bukkit.boss.BarColor;
 import org.bukkit.entity.Player;
 
 import net.kyori.adventure.text.Component;
@@ -15,7 +14,6 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
 
 import net.tfminecraft.thievery.cache.Parameters;
-import net.tfminecraft.thievery.utils.ThieveryTexts;
 
 /**
  * Pin memory minigame in a vanilla dialog, modelled on the NoPixel thermite minigame. The pins light up row by
@@ -48,6 +46,7 @@ final class PinGridGame extends LockMinigame {
     final PinGrid grid;
     final int recallTicks;
     final GridScreens screens;
+    GridFrames frames;
     Phase phase = Phase.PREPARE;
     int phaseTicks;
     int ticksLeft;
@@ -88,7 +87,6 @@ final class PinGridGame extends LockMinigame {
                 return;
             }
             if (ticksLeft % 20 == 0 && ticksLeft <= COUNTDOWN_SECONDS * 20) {
-                bar.setColor(BarColor.RED);
                 player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_HAT, 0.6f, 0.8f);
             }
             redrawTimer(player);
@@ -105,17 +103,14 @@ final class PinGridGame extends LockMinigame {
         } else if (ticksLeft <= 0) {
             if (phase == Phase.PREPARE) {
                 setPhase(Phase.SCAN, grid.rows() * SCAN_TICKS_PER_ROW);
-                status(ThieveryTexts.WARN + "Memorise the pins", BarColor.YELLOW);
             } else {
                 setPhase(Phase.RECALL, recallTicks);
-                status(ThieveryTexts.SUCCESS + "Set the pins", BarColor.GREEN);
                 player.playSound(player.getLocation(), Sound.BLOCK_TRIPWIRE_CLICK_OFF, 0.6f, 0.8f);
                 show(player);
             }
         } else if (phase == Phase.MEMORISE) {
             redrawTimer(player);
         }
-        progress(ticksLeft / (double) phaseTicks);
     }
 
     private void redrawTimer(Player player) {
@@ -167,7 +162,10 @@ final class PinGridGame extends LockMinigame {
     }
 
     void show(Player player) {
-        screens.show(player, screen(), cell -> click(player, cell), () -> giveUp(player));
+        if (frames == null) {
+            frames = screens.open(cell -> click(player, cell), () -> giveUp(player));
+        }
+        frames.show(player, screen());
     }
 
     GridScreen screen() {
@@ -261,8 +259,13 @@ final class PinGridGame extends LockMinigame {
         }
     }
 
-    /** Draws a grid frame; the dialog implementation is {@link GridDialogs#show}. */
+    /** Opens a game's dialog frames; the implementation is {@link GridDialogs#frames}. */
     interface GridScreens {
-        void show(Player player, GridScreen screen, IntConsumer onCell, Runnable onGiveUp);
+        GridFrames open(IntConsumer onCell, Runnable onGiveUp);
+    }
+
+    /** Draws one game's grid frames. */
+    interface GridFrames {
+        void show(Player player, GridScreen screen);
     }
 }

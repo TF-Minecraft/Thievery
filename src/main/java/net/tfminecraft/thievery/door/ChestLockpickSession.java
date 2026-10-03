@@ -16,6 +16,9 @@ import net.tfminecraft.thievery.steal.StealGui;
 
 public class ChestLockpickSession extends HiddenStealSession {
 
+    /** Slots in a row of the chest probe menu, which the seized pins count their neighbours across. */
+    static final int MENU_COLUMNS = 9;
+
     private final UUID thiefId;
     private final Block chestBlock;
     private final LockpickDefinition lockpickDef;
@@ -36,8 +39,8 @@ public class ChestLockpickSession extends HiddenStealSession {
         this.chestBlock = chestBlock;
         this.lockpickDef = lockpickDef;
         this.lockType = lockType == null ? LockTypeProfile.IDENTITY : lockType;
-        this.seizedPins = new SeizedPins(getLayout().getLogicalSlotToGuiSlot().values(), PinGrid.MENU_COLUMNS);
-        // The first probe is always clear, so at most every other slot can hold a pin.
+        this.seizedPins = new SeizedPins(getLayout().getLogicalSlotToGuiSlot().values(), MENU_COLUMNS);
+        // The first probe is always clear, so every slot but that one can hold a pin.
         int slots = getLayout().getLogicalSlotToGuiSlot().size();
         this.seizedCount = Math.max(0, Math.min(seizedCount, slots - 1));
     }

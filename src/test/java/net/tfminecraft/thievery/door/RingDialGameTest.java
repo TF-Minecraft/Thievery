@@ -40,6 +40,7 @@ class RingDialGameTest {
     private Player player;
     private Block chest;
     private RingView view;
+    private Random rolls;
     private final List<Object[]> opened = new ArrayList<>();
     private final AtomicInteger solved = new AtomicInteger();
     private final AtomicInteger solvedMistakes = new AtomicInteger(-1);
@@ -73,7 +74,8 @@ class RingDialGameTest {
         lockPicks = new LockPickManager();
         // Rolls of 0: every pass takes the shortest lap (36 ticks), starts its zone a third of the way round
         // (ticks 12 to 17) and asks for the first key, forward.
-        manager = new LockMinigameManager(lockPicks, mock(Random.class));
+        rolls = mock(Random.class);
+        manager = new LockMinigameManager(lockPicks, rolls);
         view = mock(RingView.class);
         manager.ringViews = (who, tumblers, slips) -> {
             opened.add(new Object[] {who, tumblers, slips});
@@ -342,6 +344,31 @@ class RingDialGameTest {
         ticks(1);
         assertEquals(2, game.slips);
         assertEquals(RingDialGame.Phase.PAUSE, game.phase);
+    }
+
+    @Test
+    void aLaggyPressForTheEndOfALateZoneArrivesBeforeThePassRunsOut() {
+        // A roll near 1 puts the zone as late as it goes: about ticks 27 to 32 of the 36-tick pass.
+        when(rolls.nextDouble()).thenReturn(0.999);
+        doReturn(200).when(player).getPing();
+        RingDialGame game = start();
+        turnTo(game, 36);
+        // The thief, four ticks behind, saw the needle at tick 32, still in the zone.
+        assertEquals(0, game.slips);
+        tap(1);
+        assertEquals(1, game.set);
+        assertEquals(0, game.slips);
+        verify(view).zone(game.sweep, RingView.GREEN);
+    }
+
+    @Test
+    void aPassRunsOutOnceEvenALaggyThiefHasSeenItEnd() {
+        doReturn(200).when(player).getPing();
+        RingDialGame game = start();
+        turnTo(game, 39);
+        assertEquals(0, game.slips);
+        ticks(1);
+        assertEquals(1, game.slips);
     }
 
     @Test

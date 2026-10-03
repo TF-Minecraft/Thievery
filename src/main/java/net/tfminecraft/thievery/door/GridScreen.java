@@ -38,10 +38,6 @@ record GridScreen(Component title, Component status, List<Cell> cells, int colum
         }
     }
 
-    GridScreen(Component title, Component status, List<Cell> cells, int columns) {
-        this(title, status, cells, columns, Timer.NONE, 0.0);
-    }
-
     GridScreen {
         cells = List.copyOf(cells);
         timeLeft = Math.max(0.0, Math.min(1.0, timeLeft));

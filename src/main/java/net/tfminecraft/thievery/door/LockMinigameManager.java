@@ -52,7 +52,7 @@ public class LockMinigameManager implements Listener {
     private final LockPickManager lockPickManager;
     private final Random random;
     private final Map<UUID, LockMinigame> games = new HashMap<>();
-    PinGridGame.GridScreens gridScreens = GridDialogs::show;
+    PinGridGame.GridScreens gridScreens = GridDialogs::frames;
     RingDialGame.RingViews ringViews = (player, tumblers, slips) ->
             RingView.open(Thievery.getInstance(), player, tumblers, slips);
 
@@ -116,6 +116,7 @@ public class LockMinigameManager implements Listener {
             game = new PinGridGame(this, playerId, target, targetId, grid, recallTicks, gridScreens, onSolved);
         }
         game.player = player;
+        game.pick = player.getInventory().getItemInMainHand().clone();
         LockMinigame started = game;
         game.task = Bukkit.getScheduler().runTaskTimer(Thievery.getInstance(), () -> tick(player, started), 1L, 1L);
         games.put(playerId, game);
@@ -137,6 +138,16 @@ public class LockMinigameManager implements Listener {
 
     public boolean isPlaying(UUID playerId) {
         return games.containsKey(playerId);
+    }
+
+    /**
+     * Whether {@code player} is working a lock. The ring cancels their clicks, but listeners that also handle
+     * cancelled clicks, such as door picking and grave looting, must stand aside themselves.
+     */
+    public static boolean isWorkingALock(Player player) {
+        Thievery plugin = Thievery.getInstance();
+        LockMinigameManager manager = plugin == null ? null : plugin.getLockMinigameManager();
+        return manager != null && manager.isPlaying(player.getUniqueId());
     }
 
     LockMinigame game(UUID playerId) {
@@ -161,7 +172,8 @@ public class LockMinigameManager implements Listener {
         if (games.get(game.playerId) != game) {
             return;
         }
-        if (!player.isOnline() || !(game.target.getState() instanceof Container)) {
+        // No snapshot: a full chest's snapshot copies every item, and this runs every tick.
+        if (!player.isOnline() || !(game.target.getState(false) instanceof Container)) {
             cancel(game.playerId);
             return;
         }
@@ -293,10 +305,16 @@ public class LockMinigameManager implements Listener {
     }
 
     /**
-     * Keeps the lockpick in hand while the ring is up: no scrolling the hotbar, dropping, swapping hands or moving
-     * items, any of which could leave the solved lock with no pick to open it.
+     * Keeps the lockpick in hand while a lock is being worked: no scrolling the hotbar, dropping, swapping hands or
+     * moving items, any of which could leave a solved lock with no pick to open it, or a failed one breaking
+     * something else. The grid's dialog blocks these keys on a vanilla client, but not a modified one.
      */
     private boolean handsOnTheLock(org.bukkit.entity.HumanEntity player) {
+        return games.containsKey(player.getUniqueId());
+    }
+
+    /** The ring holds the thief still with their off hand free; the grid's dialog leaves nothing to click. */
+    private boolean heldStill(org.bukkit.entity.HumanEntity player) {
         LockMinigame game = games.get(player.getUniqueId());
         return game != null && game.holdsStill();
     }
@@ -328,7 +346,7 @@ public class LockMinigameManager implements Listener {
      */
     @EventHandler(priority = EventPriority.LOWEST)
     public void onInteract(PlayerInteractEvent event) {
-        if (handsOnTheLock(event.getPlayer())) {
+        if (heldStill(event.getPlayer())) {
             event.setCancelled(true);
         }
     }
@@ -336,7 +354,7 @@ public class LockMinigameManager implements Listener {
     /** A frozen thief can still right-click a horse or a boat, which would carry them off with the ring. */
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
     public void onMount(EntityMountEvent event) {
-        if (event.getEntity() instanceof org.bukkit.entity.HumanEntity rider && handsOnTheLock(rider)) {
+        if (event.getEntity() instanceof org.bukkit.entity.HumanEntity rider && heldStill(rider)) {
             event.setCancelled(true);
         }
     }
@@ -350,7 +368,7 @@ public class LockMinigameManager implements Listener {
 
     void penalise(Player player, LockMinigame game) {
         lockPickManager.applyCooldown(game.playerId, game.targetId);
-        if (random.nextDouble() < Parameters.chestMinigameFailBreakChance && breakLockpick(player)) {
+        if (random.nextDouble() < Parameters.chestMinigameFailBreakChance && breakLockpick(player, game.pick)) {
             player.playSound(player.getLocation(), Sound.ENTITY_ITEM_BREAK, 1f, 1f);
             player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "The pins slip and your lockpick snaps!"));
         } else {
@@ -366,9 +384,10 @@ public class LockMinigameManager implements Listener {
         game.cleanup(player);
     }
 
-    private static boolean breakLockpick(Player player) {
+    /** Breaks the held lockpick, if it is still the pick the thief started with. */
+    private static boolean breakLockpick(Player player, ItemStack pick) {
         ItemStack held = player.getInventory().getItemInMainHand();
-        if (held.getType().isAir()) {
+        if (!held.isSimilar(pick)) {
             return false;
         }
         if (held.getAmount() > 1) {

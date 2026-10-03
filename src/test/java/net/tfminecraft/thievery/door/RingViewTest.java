@@ -104,7 +104,6 @@ class RingViewTest {
         verify(world, times(RingLayout.SIGHT_LINES * RingLayout.SIGHT_LINES)).rayTraceBlocks(any(Location.class),
                 any(Vector.class), anyDouble(), eq(FluidCollisionMode.NEVER), eq(true));
         assertEquals(24 + 4 + 3 + 1 + 1 + 2, spawned.size());
-        assertEquals(spawned, view.displays());
         ArgumentCaptor<Location> where = ArgumentCaptor.forClass(Location.class);
         verify(world, atLeastOnce()).spawn(where.capture(), any(Class.class), any(Consumer.class));
         Location centre = where.getValue();
@@ -285,7 +284,6 @@ class RingViewTest {
         for (Display display : parts) {
             verify(display).remove();
         }
-        assertTrue(view.displays().isEmpty());
         view.remove();
         verify(parts.get(0), times(1)).remove();
     }

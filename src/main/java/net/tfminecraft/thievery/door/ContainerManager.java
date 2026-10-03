@@ -743,7 +743,7 @@ public class ContainerManager implements Listener {
     }
 
     private void lockpickChest(PlayerInteractEvent e) {
-        Block b = e.getClickedBlock();
+        Block b = lockBlock(e.getClickedBlock());
         Player p = e.getPlayer();
 
         e.setCancelled(true);
@@ -760,28 +760,57 @@ public class ContainerManager implements Listener {
         ItemStack heldLockpick = p.getInventory().getItemInMainHand();
         if (ToolResolver.resolveLockpick(heldLockpick) == null) return;
 
-        ContainerData data = containerDataManager.loadContainerData(b.getLocation());
-        if (GuildAccessCooldown.isOnCooldown(data.getAccessMap(), p, Cache.cooldown)) {
-            long millisRemaining = GuildAccessCooldown.getMillisRemaining(data.getAccessMap(), p, Cache.cooldown);
-            p.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You must wait "
-                    + GuildAccessCooldown.formatRemaining(millisRemaining)
-                    + " before attempting to lockpick this again."));
+        if (onAccessCooldown(p, b)) {
             return;
         }
 
         // The probe menu opens only once the lock minigame is solved.
-        Thievery.getInstance().getLockMinigameManager().start(p, b, mistakes -> openLockpickSession(p, b, mistakes));
+        Thievery.getInstance().getLockMinigameManager().start(p, b, mistakes -> {
+            // A guildmate's pick nearby may have started the access cooldown while this lock was being worked.
+            if (!onAccessCooldown(p, b)) {
+                openLockpickSession(p, b, mistakes);
+            }
+        });
+    }
+
+    /** Tells the thief and returns true when they or their guild picked this container too recently. */
+    private boolean onAccessCooldown(Player p, Block b) {
+        ContainerData data = containerDataManager.loadContainerData(b.getLocation());
+        if (!GuildAccessCooldown.isOnCooldown(data.getAccessMap(), p, Cache.cooldown)) {
+            return false;
+        }
+        long millisRemaining = GuildAccessCooldown.getMillisRemaining(data.getAccessMap(), p, Cache.cooldown);
+        p.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You must wait "
+                + GuildAccessCooldown.formatRemaining(millisRemaining)
+                + " before attempting to lockpick this again."));
+        return true;
+    }
+
+    /**
+     * The block that stands for a container's lock. Both halves of a double chest are one lock, so they share the
+     * left half: one fail cooldown, and one thief at a time.
+     */
+    static Block lockBlock(Block block) {
+        if (block.getState() instanceof Container container
+                && container.getInventory() instanceof DoubleChestInventory inventory
+                && inventory.getHolder() instanceof DoubleChest doubleChest
+                && doubleChest.getLeftSide() instanceof Chest left) {
+            return left.getBlock();
+        }
+        return block;
     }
 
     /**
      * Staff testing: runs a lock minigame on any container, skipping the trait, clue, ownership and access checks,
      * then opens the probe menu as a real pick would.
      */
-    public void testPick(Player p, Block b, LockMinigameManager.Mode mode) {
-        if (b == null || !(b.getState() instanceof Container) || Parameters.excludedContainerMaterials.contains(b.getType())) {
+    public void testPick(Player p, Block target, LockMinigameManager.Mode mode) {
+        if (target == null || !(target.getState() instanceof Container)
+                || Parameters.excludedContainerMaterials.contains(target.getType())) {
             p.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "Look at a container within 5 blocks."));
             return;
         }
+        Block b = lockBlock(target);
         if (ToolResolver.resolveLockpick(p.getInventory().getItemInMainHand()) == null) {
             p.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "Hold a lockpick to test a pick."));
             return;

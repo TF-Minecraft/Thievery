@@ -142,6 +142,19 @@ class DoorManagerTest {
     }
 
     @Test
+    void aThiefWorkingAChestLockLeavesDoorsAlone() {
+        locked();
+        clearInvocations(store);
+        try (MockedStatic<LockMinigameManager> locks = mockStatic(LockMinigameManager.class)) {
+            locks.when(() -> LockMinigameManager.isWorkingALock(player)).thenReturn(true);
+            PlayerInteractEvent event = interaction(door);
+            manager.onPlayerInteract(event);
+            verify(event, never()).setCancelled(true);
+        }
+        verifyNoInteractions(store);
+    }
+
+    @Test
     void sneakingWithAnOrdinaryItemDoesNotChangeOrBypassTheLock() {
         locked();
         when(player.isSneaking()).thenReturn(true);

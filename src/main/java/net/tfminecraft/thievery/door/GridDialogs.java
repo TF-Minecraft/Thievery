@@ -28,16 +28,32 @@ final class GridDialogs {
 
     static final int CELL_WIDTH = 20;
     static final int STATUS_WIDTH = 260;
-    static final ClickCallback.Options ONE_CLICK = ClickCallback.Options.builder()
-            .uses(1).lifetime(Duration.ofSeconds(30)).build();
+    /**
+     * A game's click actions are made once and reused on every frame, since frames come every few ticks. A stale
+     * click is turned away by the game, so the actions need no use limit, only to outlast any game.
+     */
+    static final ClickCallback.Options CLICKS = ClickCallback.Options.builder()
+            .uses(ClickCallback.UNLIMITED_USES).lifetime(Duration.ofMinutes(10)).build();
 
     private GridDialogs() {}
 
-    static void show(Player player, GridScreen screen, IntConsumer onCell, Runnable onGiveUp) {
+    /** One game's frames, drawn with click actions made on the first frame. */
+    static PinGridGame.GridFrames frames(IntConsumer onCell, Runnable onGiveUp) {
+        List<DialogAction> cells = new ArrayList<>();
+        DialogAction giveUp = DialogAction.customClick((response, audience) -> onGiveUp.run(), CLICKS);
+        return (player, screen) -> {
+            while (cells.size() < screen.cells().size()) {
+                int cell = cells.size();
+                cells.add(DialogAction.customClick((response, audience) -> onCell.accept(cell), CLICKS));
+            }
+            show(player, screen, cells, giveUp);
+        };
+    }
+
+    private static void show(Player player, GridScreen screen, List<DialogAction> cellActions, DialogAction giveUpAction) {
         boolean pack = Parameters.chestGridPack;
         List<ActionButton> buttons = new ArrayList<>(screen.cells().size() + 1);
         for (int cell = 0; cell < screen.cells().size(); cell++) {
-            int clicked = cell;
             Component label = pack
                     ? tile(screen.cells().get(cell), edges(cell, screen.columns()))
                     : icon(screen.cells().get(cell));
@@ -45,14 +61,12 @@ final class GridDialogs {
                 // The top row's last tile is drawn after the rest of that row, so its strip lies over them all.
                 label = label.append(timerStrip(screen));
             }
-            buttons.add(ActionButton.builder(label).width(CELL_WIDTH)
-                    .action(DialogAction.customClick((response, audience) -> onCell.accept(clicked), ONE_CLICK))
-                    .build());
+            buttons.add(ActionButton.builder(label).width(CELL_WIDTH).action(cellActions.get(cell)).build());
         }
         ActionButton giveUp = ActionButton.builder(pack ? giveUpStrip(screen.columns())
                         : Component.text("Give up", GridScreen.Cell.MISS.colour))
                 .width(pack ? giveUpWidth(screen.columns()) : 90)
-                .action(DialogAction.customClick((response, audience) -> onGiveUp.run(), ONE_CLICK))
+                .action(giveUpAction)
                 .build();
         if (pack) {
             // The give-up button joins the grid as its last row, so its strip can close the board underneath:
@@ -84,7 +98,6 @@ final class GridDialogs {
     static final char GIVE_UP_STRIPS = '\ue200';
     static final int GIVE_UP_WIDTH = 96;
     static final char TIMER_RUNS = '\ue300';
-    static final int MAX_COLUMNS = 9;
     static final char PIN = '\ue010';
     static final char PIN_SET = '\ue011';
     static final char SLIP = '\ue012';
@@ -146,7 +159,7 @@ final class GridDialogs {
     }
 
     private static int boardColumns(int columns) {
-        return Math.max(1, Math.min(MAX_COLUMNS, columns));
+        return Math.max(1, Math.min(PinGrid.MAX_COLUMNS, columns));
     }
 
     /**

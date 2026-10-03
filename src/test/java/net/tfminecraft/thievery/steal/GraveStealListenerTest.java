@@ -135,6 +135,16 @@ class GraveStealListenerTest {
     }
 
     @Test
+    void aThiefWorkingAChestLockCannotLootGraves() {
+        try (org.mockito.MockedStatic<net.tfminecraft.thievery.door.LockMinigameManager> locks =
+                mockStatic(net.tfminecraft.thievery.door.LockMinigameManager.class)) {
+            locks.when(() -> net.tfminecraft.thievery.door.LockMinigameManager.isWorkingALock(player)).thenReturn(true);
+            loot();
+        }
+        verifyNoInteractions(graves);
+    }
+
+    @Test
     void interactionRequiresMainHandRightClickOnANonOwnedGrave() {
         interact(Action.LEFT_CLICK_BLOCK, EquipmentSlot.HAND, block);
         interact(Action.RIGHT_CLICK_BLOCK, EquipmentSlot.OFF_HAND, block);

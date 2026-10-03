@@ -11,7 +11,7 @@ import java.util.Random;
 public final class Sweep {
 
     public static final int KEYS = 4;
-    /** The zone always starts within the middle third of the pass, so there is time to react. */
+    /** The zone never starts in the first third of the pass, so there is time to react, and ends by 90%. */
     static final double EARLIEST_ZONE = 1.0 / 3.0;
     static final double LATEST_ZONE_END = 0.9;
 
