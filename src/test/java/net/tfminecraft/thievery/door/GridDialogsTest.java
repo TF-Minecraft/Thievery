@@ -163,7 +163,8 @@ class GridDialogsTest {
         int[] gaveUp = {0};
         GridDialogs.show(mock(Player.class), screen(), cell -> {}, () -> gaveUp[0]++);
         assertEquals(GridDialogs.tile(GridScreen.Cell.HIDDEN, GridDialogs.TOP | GridDialogs.LEFT), labels.get(0));
-        assertEquals(GridDialogs.tile(GridScreen.Cell.LIT, GridDialogs.TOP | GridDialogs.RIGHT), labels.get(1));
+        assertEquals(GridDialogs.tile(GridScreen.Cell.LIT, GridDialogs.TOP | GridDialogs.RIGHT)
+                .append(GridDialogs.timerStrip(screen())), labels.get(1));
         assertEquals(GridDialogs.tile(GridScreen.Cell.SET, GridDialogs.LEFT), labels.get(2));
         assertEquals(GridDialogs.tile(GridScreen.Cell.MISS, GridDialogs.RIGHT), labels.get(3));
         assertEquals(GridDialogs.giveUpStrip(2), labels.get(4));
@@ -204,6 +205,30 @@ class GridDialogsTest {
         assertEquals(0, GridDialogs.edges(4, 3));
         assertEquals(GridDialogs.RIGHT, GridDialogs.edges(5, 3));
         assertEquals(GridDialogs.TOP | GridDialogs.RIGHT | GridDialogs.LEFT, GridDialogs.edges(0, 1));
+    }
+
+    @Test
+    void theTimerStripRunsFromTheBoardsLeftAndReturnsThePen() {
+        GridScreen idle = new GridScreen(Component.empty(), Component.empty(),
+                List.of(GridScreen.Cell.HIDDEN, GridScreen.Cell.HIDDEN), 2);
+        assertEquals(GridScreen.Timer.NONE, idle.timer());
+        // Two columns: the strip is 50 pixels of track, from 38 left of the last button's centre.
+        String track = "\ue305" + GridDialogs.space(-1) + "\ue304" + GridDialogs.space(-1) + "\ue301" + GridDialogs.space(-1);
+        assertEquals(GridDialogs.space(-38) + track + GridDialogs.space(-12),
+                ((TextComponent) GridDialogs.timerStrip(idle)).content());
+        GridScreen recall = new GridScreen(Component.empty(), Component.empty(), idle.cells(), 2,
+                GridScreen.Timer.RECALL, 0.5);
+        // Half lit: 25 green (16 + 8 + 1), then 25 of track.
+        String green = "\ue324" + GridDialogs.space(-1) + "\ue323" + GridDialogs.space(-1) + "\ue320" + GridDialogs.space(-1);
+        String rest = "\ue304" + GridDialogs.space(-1) + "\ue303" + GridDialogs.space(-1) + "\ue300" + GridDialogs.space(-1);
+        assertEquals(GridDialogs.space(-38) + green + rest + GridDialogs.space(-12),
+                ((TextComponent) GridDialogs.timerStrip(recall)).content());
+        GridScreen full = new GridScreen(Component.empty(), Component.empty(), idle.cells(), 2,
+                GridScreen.Timer.URGENT, 3.0);
+        assertEquals(1.0, full.timeLeft());
+        assertTrue(((TextComponent) GridDialogs.timerStrip(full)).content().contains("\ue335"));
+        assertEquals(0.0, new GridScreen(Component.empty(), Component.empty(), idle.cells(), 2,
+                GridScreen.Timer.MEMORISE, -1.0).timeLeft());
     }
 
     @Test

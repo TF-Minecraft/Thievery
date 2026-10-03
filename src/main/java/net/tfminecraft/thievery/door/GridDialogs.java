@@ -29,7 +29,7 @@ final class GridDialogs {
     static final int CELL_WIDTH = 24;
     static final int STATUS_WIDTH = 260;
     static final ClickCallback.Options ONE_CLICK = ClickCallback.Options.builder()
-            .uses(1).lifetime(Duration.ofMinutes(2)).build();
+            .uses(1).lifetime(Duration.ofSeconds(30)).build();
 
     private GridDialogs() {}
 
@@ -41,6 +41,10 @@ final class GridDialogs {
             Component label = pack
                     ? tile(screen.cells().get(cell), edges(cell, screen.columns()))
                     : icon(screen.cells().get(cell));
+            if (pack && cell == Math.min(screen.columns(), screen.cells().size()) - 1) {
+                // The top row's last tile is drawn after the rest of that row, so its strip lies over them all.
+                label = label.append(timerStrip(screen));
+            }
             buttons.add(ActionButton.builder(label).width(CELL_WIDTH)
                     .action(DialogAction.customClick((response, audience) -> onCell.accept(clicked), ONE_CLICK))
                     .build());
@@ -79,6 +83,7 @@ final class GridDialogs {
     static final char TILES = '\ue100';
     static final char GIVE_UP_STRIPS = '\ue200';
     static final int GIVE_UP_WIDTH = 96;
+    static final char TIMER_RUNS = '\ue300';
     static final int MAX_COLUMNS = 9;
     static final char PIN = '\ue010';
     static final char PIN_SET = '\ue011';
@@ -95,6 +100,32 @@ final class GridDialogs {
         if (column == columns - 1) edges |= RIGHT;
         if (column == 0) edges |= LEFT;
         return edges;
+    }
+
+    /**
+     * The countdown as a strip along the top of the board, drawn from the top row's last button: the colour of the
+     * running timer for the share of time left, then the empty track. Spaces bring the pen back to where it
+     * started, so the label still measures nothing.
+     */
+    static Component timerStrip(GridScreen screen) {
+        int columns = boardColumns(screen.columns());
+        int width = columns * (CELL_WIDTH + 2) - 2;
+        int lit = screen.timer() == GridScreen.Timer.NONE ? 0 : (int) Math.round(width * screen.timeLeft());
+        int start = -(CELL_WIDTH / 2 + (columns - 1) * (CELL_WIDTH + 2));
+        return glyphs(space(start) + runs(screen.timer().ordinal(), lit) + runs(0, width - lit) + space(-(start + width)));
+    }
+
+    /** {@code length} pixels of strip in one colour, from runs of power-of-two widths. */
+    private static String runs(int colour, int length) {
+        StringBuilder text = new StringBuilder();
+        for (int power = 7; power >= 0; power--) {
+            while (length >= 1 << power) {
+                // A glyph advances one pixel past its width.
+                text.append((char) (TIMER_RUNS + colour * 16 + power)).append(space(-1));
+                length -= 1 << power;
+            }
+        }
+        return text.toString();
     }
 
     /** The give-up button: as wide as the board allows, up to {@link #GIVE_UP_WIDTH}. */

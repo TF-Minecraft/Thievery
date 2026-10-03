@@ -140,7 +140,9 @@ class PinGridGameTest {
         assertEquals(BarColor.YELLOW, game.bar.getColor());
         ticks(1);
         assertEquals(2, shown.size());
-        assertEquals("Memorise the pins", text(last().screen().title()));
+        assertEquals("Memorise the pins · 1", text(last().screen().title()));
+        assertEquals(GridScreen.Timer.MEMORISE, last().screen().timer());
+        assertEquals(1.0, last().screen().timeLeft());
         assertEquals(GridScreen.Cell.LIT, last().screen().cells().get(1));
         assertEquals(GridScreen.Cell.LIT, last().screen().cells().get(2));
         assertEquals(GridScreen.Cell.HIDDEN, last().screen().cells().get(0));
@@ -155,7 +157,9 @@ class PinGridGameTest {
         ticks(2);
         assertEquals(PinGridGame.Phase.RECALL, game.phase);
         assertEquals(4, shown.size());
-        assertEquals("Set the pins", text(last().screen().title()));
+        assertEquals("Set the pins · 2", text(last().screen().title()));
+        assertEquals(PinGridGame.RED, last().screen().title().color());
+        assertEquals(GridScreen.Timer.URGENT, last().screen().timer());
         assertFalse(last().screen().cells().contains(GridScreen.Cell.LIT));
         assertEquals(BarColor.GREEN, game.bar.getColor());
         player.assertSoundHeard(Sound.BLOCK_TRIPWIRE_CLICK_OFF);
@@ -253,6 +257,48 @@ class PinGridGameTest {
         ticks(1);
         assertEquals(LockMinigame.Outcome.FAILED, game.outcome);
         assertEquals("§cThe pins slip back into place.", player.nextMessage());
+    }
+
+    @Test
+    void theCountdownIsDrawnInTheDialogEachSecondOrOftenForThePackStrip() {
+        Parameters.chestMinigameMemoriseSeconds = 2.0;
+        Parameters.chestMinigameRecallSeconds = 5.0;
+        Parameters.chestMinigameRecallSecondsPerDexterity = 0.0;
+        PinGridGame game = start();
+        assertEquals(GridScreen.Timer.NONE, last().screen().timer());
+        ticks(1 + 4);
+        assertEquals(PinGridGame.Phase.MEMORISE, game.phase);
+        int frames = shown.size();
+        ticks(20);
+        // Forty ticks of memorising: one redraw as the title's second ticks over.
+        assertEquals(frames + 1, shown.size());
+        assertEquals("Memorise the pins · 1", text(last().screen().title()));
+        assertEquals(0.5, last().screen().timeLeft(), 1e-9);
+        ticks(20);
+        assertEquals(PinGridGame.Phase.RECALL, game.phase);
+        assertEquals(GridScreen.Timer.RECALL, last().screen().timer());
+        assertEquals("Set the pins · 5", text(last().screen().title()));
+        assertEquals(PinGridGame.GREEN, last().screen().title().color());
+
+        Parameters.chestGridPack = true;
+        frames = shown.size();
+        ticks(PinGridGame.TIMER_REDRAW_TICKS * 3);
+        assertEquals(frames + 3, shown.size());
+        assertEquals(1.0 - 12 / 100.0, last().screen().timeLeft(), 1e-9);
+        ticks(100 - 12 - 60);
+        assertEquals(GridScreen.Timer.URGENT, last().screen().timer());
+        assertEquals("Set the pins · 3", text(last().screen().title()));
+        game.solve(player);
+        assertEquals(GridScreen.Timer.NONE, game.screen().timer());
+    }
+
+    @Test
+    void secondsRoundUpUntilTimeIsOut() {
+        assertEquals(0, PinGridGame.seconds(0));
+        assertEquals(0, PinGridGame.seconds(-5));
+        assertEquals(1, PinGridGame.seconds(1));
+        assertEquals(1, PinGridGame.seconds(20));
+        assertEquals(2, PinGridGame.seconds(21));
     }
 
     @Test

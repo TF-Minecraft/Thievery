@@ -26,6 +26,11 @@ final class PinGridGame extends LockMinigame {
 
     static final int COUNTDOWN_SECONDS = 3;
     static final int SCAN_TICKS_PER_ROW = 2;
+    /**
+     * The dialog hides the boss bar behind its blur, so a running countdown is drawn in the dialog: redrawn this
+     * often for the board's timer strip, or each second for the countdown in the title.
+     */
+    static final int TIMER_REDRAW_TICKS = 4;
     /** Semitones of a major pentatonic scale over two octaves; each correct pin plays the next one. */
     static final int[] SCALE = {0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24};
     static final TextColor GOLD = TextColor.color(0xf2c53d);
@@ -80,6 +85,7 @@ final class PinGridGame extends LockMinigame {
                 bar.setColor(BarColor.RED);
                 player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_HAT, 0.6f, 0.8f);
             }
+            redrawTimer(player);
         } else if (phase == Phase.SCAN) {
             int rows = Math.min(grid.rows(), (phaseTicks - ticksLeft) / SCAN_TICKS_PER_ROW + 1);
             if (rows > scannedRows) {
@@ -100,8 +106,16 @@ final class PinGridGame extends LockMinigame {
                 player.playSound(player.getLocation(), Sound.BLOCK_TRIPWIRE_CLICK_OFF, 0.6f, 0.8f);
                 show(player);
             }
+        } else if (phase == Phase.MEMORISE) {
+            redrawTimer(player);
         }
         progress(ticksLeft / (double) phaseTicks);
+    }
+
+    private void redrawTimer(Player player) {
+        if (ticksLeft % (Parameters.chestGridPack ? TIMER_REDRAW_TICKS : 20) == 0) {
+            show(player);
+        }
     }
 
     /**
@@ -155,7 +169,7 @@ final class PinGridGame extends LockMinigame {
         for (int cell = 0; cell < grid.cellCount(); cell++) {
             cells.add(look(cell));
         }
-        return new GridScreen(title(), status(), cells, grid.columns());
+        return new GridScreen(title(), status(), cells, grid.columns(), timer(), timeLeft());
     }
 
     private GridScreen.Cell look(int cell) {
@@ -180,9 +194,35 @@ final class PinGridGame extends LockMinigame {
         }
         return switch (phase) {
             case PREPARE -> Component.text("Steady your hands...", NamedTextColor.GRAY);
-            case SCAN, MEMORISE -> Component.text("Memorise the pins", GOLD);
-            case RECALL -> Component.text("Set the pins", GREEN);
+            case SCAN -> Component.text("Memorise the pins \u00b7 "
+                    + seconds(ticks(Parameters.chestMinigameMemoriseSeconds)), GOLD);
+            case MEMORISE -> Component.text("Memorise the pins \u00b7 " + seconds(ticksLeft), GOLD);
+            case RECALL -> Component.text("Set the pins \u00b7 " + seconds(ticksLeft), urgent() ? RED : GREEN);
         };
+    }
+
+    /** Whole seconds left, rounded up, so the countdown shows 1 until time is out. */
+    static int seconds(int ticks) {
+        return Math.max(0, (ticks + 19) / 20);
+    }
+
+    private boolean urgent() {
+        return ticksLeft <= COUNTDOWN_SECONDS * 20;
+    }
+
+    private GridScreen.Timer timer() {
+        if (outcome != Outcome.NONE) {
+            return GridScreen.Timer.NONE;
+        }
+        return switch (phase) {
+            case PREPARE -> GridScreen.Timer.NONE;
+            case SCAN, MEMORISE -> GridScreen.Timer.MEMORISE;
+            case RECALL -> urgent() ? GridScreen.Timer.URGENT : GridScreen.Timer.RECALL;
+        };
+    }
+
+    private double timeLeft() {
+        return phase == Phase.SCAN ? 1.0 : ticksLeft / (double) phaseTicks;
     }
 
     private Component status() {

@@ -5,8 +5,19 @@ import java.util.List;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextColor;
 
-/** One frame of the pin grid dialog: a title, a status line and how each cell looks. */
-record GridScreen(Component title, Component status, List<Cell> cells, int columns) {
+/**
+ * One frame of the pin grid dialog: a title, a status line, how each cell looks, and the running timer with the
+ * share of its time left.
+ */
+record GridScreen(Component title, Component status, List<Cell> cells, int columns, Timer timer, double timeLeft) {
+
+    /** Which countdown is running, so the board's timer strip can colour it. */
+    enum Timer {
+        NONE,
+        MEMORISE,
+        RECALL,
+        URGENT
+    }
 
     /** How a grid cell is drawn: a block texture, or a coloured square when textures are off. */
     enum Cell {
@@ -27,7 +38,12 @@ record GridScreen(Component title, Component status, List<Cell> cells, int colum
         }
     }
 
+    GridScreen(Component title, Component status, List<Cell> cells, int columns) {
+        this(title, status, cells, columns, Timer.NONE, 0.0);
+    }
+
     GridScreen {
         cells = List.copyOf(cells);
+        timeLeft = Math.max(0.0, Math.min(1.0, timeLeft));
     }
 }
