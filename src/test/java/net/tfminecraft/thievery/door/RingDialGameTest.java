@@ -149,6 +149,7 @@ class RingDialGameTest {
         assertEquals(3, opened.get(0)[2]);
         verify(view).label(Component.text("Steady...", NamedTextColor.GRAY), 1.1f);
         assertTrue(game.bar.getTitle().contains("Pick the lock"));
+        assertTrue(game.bar.getPlayers().contains(player));
         assertEquals(RingDialGame.Phase.PREPARE, game.phase);
     }
 

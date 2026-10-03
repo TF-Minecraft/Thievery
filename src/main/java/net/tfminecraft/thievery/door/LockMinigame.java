@@ -73,6 +73,11 @@ public abstract class LockMinigame {
     void input(Player player, Input input) {
     }
 
+    /** Whether the boss bar shows the thief the puzzle's state and countdown. */
+    boolean showsBar() {
+        return true;
+    }
+
     /** Whether the thief must stay put while playing. */
     boolean holdsStill() {
         return false;

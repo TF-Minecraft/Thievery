@@ -68,6 +68,12 @@ final class PinGridGame extends LockMinigame {
         ticksLeft = duration;
     }
 
+    /** The dialog's blur hides the boss bar, so the dialog draws its own countdown instead. */
+    @Override
+    boolean showsBar() {
+        return false;
+    }
+
     @Override
     void begin(Player player) {
         show(player);

@@ -119,7 +119,9 @@ public class LockMinigameManager implements Listener {
         LockMinigame started = game;
         game.task = Bukkit.getScheduler().runTaskTimer(Thievery.getInstance(), () -> tick(player, started), 1L, 1L);
         games.put(playerId, game);
-        game.bar.addPlayer(player);
+        if (game.showsBar()) {
+            game.bar.addPlayer(player);
+        }
         game.begin(player);
         return true;
     }

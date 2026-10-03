@@ -128,7 +128,8 @@ class PinGridGameTest {
         risk.when(() -> RiskCalculator.getDexterity(player)).thenReturn(10);
         PinGridGame game = start();
         assertEquals(30, game.recallTicks);
-        assertTrue(game.bar.getPlayers().contains(player));
+        assertFalse(game.showsBar());
+        assertTrue(game.bar.getPlayers().isEmpty());
         assertEquals(1, shown.size());
         assertEquals("Steady your hands...", text(last().screen().title()));
         assertEquals(List.of(GridScreen.Cell.HIDDEN, GridScreen.Cell.HIDDEN, GridScreen.Cell.HIDDEN,
