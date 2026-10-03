@@ -26,7 +26,7 @@ import net.tfminecraft.thievery.cache.Parameters;
 /** Shows the pin grid as a vanilla dialog: a button per cell and a "Give up" button, which is the only way out. */
 final class GridDialogs {
 
-    static final int CELL_WIDTH = 24;
+    static final int CELL_WIDTH = 20;
     static final int STATUS_WIDTH = 260;
     static final ClickCallback.Options ONE_CLICK = ClickCallback.Options.builder()
             .uses(1).lifetime(Duration.ofSeconds(30)).build();

@@ -108,7 +108,7 @@ class GridDialogsTest {
         GridDialogs.show(player, screen(), clicked::add, () -> gaveUp[0]++);
         verify(player).showDialog(dialog);
         assertEquals(5, labels.size());
-        assertEquals(List.of(24, 24, 24, 24, 90), widths);
+        assertEquals(List.of(20, 20, 20, 20, 90), widths);
         assertEquals("Give up", ((TextComponent) labels.get(4)).content());
         assertEquals(5, callbacks.size());
         callbacks.get(2).accept(mock(io.papermc.paper.dialog.DialogResponseView.class), mock(Audience.class));
@@ -168,7 +168,7 @@ class GridDialogsTest {
         assertEquals(GridDialogs.tile(GridScreen.Cell.SET, GridDialogs.LEFT), labels.get(2));
         assertEquals(GridDialogs.tile(GridScreen.Cell.MISS, GridDialogs.RIGHT), labels.get(3));
         assertEquals(GridDialogs.giveUpStrip(2), labels.get(4));
-        assertEquals(List.of(24, 24, 24, 24, 50), widths);
+        assertEquals(List.of(20, 20, 20, 20, 42), widths);
         DialogRegistryEntry.Builder entry = mock(DialogRegistryEntry.Builder.class, RETURNS_SELF);
         io.papermc.paper.registry.RegistryBuilderFactory<Dialog, DialogRegistryEntry.Builder> factory =
                 mock(io.papermc.paper.registry.RegistryBuilderFactory.class);
@@ -184,15 +184,15 @@ class GridDialogsTest {
     @Test
     void tilesSitOnTheirButtonAndMeasureNothing() {
         TextComponent corner = (TextComponent) GridDialogs.tile(GridScreen.Cell.LIT, GridDialogs.TOP | GridDialogs.LEFT);
-        // A 31-pixel tile (24 + 1 each side + 5 of rim on the left) starts 18 left of the button's centre.
-        assertEquals(GridDialogs.space(-18) + (char) (0xe100 + 8 + 5) + GridDialogs.space(-14), corner.content());
+        // A 27-pixel tile (20 + 1 each side + 5 of rim on the left) starts 16 left of the button's centre.
+        assertEquals(GridDialogs.space(-16) + (char) (0xe100 + 8 + 5) + GridDialogs.space(-12), corner.content());
         assertEquals(GridDialogs.FONT, corner.font());
         assertEquals(NamedTextColor.WHITE, corner.color());
         assertEquals(ShadowColor.none(), corner.shadowColor());
         TextComponent inner = (TextComponent) GridDialogs.tile(GridScreen.Cell.MISSED, 0);
-        assertEquals(GridDialogs.space(-13) + (char) (0xe100 + 32) + GridDialogs.space(-14), inner.content());
+        assertEquals(GridDialogs.space(-11) + (char) (0xe100 + 32) + GridDialogs.space(-12), inner.content());
         TextComponent right = (TextComponent) GridDialogs.tile(GridScreen.Cell.SET, GridDialogs.RIGHT);
-        assertEquals(GridDialogs.space(-13) + (char) (0xe100 + 16 + 2) + GridDialogs.space(-19), right.content());
+        assertEquals(GridDialogs.space(-11) + (char) (0xe100 + 16 + 2) + GridDialogs.space(-17), right.content());
     }
 
     @Test
@@ -212,16 +212,16 @@ class GridDialogsTest {
         GridScreen idle = new GridScreen(Component.empty(), Component.empty(),
                 List.of(GridScreen.Cell.HIDDEN, GridScreen.Cell.HIDDEN), 2);
         assertEquals(GridScreen.Timer.NONE, idle.timer());
-        // Two columns: the strip is 50 pixels of track, from 38 left of the last button's centre.
-        String track = "\ue305" + GridDialogs.space(-1) + "\ue304" + GridDialogs.space(-1) + "\ue301" + GridDialogs.space(-1);
-        assertEquals(GridDialogs.space(-38) + track + GridDialogs.space(-12),
+        // Two columns: the strip is 42 pixels of track, from 32 left of the last button's centre.
+        String track = "\ue305" + GridDialogs.space(-1) + "\ue303" + GridDialogs.space(-1) + "\ue301" + GridDialogs.space(-1);
+        assertEquals(GridDialogs.space(-32) + track + GridDialogs.space(-10),
                 ((TextComponent) GridDialogs.timerStrip(idle)).content());
         GridScreen recall = new GridScreen(Component.empty(), Component.empty(), idle.cells(), 2,
                 GridScreen.Timer.RECALL, 0.5);
-        // Half lit: 25 green (16 + 8 + 1), then 25 of track.
-        String green = "\ue324" + GridDialogs.space(-1) + "\ue323" + GridDialogs.space(-1) + "\ue320" + GridDialogs.space(-1);
-        String rest = "\ue304" + GridDialogs.space(-1) + "\ue303" + GridDialogs.space(-1) + "\ue300" + GridDialogs.space(-1);
-        assertEquals(GridDialogs.space(-38) + green + rest + GridDialogs.space(-12),
+        // Half lit: 21 green (16 + 4 + 1), then 21 of track.
+        String green = "\ue324" + GridDialogs.space(-1) + "\ue322" + GridDialogs.space(-1) + "\ue320" + GridDialogs.space(-1);
+        String rest = "\ue304" + GridDialogs.space(-1) + "\ue302" + GridDialogs.space(-1) + "\ue300" + GridDialogs.space(-1);
+        assertEquals(GridDialogs.space(-32) + green + rest + GridDialogs.space(-10),
                 ((TextComponent) GridDialogs.timerStrip(recall)).content());
         GridScreen full = new GridScreen(Component.empty(), Component.empty(), idle.cells(), 2,
                 GridScreen.Timer.URGENT, 3.0);
@@ -234,13 +234,13 @@ class GridDialogsTest {
     @Test
     void theGiveUpStripSpansTheBoardUnderAButtonCentredBelowTheGrid() {
         assertEquals(96, GridDialogs.giveUpWidth(6));
-        assertEquals(76, GridDialogs.giveUpWidth(3));
-        assertEquals(24, GridDialogs.giveUpWidth(1));
-        assertEquals(24, GridDialogs.giveUpWidth(0));
+        assertEquals(64, GridDialogs.giveUpWidth(3));
+        assertEquals(20, GridDialogs.giveUpWidth(1));
+        assertEquals(20, GridDialogs.giveUpWidth(0));
         assertEquals(96, GridDialogs.giveUpWidth(12));
-        // Six columns: a board 166 wide (154 of buttons and gaps, 6 of margin and rim each side), centred.
+        // Six columns: a board 142 wide (130 of buttons and gaps, 6 of margin and rim each side), centred.
         TextComponent six = (TextComponent) GridDialogs.giveUpStrip(6);
-        assertEquals(GridDialogs.space(-83) + (char) (0xe200 + 6) + GridDialogs.space(-84), six.content());
+        assertEquals(GridDialogs.space(-71) + (char) (0xe200 + 6) + GridDialogs.space(-72), six.content());
         assertEquals(GridDialogs.FONT, six.font());
         // Nine columns caps the strip at the widest board the pack draws.
         assertTrue(((TextComponent) GridDialogs.giveUpStrip(15)).content().contains(String.valueOf((char) (0xe200 + 9))));
