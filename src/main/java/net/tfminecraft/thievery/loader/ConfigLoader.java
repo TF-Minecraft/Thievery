@@ -145,6 +145,7 @@ public class ConfigLoader {
                 Math.min(1.0, config.getDouble(path + "fail-break-chance", 0.5)));
         Parameters.chestDialChance = Math.max(0.0, Math.min(1.0, config.getDouble(path + "dial-chance", 0.5)));
         Parameters.chestGridSprites = config.getBoolean(path + "grid.sprites", true);
+        Parameters.chestGridPack = config.getBoolean(path + "grid.pack", false);
         Parameters.chestDialTumblers = Math.max(1, Math.min(MAX_TUMBLERS, config.getInt(path + "dial.tumblers", 4)));
         Parameters.chestDialZoneWidth = Math.max(0.02, Math.min(0.25, config.getDouble(path + "dial.zone-width", 0.14)));
         Parameters.chestDialZoneShrinkPerTumbler = Math.max(0.0,

@@ -34,16 +34,28 @@ final class GridDialogs {
     private GridDialogs() {}
 
     static void show(Player player, GridScreen screen, IntConsumer onCell, Runnable onGiveUp) {
-        List<ActionButton> buttons = new ArrayList<>(screen.cells().size());
+        boolean pack = Parameters.chestGridPack;
+        List<ActionButton> buttons = new ArrayList<>(screen.cells().size() + 1);
         for (int cell = 0; cell < screen.cells().size(); cell++) {
             int clicked = cell;
-            buttons.add(ActionButton.builder(icon(screen.cells().get(cell))).width(CELL_WIDTH)
+            Component label = pack
+                    ? tile(screen.cells().get(cell), edges(cell, screen.columns()))
+                    : icon(screen.cells().get(cell));
+            buttons.add(ActionButton.builder(label).width(CELL_WIDTH)
                     .action(DialogAction.customClick((response, audience) -> onCell.accept(clicked), ONE_CLICK))
                     .build());
         }
-        ActionButton giveUp = ActionButton.builder(Component.text("Give up", GridScreen.Cell.MISS.colour)).width(90)
+        ActionButton giveUp = ActionButton.builder(pack ? giveUpStrip(screen.columns())
+                        : Component.text("Give up", GridScreen.Cell.MISS.colour))
+                .width(pack ? giveUpWidth(screen.columns()) : 90)
                 .action(DialogAction.customClick((response, audience) -> onGiveUp.run(), ONE_CLICK))
                 .build();
+        if (pack) {
+            // The give-up button joins the grid as its last row, so its strip can close the board underneath:
+            // the dialog clips anything drawn below its last row of buttons.
+            buttons.add(giveUp);
+        }
+        ActionButton exit = pack ? null : giveUp;
         Dialog dialog = Dialog.create(builder -> builder.empty()
                 .base(DialogBase.builder(screen.title())
                         .externalTitle(Component.text("Lockpicking"))
@@ -52,8 +64,103 @@ final class GridDialogs {
                         .afterAction(DialogBase.DialogAfterAction.NONE)
                         .body(List.of(DialogBody.plainMessage(screen.status(), STATUS_WIDTH)))
                         .build())
-                .type(DialogType.multiAction(buttons, giveUp, screen.columns())));
+                .type(DialogType.multiAction(buttons, exit, screen.columns())));
         player.showDialog(dialog);
+    }
+
+    /** The server resource pack's lockpick font: board tiles, status pips and spaces. */
+    static final Key FONT = Key.key("thievery", "lockpick");
+    /** How far a tile reaches past its button into the gap between buttons, and past the outer buttons. */
+    static final int MARGIN = 1;
+    static final int EDGE = 5;
+    static final int TOP = 1;
+    static final int RIGHT = 2;
+    static final int LEFT = 4;
+    static final char TILES = '\ue100';
+    static final char GIVE_UP_STRIPS = '\ue200';
+    static final int GIVE_UP_WIDTH = 96;
+    static final int MAX_COLUMNS = 9;
+    static final char PIN = '\ue010';
+    static final char PIN_SET = '\ue011';
+    static final char SLIP = '\ue012';
+    static final char SLIP_HIT = '\ue013';
+    static final int PIP_GAP = 8;
+
+    /** Which outer edges of the board a cell sits on, so its tile draws the rim there. The give-up strip below
+     * closes the bottom. */
+    static int edges(int cell, int columns) {
+        int column = cell % columns;
+        int edges = 0;
+        if (cell < columns) edges |= TOP;
+        if (column == columns - 1) edges |= RIGHT;
+        if (column == 0) edges |= LEFT;
+        return edges;
+    }
+
+    /** The give-up button: as wide as the board allows, up to {@link #GIVE_UP_WIDTH}. */
+    static int giveUpWidth(int columns) {
+        return Math.min(GIVE_UP_WIDTH, boardColumns(columns) * (CELL_WIDTH + 2) - 2);
+    }
+
+    /**
+     * The board's bottom row: a strip as wide as the board with its rim, around a red "Give up" plate on the
+     * button, centred under the grid like the button itself.
+     */
+    static Component giveUpStrip(int columns) {
+        int board = boardColumns(columns);
+        int width = board * (CELL_WIDTH + 2) - 2 + 2 * (MARGIN + EDGE);
+        int before = -(width / 2);
+        int after = -(width + 1 + before);
+        return glyphs(space(before) + (char) (GIVE_UP_STRIPS + board) + space(after));
+    }
+
+    private static int boardColumns(int columns) {
+        return Math.max(1, Math.min(MAX_COLUMNS, columns));
+    }
+
+    /**
+     * A cell's tile from the pack font: one glyph per look and set of board edges, covering its button but for
+     * the button's one-pixel outline, which shows black, or white under the cursor. Spaces either side bring the
+     * label's width to nothing, so the client centres it on the button without scrolling or clipping, and the
+     * tile reaches over the gaps to its neighbours to make one board.
+     */
+    static Component tile(GridScreen.Cell cell, int edges) {
+        int left = (edges & LEFT) != 0 ? EDGE : 0;
+        int right = (edges & RIGHT) != 0 ? EDGE : 0;
+        int width = CELL_WIDTH + 2 * MARGIN + left + right;
+        int before = -(CELL_WIDTH / 2 + MARGIN + left);
+        int after = -(width + 1 + before);
+        char glyph = (char) (TILES + cell.ordinal() * 8 + edges);
+        return glyphs(space(before) + glyph + space(after));
+    }
+
+    /** Pins set and slips as pips from the pack font. */
+    static Component tally(int set, int pins, int slips, int maxSlips) {
+        StringBuilder text = new StringBuilder();
+        for (int pin = 0; pin < pins; pin++) {
+            text.append(pin < set ? PIN_SET : PIN);
+        }
+        text.append(space(PIP_GAP));
+        for (int slip = 0; slip < maxSlips; slip++) {
+            text.append(slip < slips ? SLIP_HIT : SLIP);
+        }
+        return glyphs(text.toString());
+    }
+
+    /** A space of {@code advance} pixels in the pack font, which has spaces of up to 64 either way. */
+    static String space(int advance) {
+        StringBuilder spaces = new StringBuilder();
+        int left = Math.abs(advance);
+        while (left > 0) {
+            int step = Math.min(64, left);
+            spaces.append((char) ((advance < 0 ? 0xF000 : 0xF100) + step));
+            left -= step;
+        }
+        return spaces.toString();
+    }
+
+    private static Component glyphs(String text) {
+        return Component.text(text, NamedTextColor.WHITE).font(FONT).shadowColor(ShadowColor.none());
     }
 
     /** Button face colour, so the pad glyph in front of a texture cannot be seen. */

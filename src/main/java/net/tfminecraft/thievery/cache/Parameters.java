@@ -62,6 +62,8 @@ public final class Parameters {
 
     /** Draw the pin grid's cells as block textures; off draws coloured squares. */
     public static boolean chestGridSprites = true;
+    /** Draw the pin grid as a board from the server resource pack's {@code thievery:lockpick} font. */
+    public static boolean chestGridPack = false;
 
     /** Share of chest locks that use the lockpick ring instead of the pin grid. */
     public static double chestDialChance = 0.5;

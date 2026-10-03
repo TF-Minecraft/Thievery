@@ -160,9 +160,12 @@ lockpicking:
       recall-seconds-per-dexterity: 0.05
       mistakes-to-fail: 3              # wrong grid cells; the ring has dial.mistakes-to-fail
       fail-break-chance: 0.5
-      # The pin grid is a dialog. sprites draws its cells as block textures (redstone lamps); false
-      # draws coloured squares instead.
+      # The pin grid is a dialog. pack draws it as a lit board from the server resource pack's
+      # thievery:lockpick font; turn it on only once the pack carries that font, or players see boxes.
+      # Without it, sprites draws its cells as block textures (redstone lamps); false draws coloured
+      # squares instead.
       grid:
+        pack: false
         sprites: true
       # Share of locks that use the lockpick ring instead of the pin grid. The ring floats in front of
       # the thief, who is held still, and a white pointer sweeps once round it per pass. Press the

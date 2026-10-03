@@ -44,11 +44,13 @@ class GridDialogsTest {
     private Dialog dialog;
     private Consumer<io.papermc.paper.registry.RegistryBuilderFactory<Dialog, ? extends DialogRegistryEntry.Builder>> recipe;
     private boolean sprites;
+    private boolean pack;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setUp() {
         sprites = Parameters.chestGridSprites;
+        pack = Parameters.chestGridPack;
         Parameters.chestGridSprites = true;
         actions = mockStatic(DialogAction.class);
         actions.when(() -> DialogAction.customClick(any(DialogActionCallback.class), any())).thenAnswer(call -> {
@@ -85,6 +87,7 @@ class GridDialogsTest {
     @AfterEach
     void tearDown() {
         Parameters.chestGridSprites = sprites;
+        Parameters.chestGridPack = pack;
         for (MockedStatic<?> mocked : List.of(actions, buttons, bases, bodies, types, dialogs)) {
             mocked.close();
         }
@@ -151,6 +154,84 @@ class GridDialogsTest {
         }
         Parameters.chestGridSprites = false;
         assertEquals(Component.text("✖", GridScreen.Cell.MISS.colour), GridDialogs.icon(GridScreen.Cell.MISS));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void thePackDrawsTheGridAsABoardClosedByTheGiveUpStrip() {
+        Parameters.chestGridPack = true;
+        int[] gaveUp = {0};
+        GridDialogs.show(mock(Player.class), screen(), cell -> {}, () -> gaveUp[0]++);
+        assertEquals(GridDialogs.tile(GridScreen.Cell.HIDDEN, GridDialogs.TOP | GridDialogs.LEFT), labels.get(0));
+        assertEquals(GridDialogs.tile(GridScreen.Cell.LIT, GridDialogs.TOP | GridDialogs.RIGHT), labels.get(1));
+        assertEquals(GridDialogs.tile(GridScreen.Cell.SET, GridDialogs.LEFT), labels.get(2));
+        assertEquals(GridDialogs.tile(GridScreen.Cell.MISS, GridDialogs.RIGHT), labels.get(3));
+        assertEquals(GridDialogs.giveUpStrip(2), labels.get(4));
+        assertEquals(List.of(24, 24, 24, 24, 50), widths);
+        DialogRegistryEntry.Builder entry = mock(DialogRegistryEntry.Builder.class, RETURNS_SELF);
+        io.papermc.paper.registry.RegistryBuilderFactory<Dialog, DialogRegistryEntry.Builder> factory =
+                mock(io.papermc.paper.registry.RegistryBuilderFactory.class);
+        when(factory.empty()).thenReturn(entry);
+        recipe.accept(factory);
+        ArgumentCaptor<List<ActionButton>> all = ArgumentCaptor.forClass(List.class);
+        types.verify(() -> DialogType.multiAction(all.capture(), isNull(), eq(2)));
+        assertEquals(5, all.getValue().size());
+        callbacks.get(4).accept(mock(io.papermc.paper.dialog.DialogResponseView.class), mock(Audience.class));
+        assertEquals(1, gaveUp[0]);
+    }
+
+    @Test
+    void tilesSitOnTheirButtonAndMeasureNothing() {
+        TextComponent corner = (TextComponent) GridDialogs.tile(GridScreen.Cell.LIT, GridDialogs.TOP | GridDialogs.LEFT);
+        // A 31-pixel tile (24 + 1 each side + 5 of rim on the left) starts 18 left of the button's centre.
+        assertEquals(GridDialogs.space(-18) + (char) (0xe100 + 8 + 5) + GridDialogs.space(-14), corner.content());
+        assertEquals(GridDialogs.FONT, corner.font());
+        assertEquals(NamedTextColor.WHITE, corner.color());
+        assertEquals(ShadowColor.none(), corner.shadowColor());
+        TextComponent inner = (TextComponent) GridDialogs.tile(GridScreen.Cell.MISSED, 0);
+        assertEquals(GridDialogs.space(-13) + (char) (0xe100 + 32) + GridDialogs.space(-14), inner.content());
+        TextComponent right = (TextComponent) GridDialogs.tile(GridScreen.Cell.SET, GridDialogs.RIGHT);
+        assertEquals(GridDialogs.space(-13) + (char) (0xe100 + 16 + 2) + GridDialogs.space(-19), right.content());
+    }
+
+    @Test
+    void edgesMarkTheBoardsTopAndSides() {
+        // Three columns, two rows.
+        assertEquals(GridDialogs.TOP | GridDialogs.LEFT, GridDialogs.edges(0, 3));
+        assertEquals(GridDialogs.TOP, GridDialogs.edges(1, 3));
+        assertEquals(GridDialogs.TOP | GridDialogs.RIGHT, GridDialogs.edges(2, 3));
+        assertEquals(GridDialogs.LEFT, GridDialogs.edges(3, 3));
+        assertEquals(0, GridDialogs.edges(4, 3));
+        assertEquals(GridDialogs.RIGHT, GridDialogs.edges(5, 3));
+        assertEquals(GridDialogs.TOP | GridDialogs.RIGHT | GridDialogs.LEFT, GridDialogs.edges(0, 1));
+    }
+
+    @Test
+    void theGiveUpStripSpansTheBoardUnderAButtonCentredBelowTheGrid() {
+        assertEquals(96, GridDialogs.giveUpWidth(6));
+        assertEquals(76, GridDialogs.giveUpWidth(3));
+        assertEquals(24, GridDialogs.giveUpWidth(1));
+        assertEquals(24, GridDialogs.giveUpWidth(0));
+        assertEquals(96, GridDialogs.giveUpWidth(12));
+        // Six columns: a board 166 wide (154 of buttons and gaps, 6 of margin and rim each side), centred.
+        TextComponent six = (TextComponent) GridDialogs.giveUpStrip(6);
+        assertEquals(GridDialogs.space(-83) + (char) (0xe200 + 6) + GridDialogs.space(-84), six.content());
+        assertEquals(GridDialogs.FONT, six.font());
+        // Nine columns caps the strip at the widest board the pack draws.
+        assertTrue(((TextComponent) GridDialogs.giveUpStrip(15)).content().contains(String.valueOf((char) (0xe200 + 9))));
+    }
+
+    @Test
+    void theTallyIsPipsAndLongSpacesChain() {
+        TextComponent tally = (TextComponent) GridDialogs.tally(2, 4, 1, 3);
+        assertEquals("\ue011\ue011\ue010\ue010" + GridDialogs.space(GridDialogs.PIP_GAP) + "\ue013\ue012\ue012",
+                tally.content());
+        assertEquals(GridDialogs.FONT, tally.font());
+        assertEquals("\uf105", GridDialogs.space(5));
+        assertEquals("\uf00c", GridDialogs.space(-12));
+        assertEquals("\uf140\uf11a", GridDialogs.space(90));
+        assertEquals("\uf040\uf040\uf001", GridDialogs.space(-129));
+        assertEquals("", GridDialogs.space(0));
     }
 
     @Test

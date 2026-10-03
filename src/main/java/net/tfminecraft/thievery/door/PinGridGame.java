@@ -188,6 +188,9 @@ final class PinGridGame extends LockMinigame {
     private Component status() {
         int set = grid.pins().size() - grid.pinsLeft();
         int slips = grid.mistakes();
+        if (Parameters.chestGridPack) {
+            return GridDialogs.tally(set, grid.pins().size(), slips, Parameters.chestMinigameMistakesToFail);
+        }
         return Component.text()
                 .append(Component.text("Pins set " + set + "/" + grid.pins().size(), set > 0 ? GREEN : DIM))
                 .append(Component.text("    Slips " + slips + "/" + Parameters.chestMinigameMistakesToFail,

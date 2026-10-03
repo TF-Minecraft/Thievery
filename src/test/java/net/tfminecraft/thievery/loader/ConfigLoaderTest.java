@@ -98,6 +98,7 @@ class ConfigLoaderTest {
         assertEquals(0.5, Parameters.chestDialChance);
         assertEquals(4, Parameters.chestDialTumblers);
         assertTrue(Parameters.chestGridSprites);
+        assertFalse(Parameters.chestGridPack);
         assertEquals(0.14, Parameters.chestDialZoneWidth);
         assertEquals(0.15, Parameters.chestDialZoneShrinkPerTumbler);
         assertEquals(1.44, Parameters.chestDialMinLapSeconds);
@@ -375,12 +376,13 @@ class ConfigLoaderTest {
                       mistakes-to-fail: 2
                       fail-break-chance: 0.25
                       dial-chance: 0.75
-                      grid: {sprites: false}
+                      grid: {sprites: false, pack: true}
                       dial: {tumblers: 5, zone-width: 0.2, zone-shrink-per-tumbler: 0.1, min-lap-seconds: 2, max-lap-seconds: 3, lap-seconds-per-dexterity: 0.02, alternate-direction: false, max-lag-ticks: 4, distance: 3, mistakes-to-fail: 2}
                 """);
         assertEquals(0.75, Parameters.chestDialChance);
         assertEquals(5, Parameters.chestDialTumblers);
         assertFalse(Parameters.chestGridSprites);
+        assertTrue(Parameters.chestGridPack);
         assertEquals(0.2, Parameters.chestDialZoneWidth);
         assertEquals(0.1, Parameters.chestDialZoneShrinkPerTumbler);
         assertEquals(2.0, Parameters.chestDialMinLapSeconds);

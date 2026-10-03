@@ -114,6 +114,16 @@ class PinGridGameTest {
     }
 
     @Test
+    void withThePackTheStatusIsATallyOfPips() {
+        Parameters.chestGridPack = true;
+        PinGridGame game = start();
+        assertEquals(GridDialogs.tally(0, 2, 0, 2), last().screen().status());
+        reachRecall(game);
+        game.click(player, game.grid.pins().iterator().next());
+        assertEquals(GridDialogs.tally(1, 2, 0, 2), last().screen().status());
+    }
+
+    @Test
     void pinsScanOnRowByRowHoldThenGoDark() {
         risk.when(() -> RiskCalculator.getDexterity(player)).thenReturn(10);
         PinGridGame game = start();
