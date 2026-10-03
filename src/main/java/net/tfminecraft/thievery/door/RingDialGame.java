@@ -5,7 +5,6 @@ import java.util.UUID;
 import java.util.function.IntConsumer;
 
 import org.bukkit.Input;
-import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.block.Block;
 import org.bukkit.boss.BarColor;
@@ -168,7 +167,7 @@ final class RingDialGame extends LockMinigame {
         view.pin(set);
         set++;
         view.zone(sweep, RingView.GREEN);
-        view.burst(Particle.HAPPY_VILLAGER, 3);
+        view.burst(RingView.GREEN, 3);
         player.playSound(player.getLocation(), Sound.BLOCK_IRON_TRAPDOOR_CLOSE, 0.5f, 1.8f);
         if (set >= tumblers) {
             solve(player);
@@ -181,7 +180,7 @@ final class RingDialGame extends LockMinigame {
         view.slip(slips);
         slips++;
         view.zone(sweep, RingView.RED);
-        view.burst(Particle.SMOKE, 4);
+        view.burst(RingView.RED, 4);
         player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.8f, 0.6f);
         if (slips >= Parameters.chestDialMistakesToFail) {
             fail(player);

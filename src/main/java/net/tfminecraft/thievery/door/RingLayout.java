@@ -18,12 +18,12 @@ public final class RingLayout {
     /** Every part of the ring floats at most this share of the way to the block behind it, so none of it sinks in. */
     static final double CLEARANCE = 0.6;
     /**
-     * The ring's outline in its own plane at full size, with a margin: the pointer swinging round the dots, the pins
-     * and hint above them, and the widest label.
+     * The ring's outline in its own plane at full size, with a margin: the pointer swinging round the dots, the bursts
+     * past its tip, the pins and hint above them, and the widest label.
      */
     static final float HALF_WIDTH = 1.1f;
     static final float TOP = 1.3f;
-    static final float BOTTOM = -0.95f;
+    static final float BOTTOM = -1.1f;
     /** Sight lines checked across each side of the outline. */
     static final int SIGHT_LINES = 5;
 

@@ -46,6 +46,10 @@ final class RingView {
     static final float NEEDLE_EDGE_WIDTH = 0.02f;
     /** The needle's middle sits a little outside the dots, so more of it shows beyond the ring than inside. */
     static final float NEEDLE_RADIUS = RingLayout.RADIUS + 0.05f;
+    /** Bursts go off just past the needle's outer tip, clear of the dots, so they never hide the zone. */
+    static final float BURST_RADIUS = NEEDLE_RADIUS + NEEDLE_LENGTH / 2 + 0.08f;
+    /** Dust size at full scale; it shrinks with the ring, where other particles stay one size and swamp a close ring. */
+    static final float BURST_SIZE = 0.6f;
     /** A text display's background around one space, at scale 1: five pixels by ten, a fortieth of a block each. */
     static final float BACKDROP_WIDTH = 0.125f;
     static final float BACKDROP_HEIGHT = 0.25f;
@@ -225,11 +229,13 @@ final class RingView {
         }
     }
 
-    /** A burst of particles at the pointer that only the viewer sees. */
-    void burst(Particle particle, int count) {
+    /** A puff of coloured dust beyond the pointer's tip that only the viewer sees. */
+    void burst(TextColor colour, int count) {
         Location at = centre.clone().add(RingLayout.worldOffset(yaw, pitch,
-                RingLayout.onRing(pointerDegrees, NEEDLE_RADIUS).mul(scale)));
-        viewer.spawnParticle(particle, at, count, 0.03, 0.03, 0.03, 0.01);
+                RingLayout.onRing(pointerDegrees, BURST_RADIUS).mul(scale)));
+        double spread = 0.03 * scale;
+        viewer.spawnParticle(Particle.DUST, at, count, spread, spread, spread, 0,
+                new Particle.DustOptions(Color.fromRGB(colour.value()), BURST_SIZE * scale));
     }
 
     void remove() {

@@ -231,15 +231,50 @@ class RingViewTest {
     }
 
     @Test
-    void burstsAppearAtThePointerForTheViewerOnly() {
+    void burstsPuffColouredDustPastTheNeedleTipForTheViewerOnly() {
         RingView view = open();
         view.pick(90, 0);
-        view.burst(Particle.HAPPY_VILLAGER, 3);
+        view.burst(RingView.GREEN, 3);
         ArgumentCaptor<Location> at = ArgumentCaptor.forClass(Location.class);
-        verify(viewer).spawnParticle(eq(Particle.HAPPY_VILLAGER), at.capture(), eq(3), anyDouble(), anyDouble(), anyDouble(), anyDouble());
+        ArgumentCaptor<Particle.DustOptions> dust = ArgumentCaptor.forClass(Particle.DustOptions.class);
+        verify(viewer).spawnParticle(eq(Particle.DUST), at.capture(), eq(3), eq(0.03), eq(0.03), eq(0.03), eq(0.0),
+                dust.capture());
         // Facing south, the ring's right is west, so a pointer at three o'clock sits towards -x.
-        assertEquals(0.5 - RingView.NEEDLE_RADIUS, at.getValue().getX(), 1e-5);
+        assertEquals(0.5 - RingView.BURST_RADIUS, at.getValue().getX(), 1e-5);
+        assertEquals(RingView.GREEN.value(), dust.getValue().getColor().asRGB());
+        assertEquals(RingView.BURST_SIZE, dust.getValue().getSize(), 1e-6);
         verify(world, never()).spawnParticle(any(Particle.class), any(Location.class), anyInt());
+    }
+
+    @Test
+    void burstsClearTheDotsAndTheNeedle() {
+        // The dust puffs out about a tenth of a block; it must start beyond the dots and the needle's outer tip.
+        assertTrue(RingView.BURST_RADIUS - 0.05f > RingView.NEEDLE_RADIUS + RingView.NEEDLE_LENGTH / 2);
+        assertTrue(RingView.BURST_RADIUS - 0.05f > RingLayout.RADIUS + 0.1f);
+        float reach = RingView.BURST_RADIUS + 0.1f;
+        assertTrue(reach < RingLayout.HALF_WIDTH && reach < RingLayout.TOP && -reach > RingLayout.BOTTOM,
+                "bursts stay inside the outline kept clear of blocks");
+    }
+
+    @Test
+    void aCloseRingShrinksItsBursts() {
+        // A wall across z = 2.5 halves the ring, as in aBlockInTheWayPullsTheRingCloserAndShrinksIt.
+        when(world.rayTraceBlocks(any(Location.class), any(Vector.class), anyDouble(), any(FluidCollisionMode.class), anyBoolean()))
+                .thenAnswer(call -> {
+                    Vector eye = call.<Location>getArgument(0).toVector();
+                    Vector direction = call.getArgument(1);
+                    return new RayTraceResult(eye.add(direction.clone().multiply(2.0 / direction.getZ())));
+                });
+        RingView view = open();
+        view.pick(90, 0);
+        view.burst(RingView.RED, 4);
+        ArgumentCaptor<Location> at = ArgumentCaptor.forClass(Location.class);
+        ArgumentCaptor<Particle.DustOptions> dust = ArgumentCaptor.forClass(Particle.DustOptions.class);
+        verify(viewer).spawnParticle(eq(Particle.DUST), at.capture(), eq(4), eq(0.015), eq(0.015), eq(0.015),
+                eq(0.0), dust.capture());
+        assertEquals(0.5 - RingView.BURST_RADIUS * 0.5, at.getValue().getX(), 1e-5);
+        assertEquals(RingView.RED.value(), dust.getValue().getColor().asRGB());
+        assertEquals(RingView.BURST_SIZE * 0.5f, dust.getValue().getSize(), 1e-6);
     }
 
     @Test

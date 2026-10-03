@@ -17,7 +17,6 @@ import net.tfminecraft.thievery.player.RiskCalculator;
 import org.bukkit.Input;
 import org.bukkit.Location;
 import org.bukkit.Material;
-import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.block.Block;
 import org.bukkit.boss.BarColor;
@@ -193,7 +192,7 @@ class RingDialGameTest {
         assertEquals(1, game.set);
         verify(view).pin(0);
         verify(view).zone(game.sweep, RingView.GREEN);
-        verify(view).burst(Particle.HAPPY_VILLAGER, 3);
+        verify(view).burst(RingView.GREEN, 3);
         verify(view).label(Component.text("Set", RingView.GREEN), 1.1f);
         verify(view).pick(game.sweep.angleAt(game.sweep.progress(14)), 0);
         assertEquals(RingDialGame.Phase.PAUSE, game.phase);
@@ -241,7 +240,7 @@ class RingDialGameTest {
         assertEquals(1, game.slips);
         verify(view).slip(0);
         verify(view).zone(game.sweep, RingView.RED);
-        verify(view).burst(Particle.SMOKE, 4);
+        verify(view).burst(RingView.RED, 4);
         verify(view).label(Component.text("Wrong key", RingView.RED), 1.1f);
         assertEquals(BarColor.RED, game.bar.getColor());
         ticks(RingDialGame.PAUSE_TICKS);
