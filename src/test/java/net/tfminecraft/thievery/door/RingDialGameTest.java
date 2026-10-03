@@ -83,6 +83,7 @@ class RingDialGameTest {
         chest.setType(Material.CHEST);
         player = spy(server.addPlayer());
         doReturn(input(false, false, false, false, false)).when(player).getCurrentInput();
+        doReturn(true).when(player).isOnGround();
         player.getInventory().setItemInMainHand(new ItemStack(Material.TRIPWIRE_HOOK));
         player.setWalkSpeed(0.2f);
     }
@@ -149,6 +150,60 @@ class RingDialGameTest {
         verify(view).label(Component.text("Steady...", NamedTextColor.GRAY), 1.1f);
         assertTrue(game.bar.getTitle().contains("Pick the lock"));
         assertEquals(RingDialGame.Phase.PREPARE, game.phase);
+    }
+
+    @Test
+    void aThiefPickingMidJumpGetsTheRingOnceTheyLand() {
+        doReturn(false).when(player).isOnGround();
+        RingDialGame game = start();
+        assertTrue(LockFreeze.isFrozen(player));
+        assertTrue(game.bar.getTitle().contains("Pick the lock"));
+        assertEquals(RingDialGame.Phase.LANDING, game.phase);
+        ticks(3);
+        assertTrue(opened.isEmpty());
+        doReturn(true).when(player).isOnGround();
+        ticks(1);
+        assertEquals(1, opened.size());
+        verify(view).label(Component.text("Steady...", NamedTextColor.GRAY), 1.1f);
+        assertEquals(RingDialGame.Phase.PREPARE, game.phase);
+        assertEquals(LockMinigame.ticks(Parameters.chestMinigamePrepareSeconds), game.ticksLeft);
+        ticks(1);
+        assertEquals(RingDialGame.Phase.TURN, game.phase);
+    }
+
+    @Test
+    void aThiefWhoNeverLandsStillGetsTheRingAfterASecond() {
+        doReturn(false).when(player).isOnGround();
+        RingDialGame game = start();
+        ticks(RingDialGame.LANDING_TICKS - 1);
+        assertTrue(opened.isEmpty());
+        ticks(1);
+        assertEquals(1, opened.size());
+        assertEquals(RingDialGame.Phase.PREPARE, game.phase);
+    }
+
+    @Test
+    void waterAndLaddersCountAsComingToRest() {
+        Player floating = mock(Player.class);
+        assertFalse(RingDialGame.settled(floating));
+        when(floating.isInWater()).thenReturn(true);
+        assertTrue(RingDialGame.settled(floating));
+        Player climbing = mock(Player.class);
+        when(climbing.isClimbing()).thenReturn(true);
+        assertTrue(RingDialGame.settled(climbing));
+    }
+
+    @Test
+    void givingUpBeforeLandingFailsWithoutDrawingTheRing() {
+        doReturn(false).when(player).isOnGround();
+        RingDialGame game = start();
+        send(input(false, false, false, false, true));
+        assertEquals(LockMinigame.Outcome.FAILED, game.outcome);
+        ticks(LockMinigame.FAILED_TICKS);
+        assertTrue(opened.isEmpty());
+        verifyNoInteractions(view);
+        assertNull(manager.game(player.getUniqueId()));
+        assertFalse(LockFreeze.isFrozen(player));
     }
 
     @Test

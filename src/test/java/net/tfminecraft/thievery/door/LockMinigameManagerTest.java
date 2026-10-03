@@ -76,6 +76,7 @@ class LockMinigameManagerTest {
         chest = world.getBlockAt(0, 64, 0);
         chest.setType(Material.CHEST);
         player = spy(server.addPlayer());
+        doReturn(true).when(player).isOnGround();
         doReturn(RingDialGameTest.input(false, false, false, false, false)).when(player).getCurrentInput();
         player.getInventory().setItemInMainHand(new ItemStack(Material.TRIPWIRE_HOOK));
     }

@@ -32,10 +32,16 @@ final class RingDialGame extends LockMinigame {
     /** The server sends the pointer's position this many ticks ahead and lets the client glide there. */
     static final int LEAD_TICKS = 2;
     static final int PAUSE_TICKS = 12;
+    /**
+     * A thief who starts mid-jump drops as they are held still. The ring waits this long at most for them to land,
+     * so it floats before their eyes where they come to rest, not where they were in the air.
+     */
+    static final int LANDING_TICKS = 20;
     static final double MIN_ZONE_SHARE = 0.4;
     static final String[] KEYBINDS = {"key.forward", "key.left", "key.back", "key.right"};
 
     enum Phase {
+        LANDING,
         PREPARE,
         TURN,
         PAUSE
@@ -47,7 +53,7 @@ final class RingDialGame extends LockMinigame {
     final int tumblers = Parameters.chestDialTumblers;
     RingView view;
     Sweep sweep;
-    Phase phase = Phase.PREPARE;
+    Phase phase = Phase.LANDING;
     int ticksLeft;
     int turnTicks;
     int lastNotch;
@@ -61,16 +67,29 @@ final class RingDialGame extends LockMinigame {
         this.random = random;
         this.dexterity = Math.max(0, dexterity);
         this.views = views;
-        this.ticksLeft = ticks(Parameters.chestMinigamePrepareSeconds);
+        this.ticksLeft = LANDING_TICKS;
     }
 
     @Override
     void begin(Player player) {
         LockFreeze.freeze(player);
         held = keys(player.getCurrentInput());
+        status(ThieveryTexts.MUTED + "Pick the lock", BarColor.WHITE);
+        if (settled(player)) {
+            open(player);
+        }
+    }
+
+    /** Whether the thief has come to rest, so their eyes will stay where they are. */
+    static boolean settled(Player player) {
+        return player.isOnGround() || player.isInWater() || player.isClimbing();
+    }
+
+    private void open(Player player) {
         view = views.open(player, tumblers, Parameters.chestDialMistakesToFail);
         view.label(Component.text("Steady...", NamedTextColor.GRAY), 1.1f);
-        status(ThieveryTexts.MUTED + "Pick the lock", BarColor.WHITE);
+        phase = Phase.PREPARE;
+        ticksLeft = ticks(Parameters.chestMinigamePrepareSeconds);
     }
 
     @Override
@@ -80,6 +99,12 @@ final class RingDialGame extends LockMinigame {
 
     @Override
     void tickRunning(Player player) {
+        if (phase == Phase.LANDING) {
+            if (settled(player) || --ticksLeft <= 0) {
+                open(player);
+            }
+            return;
+        }
         if (phase != Phase.TURN) {
             if (--ticksLeft <= 0) {
                 spin(player);
@@ -204,6 +229,9 @@ final class RingDialGame extends LockMinigame {
 
     @Override
     void showOutcome(Player player) {
+        if (view == null) {
+            return;
+        }
         TextColor colour = outcome == Outcome.SOLVED ? RingView.GREEN : RingView.RED;
         view.label(Component.text(outcome == Outcome.SOLVED ? "The lock gives way" : "The pins slip", colour), 0.9f);
     }
