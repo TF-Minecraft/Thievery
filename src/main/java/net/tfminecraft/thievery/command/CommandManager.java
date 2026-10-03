@@ -4,6 +4,7 @@ import net.tfminecraft.thievery.Thievery;
 import net.tfminecraft.thievery.clue.ClearCluesManager;
 import net.tfminecraft.thievery.door.ContainerManager;
 import net.tfminecraft.thievery.door.FactionLockTutorial;
+import net.tfminecraft.thievery.door.LockMinigameManager;
 import net.tfminecraft.thievery.player.CooldownResetService;
 import net.tfminecraft.thievery.player.InventoryManager;
 import net.tfminecraft.thievery.player.RiskSetService;
@@ -170,6 +171,8 @@ public class CommandManager implements CommandExecutor, TabCompleter {
                         + ThieveryTexts.MUTED + "- Set thievery risk level");
                 msg(player, ThieveryTexts.WARN + "/thievery itemvalue " + ThieveryTexts.MUTED + "- Inspect held item steal value");
                 msg(player, ThieveryTexts.WARN + "/thievery keychain " + ThieveryTexts.MUTED + "- Get an empty keychain");
+                msg(player, ThieveryTexts.WARN + "/thievery testpick [grid|dial] " + ThieveryTexts.MUTED
+                        + "- Test-pick the container you look at");
             }
             msg(player, ThieveryTexts.WARN + "/thievery loadout " + ThieveryTexts.MUTED + "- Open thievery category loadout");
             msg(player, ThieveryTexts.WARN + "/thievery clearclues " + ThieveryTexts.MUTED + "- Clear clues on a door or container");
@@ -212,6 +215,24 @@ public class CommandManager implements CommandExecutor, TabCompleter {
             return true;
         }
 
+        if (args[0].equalsIgnoreCase("testpick")) {
+            if (!player.hasPermission("thievery.admin")) {
+                msg(player, ThieveryTexts.ERROR + "You don't have permission to use this command.");
+                return true;
+            }
+            LockMinigameManager.Mode mode = null;
+            if (args.length >= 2) {
+                try {
+                    mode = LockMinigameManager.Mode.valueOf(args[1].toUpperCase(Locale.ROOT));
+                } catch (IllegalArgumentException e) {
+                    msg(player, ThieveryTexts.ERROR + "Usage: " + ThieveryTexts.WARN + "/thievery testpick [grid|dial]");
+                    return true;
+                }
+            }
+            containerManager.testPick(player, player.getTargetBlockExact(5), mode);
+            return true;
+        }
+
         msg(player, ThieveryTexts.ERROR + "Unknown subcommand. Try " + ThieveryTexts.WARN + "/thievery loadout");
         return true;
     }
@@ -229,8 +250,14 @@ public class CommandManager implements CommandExecutor, TabCompleter {
                 options.add("setrisk");
                 options.add("itemvalue");
                 options.add("keychain");
+                options.add("testpick");
             }
             return options;
+        }
+
+        if (args.length == 2 && args[0].equalsIgnoreCase("testpick") && sender.hasPermission("thievery.admin")) {
+            String prefix = args[1].toLowerCase(Locale.ROOT);
+            return List.of("grid", "dial").stream().filter(option -> option.startsWith(prefix)).collect(Collectors.toList());
         }
 
         if (args.length == 2 && (args[0].equalsIgnoreCase("resetcooldowns") || args[0].equalsIgnoreCase("setrisk"))

@@ -739,46 +739,118 @@ public class ContainerManager implements Listener {
             return;
         }
 
-        lockpickChest(event, container); // proceed to start the system
+        lockpickChest(event); // proceed to start the system
     }
 
-    private void lockpickChest(PlayerInteractEvent e, Container container) {
-        Block b = e.getClickedBlock();
+    private void lockpickChest(PlayerInteractEvent e) {
+        Block b = lockBlock(e.getClickedBlock());
         Player p = e.getPlayer();
 
         e.setCancelled(true);
 
-        for (ChestLockpickSession active : lockpickingSessions.values()) {
-            if (active.getChestBlock().equals(b)) {
-                p.sendMessage(ThieveryTexts.msg(ThieveryTexts.CRITICAL + "Someone is already picking this lock!"));
-                return;
-            }
+        if (Thievery.getInstance().getLockMinigameManager().isPlaying(p.getUniqueId())) {
+            p.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You're already working a lock."));
+            return;
         }
-
-        ItemStack heldLockpick = p.getInventory().getItemInMainHand();
-        LockpickDefinition lockpickDef = ToolResolver.resolveLockpick(heldLockpick);
-        if (lockpickDef == null) return;
-
-        Location chestLoc = b.getLocation();
-        ContainerData data = containerDataManager.loadContainerData(chestLoc);
-        UUID playerId = p.getUniqueId();
-
-        if (GuildAccessCooldown.isOnCooldown(data.getAccessMap(), p, Cache.cooldown)) {
-            long millisRemaining = GuildAccessCooldown.getMillisRemaining(data.getAccessMap(), p, Cache.cooldown);
-            p.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You must wait "
-                    + GuildAccessCooldown.formatRemaining(millisRemaining)
-                    + " before attempting to lockpick this again."));
+        if (isBeingPicked(b)) {
+            p.sendMessage(ThieveryTexts.msg(ThieveryTexts.CRITICAL + "Someone is already picking this lock!"));
             return;
         }
 
+        ItemStack heldLockpick = p.getInventory().getItemInMainHand();
+        if (ToolResolver.resolveLockpick(heldLockpick) == null) return;
+
+        if (onAccessCooldown(p, b)) {
+            return;
+        }
+
+        // The probe menu opens only once the lock minigame is solved.
+        Thievery.getInstance().getLockMinigameManager().start(p, b, mistakes -> {
+            // A guildmate's pick nearby may have started the access cooldown while this lock was being worked.
+            if (!onAccessCooldown(p, b)) {
+                openLockpickSession(p, b, mistakes);
+            }
+        });
+    }
+
+    /** Tells the thief and returns true when they or their guild picked this container too recently. */
+    private boolean onAccessCooldown(Player p, Block b) {
+        ContainerData data = containerDataManager.loadContainerData(b.getLocation());
+        if (!GuildAccessCooldown.isOnCooldown(data.getAccessMap(), p, Cache.cooldown)) {
+            return false;
+        }
+        long millisRemaining = GuildAccessCooldown.getMillisRemaining(data.getAccessMap(), p, Cache.cooldown);
+        p.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You must wait "
+                + GuildAccessCooldown.formatRemaining(millisRemaining)
+                + " before attempting to lockpick this again."));
+        return true;
+    }
+
+    /**
+     * The block that stands for a container's lock. Both halves of a double chest are one lock, so they share the
+     * left half: one fail cooldown, and one thief at a time.
+     */
+    static Block lockBlock(Block block) {
+        if (block.getState() instanceof Container container
+                && container.getInventory() instanceof DoubleChestInventory inventory
+                && inventory.getHolder() instanceof DoubleChest doubleChest
+                && doubleChest.getLeftSide() instanceof Chest left) {
+            return left.getBlock();
+        }
+        return block;
+    }
+
+    /**
+     * Staff testing: runs a lock minigame on any container, skipping the trait, clue, ownership and access checks,
+     * then opens the probe menu as a real pick would.
+     */
+    public void testPick(Player p, Block target, LockMinigameManager.Mode mode) {
+        if (target == null || !(target.getState() instanceof Container)
+                || Parameters.excludedContainerMaterials.contains(target.getType())) {
+            p.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "Look at a container within 5 blocks."));
+            return;
+        }
+        Block b = lockBlock(target);
+        if (ToolResolver.resolveLockpick(p.getInventory().getItemInMainHand()) == null) {
+            p.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "Hold a lockpick to test a pick."));
+            return;
+        }
+        if (Thievery.getInstance().getLockMinigameManager().isPlaying(p.getUniqueId())) {
+            p.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You're already working a lock."));
+            return;
+        }
+        if (isBeingPicked(b)) {
+            p.sendMessage(ThieveryTexts.msg(ThieveryTexts.CRITICAL + "Someone is already picking this lock!"));
+            return;
+        }
+        Thievery.getInstance().getLockMinigameManager().start(p, b, mode, mistakes -> openLockpickSession(p, b, mistakes));
+    }
+
+    private boolean isBeingPicked(Block b) {
+        for (ChestLockpickSession active : lockpickingSessions.values()) {
+            if (active.getChestBlock().equals(b)) {
+                return true;
+            }
+        }
+        return Thievery.getInstance().getLockMinigameManager().isPicking(b);
+    }
+
+    private void openLockpickSession(Player p, Block b, int gridMistakes) {
+        // The chest or the held lockpick may have changed while the minigame ran.
+        if (!(b.getState() instanceof Container container)) return;
+        LockpickDefinition lockpickDef = ToolResolver.resolveLockpick(p.getInventory().getItemInMainHand());
+        if (lockpickDef == null) return;
+
+        ContainerData data = containerDataManager.loadContainerData(b.getLocation());
+        UUID playerId = p.getUniqueId();
         Inventory chestInv = container.getInventory();
 
         int dexterity = RiskCalculator.getDexterity(p);
-        double successChance = ChestLockpickSession.computeSuccessChance(dexterity, lockpickDef.getStrength());
-
         String targetKey = TargetKeyResolver.resolve(getOwnerFromInventory(chestInv));
         LockTypeProfile lockType = Parameters.lockTypeProfile(data.getLockState());
-        ChestLockpickSession session = new ChestLockpickSession(playerId, b, lockpickDef, successChance, chestInv,
+        int seizedCount = ChestLockpickSession.computeSeizedCount(dexterity, lockpickDef.getStrength(), lockType,
+                chestInv.getSize(), gridMistakes);
+        ChestLockpickSession session = new ChestLockpickSession(playerId, b, lockpickDef, seizedCount, chestInv,
                 targetKey, lockType);
         lockpickingSessions.put(playerId, session);
         EvilRpPlays.record(p);

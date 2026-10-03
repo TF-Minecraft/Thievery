@@ -25,6 +25,7 @@ import net.tfminecraft.rpcharacters.grave.GraveManager;
 import net.tfminecraft.thievery.Thievery;
 import net.tfminecraft.thievery.category.CategoryHandler;
 import net.tfminecraft.thievery.category.ItemValue;
+import net.tfminecraft.thievery.door.LockMinigameManager;
 import net.tfminecraft.thievery.player.PlayerData;
 import net.tfminecraft.thievery.steal.source.GraveStealSource;
 import net.tfminecraft.thievery.utils.EvilRpPlays;
@@ -43,6 +44,9 @@ public final class GraveStealListener implements Listener {
 			return;
 		}
 		if (event.getHand() != EquipmentSlot.HAND) {
+			return;
+		}
+		if (LockMinigameManager.isWorkingALock(event.getPlayer())) {
 			return;
 		}
 		tryLoot(event.getPlayer(), event.getClickedBlock());

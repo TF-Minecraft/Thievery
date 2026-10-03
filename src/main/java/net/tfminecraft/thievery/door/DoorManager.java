@@ -63,6 +63,7 @@ public class DoorManager implements Listener {
 
         Block block = event.getClickedBlock();
         if (!isDoor(block)) return;
+        if (LockMinigameManager.isWorkingALock(event.getPlayer())) return;
 
         Player player = event.getPlayer();
         Location canonical = getCanonicalLocation(block);

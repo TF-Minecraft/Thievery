@@ -48,10 +48,10 @@ class CommandManagerTest {
 
     @Test void adminActionsRejectUnprivilegedPlayersWithoutDispatch() {
         for (String[] args : new String[][]{{"itemvalue"}, {"reload"}, {"resetcooldowns", "all"},
-                {"setrisk", "all", "0.5"}, {"feedback"}, {"keychain"}}) {
+                {"setrisk", "all", "0.5"}, {"feedback"}, {"keychain"}, {"testpick", "dial"}}) {
             assertTrue(run(player, args));
         }
-        verify(player, times(6)).sendMessage(contains("don't have permission"));
+        verify(player, times(7)).sendMessage(contains("don't have permission"));
         verifyNoInteractions(containers, inventories, cooldowns, risks, clues);
     }
 
@@ -68,7 +68,7 @@ class CommandManagerTest {
         clearInvocations(player);
         when(player.hasPermission("thievery.admin")).thenReturn(true);
         assertTrue(run(player));
-        for (String action : List.of("feedback", "reload", "resetcooldowns", "setrisk", "itemvalue", "keychain", "loadout", "clearclues")) {
+        for (String action : List.of("feedback", "reload", "resetcooldowns", "setrisk", "itemvalue", "keychain", "testpick", "loadout", "clearclues")) {
             verify(player).sendMessage(contains("/thievery " + action));
         }
     }
@@ -206,8 +206,11 @@ class CommandManagerTest {
         assertEquals(List.of("loadout", "clearclues"), complete(player, ""));
         assertTrue(complete(player, "resetcooldowns", "").isEmpty());
         assertTrue(complete(player, "setrisk", "all", "").isEmpty());
+        assertTrue(complete(player, "testpick", "").isEmpty());
         when(player.hasPermission("thievery.admin")).thenReturn(true);
-        assertEquals(List.of("loadout", "clearclues", "feedback", "reload", "resetcooldowns", "setrisk", "itemvalue", "keychain"), complete(player, ""));
+        assertEquals(List.of("loadout", "clearclues", "feedback", "reload", "resetcooldowns", "setrisk", "itemvalue", "keychain", "testpick"), complete(player, ""));
+        assertEquals(List.of("grid", "dial"), complete(player, "testpick", ""));
+        assertEquals(List.of("dial"), complete(player, "TESTPICK", "D"));
         server.addPlayer("Alice"); server.addPlayer("Bob");
         assertEquals(List.of("all", "Alice", "Bob"), complete(player, "resetcooldowns", ""));
         assertEquals(List.of("Alice"), complete(player, "SETRISK", "ALI"));
@@ -219,6 +222,20 @@ class CommandManagerTest {
         assertTrue(complete(player, "unknown", "").isEmpty());
         assertTrue(complete(player, "reload", "all", "").isEmpty());
         assertTrue(complete(player, "setrisk", "all", "0", "extra").isEmpty());
+    }
+
+    @Test void testPickForcesTheNamedMinigameOnTheTargetedContainer() {
+        when(player.hasPermission("thievery.admin")).thenReturn(true);
+        var block = mock(org.bukkit.block.Block.class); when(player.getTargetBlockExact(5)).thenReturn(block);
+        assertTrue(run(player, "testpick"));
+        verify(containers).testPick(player, block, null);
+        assertTrue(run(player, "testpick", "dial"));
+        verify(containers).testPick(player, block, net.tfminecraft.thievery.door.LockMinigameManager.Mode.DIAL);
+        assertTrue(run(player, "TestPick", "GRID"));
+        verify(containers).testPick(player, block, net.tfminecraft.thievery.door.LockMinigameManager.Mode.GRID);
+        assertTrue(run(player, "testpick", "spin"));
+        verify(player).sendMessage("§cUsage: §e/thievery testpick [grid|dial]");
+        verify(containers, times(3)).testPick(any(), any(), any());
     }
 
     private boolean run(CommandSender sender, String... args) { return commands.onCommand(sender, null, "thievery", args); }

@@ -304,7 +304,7 @@ public class LockPickManager {
         return Math.max(0, (expiry - System.currentTimeMillis()) / 1000);
     }
 
-    private void applyCooldown(UUID uuid, String targetId) {
+    public void applyCooldown(UUID uuid, String targetId) {
         if (targetId == null || targetId.isEmpty()) {
             return;
         }

@@ -139,9 +139,58 @@ lockpicking:
 
   chest:
     base-success-chance: 1.0
-    break-chance-ramp-per-slot: 0.1
+    # The probe menu hides seized pins: probing one snaps the lockpick, and every safe probe counts the
+    # seized pins around it. Pins = slots x seized-density x break chance (1 - success chance from
+    # Dexterity and pick strength) x the lock type's break-chance-multiplier, plus
+    # seized-per-grid-mistake for each mistake in the lock minigame.
+    seized-density: 0.3
+    seized-per-grid-mistake: 1
+    # Pin memory minigame solved before the probe menu opens. Lit pins show for memorise-seconds,
+    # then hide; set every pin from memory within recall-seconds (plus recall-seconds-per-dexterity
+    # per dexterity level). The grid is up to 6 rows and 9 columns.
+    # Failing either minigame, running out of time or giving up applies fail-cooldown-ms to that chest
+    # (both halves of a double chest) and may break the lockpick (fail-break-chance).
+    minigame:
+      enabled: true
+      rows: 6
+      columns: 6
+      pins: 14
+      prepare-seconds: 1.0
+      memorise-seconds: 4.0
+      recall-seconds: 6.0
+      recall-seconds-per-dexterity: 0.05
+      mistakes-to-fail: 3              # wrong grid cells; the ring has dial.mistakes-to-fail
+      fail-break-chance: 0.5
+      # The pin grid is a dialog. pack draws it as a lit board from the server resource pack's
+      # thievery:lockpick font; turn it on only once the pack carries that font, or players see boxes.
+      # Without it, sprites draws its cells as block textures (redstone lamps); false draws coloured
+      # squares instead.
+      grid:
+        pack: false
+        sprites: true
+      # Share of locks that use the lockpick ring instead of the pin grid. The ring floats in front of
+      # the thief, who is held still, and a white pointer sweeps once round it per pass. Press the
+      # movement key shown in the middle (each player sees their own binding) while the pointer is in
+      # the green zone. Each set tumbler narrows the zone by zone-shrink-per-tumbler and, with
+      # alternate-direction, reverses the sweep. A pass takes min-lap-seconds to max-lap-seconds, plus
+      # lap-seconds-per-dexterity per Dexterity level. Presses are judged against where the pointer was
+      # up to max-lag-ticks ago, from the thief's ping. mistakes-to-fail slips fail the ring (the grid
+      # above has its own); sneaking gives up.
+      dial-chance: 0.5
+      dial:
+        tumblers: 4
+        mistakes-to-fail: 1
+        zone-width: 0.14
+        zone-shrink-per-tumbler: 0.15
+        min-lap-seconds: 1.44
+        max-lap-seconds: 2.08
+        lap-seconds-per-dexterity: 0.008
+        alternate-direction: true
+        max-lag-ticks: 6
+        distance: 2.4
 
   # Multipliers on the chest steal bases. Omitted keys stay at 1.0, and critical-risk stays on.
+  # break-chance-multiplier scales the number of seized pins.
   lock-types:
     private: {}
     guild: {}

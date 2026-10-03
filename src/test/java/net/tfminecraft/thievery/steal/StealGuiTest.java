@@ -115,17 +115,17 @@ class StealGuiTest {
         assertEquals(" ",StealGui.formatTitle(new StealGui.TitleOptions(null,null,null,null,null)));
         assertEquals(" ",StealGui.formatTitle(new StealGui.TitleOptions(.2,null,null,null,null)));
         assertEquals(" ",StealGui.formatTitle(new StealGui.TitleOptions(0.0,0.0,null,null,null)));
-        assertEquals("§6Break: 25%",StealGui.formatTitle(new StealGui.TitleOptions(null,null,null,null,.25)));
+        assertEquals("§6Seized: 3",StealGui.formatTitle(new StealGui.TitleOptions(null,null,null,null,3)));
         var budget=new StealBudget(10.4); budget.addUsed(2.6);
         assertEquals("§a3/10",StealGui.formatTitle(new StealGui.TitleOptions(null,null,null,budget,null)));
-        String title=StealGui.formatTitle(new StealGui.TitleOptions(.2,.1,65_000L,budget,.25));
-        assertTrue(title.contains("Risk: §720%")); assertTrue(title.contains("Crit: §710%")); assertTrue(title.contains(" §6Break: 25%")); assertTrue(title.endsWith(" §a3/10"));
+        String title=StealGui.formatTitle(new StealGui.TitleOptions(.2,.1,65_000L,budget,3));
+        assertTrue(title.contains("Risk: §720%")); assertTrue(title.contains("Crit: §710%")); assertTrue(title.contains(" §6Seized: 3")); assertTrue(title.endsWith(" §a3/10"));
         assertTrue(StealGui.forRobbery(65_000,budget).endsWith(" §a3/10"));
         assertFalse(StealGui.formatTitle(new StealGui.TitleOptions(null,null,65_000L,null,null)).isBlank());
         var data=mock(PlayerData.class); when(data.getRisk()).thenReturn(.2); when(data.getCriticalChance(20,0)).thenReturn(.1); when(data.getCriticalChance(20,.5)).thenReturn(.15);
         assertTrue(StealGui.forPickpocket(data,20,budget).contains("Crit: §710%"));
-        assertTrue(StealGui.forChest(data,20,.5,budget,.8,false,true).contains("Break: 20%"));
-        String broken=StealGui.forChest(data,20,.5,budget,.8,true,false); assertFalse(broken.contains("Break:")); assertFalse(broken.contains("Crit:"));
+        assertTrue(StealGui.forChest(data,20,.5,budget,2,false,true).contains("Seized: 2"));
+        String broken=StealGui.forChest(data,20,.5,budget,2,true,false); assertFalse(broken.contains("Seized:")); assertFalse(broken.contains("Crit:"));
     }
     @Test void titleUpdatesOnlyMatchingActiveInventoryAndOnlyWhenChanged() {
         UUID id=UUID.randomUUID(); var holder=new StealGuiHolder(id,StealGuiHolder.Kind.CHEST); var player=mock(Player.class,RETURNS_DEEP_STUBS);

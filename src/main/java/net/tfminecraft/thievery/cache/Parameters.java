@@ -42,8 +42,46 @@ public final class Parameters {
 
     public static double chestBaseSuccessChance = 1.0;
 
-    /** Per-slot break multiplier step (1st reveal = 1×step, 2nd = 2×step, … capped at full break chance). */
-    public static double chestBreakChanceRampPerSlot = 0.1;
+    /** Share of a chest's slots hiding seized pins at a 100% break chance; better picks and Dexterity lower it. */
+    public static double chestSeizedDensity = 0.3;
+
+    /** Extra seized pins for each mistake in the lock minigame: a wrong cell on the grid, or a slip on the ring. */
+    public static int chestSeizedPerGridMistake = 1;
+
+    /** Pin memory minigame that must be solved before the chest probe menu opens. */
+    public static boolean chestMinigameEnabled = true;
+    public static int chestMinigameRows = 6;
+    public static int chestMinigameColumns = 6;
+    public static int chestMinigamePins = 14;
+    public static double chestMinigamePrepareSeconds = 1.0;
+    public static double chestMinigameMemoriseSeconds = 4.0;
+    public static double chestMinigameRecallSeconds = 6.0;
+    public static double chestMinigameRecallSecondsPerDexterity = 0.05;
+    public static int chestMinigameMistakesToFail = 3;
+    public static double chestMinigameFailBreakChance = 0.5;
+
+    /** Draw the pin grid's cells as block textures; off draws coloured squares. */
+    public static boolean chestGridSprites = true;
+    /** Draw the pin grid as a board from the server resource pack's {@code thievery:lockpick} font. */
+    public static boolean chestGridPack = false;
+
+    /** Share of chest locks that use the lockpick ring instead of the pin grid. */
+    public static double chestDialChance = 0.5;
+    public static int chestDialTumblers = 4;
+    /** Share of the ring the green zone covers for the first tumbler. */
+    public static double chestDialZoneWidth = 0.14;
+    /** How much each set tumbler narrows the zone, as a share of its first width. */
+    public static double chestDialZoneShrinkPerTumbler = 0.15;
+    public static double chestDialMinLapSeconds = 1.44;
+    public static double chestDialMaxLapSeconds = 2.08;
+    public static double chestDialLapSecondsPerDexterity = 0.008;
+    /** Slips that fail the ring; the pin grid has its own {@link #chestMinigameMistakesToFail}. */
+    public static int chestDialMistakesToFail = 1;
+    /** Reverse the sweep after each set tumbler, like a combination lock. */
+    public static boolean chestDialAlternate = true;
+    public static int chestDialMaxLagTicks = 6;
+    /** How far in front of the eyes the ring floats, in blocks. */
+    public static double chestDialDistance = 2.4;
 
     public static double maxSuccessChance = 0.95;
 

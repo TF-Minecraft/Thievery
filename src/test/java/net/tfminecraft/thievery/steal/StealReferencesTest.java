@@ -50,7 +50,6 @@ class StealReferencesTest {
     private MockedStatic<PickpocketVictimAlerter> alerts;
     private ItemStack unknown, filler, hidden, pouch;
     private boolean oldCoreProtect;
-    private double oldBreakRamp;
 
     @BeforeEach void setUp() {
         server = MockBukkit.mock(); thief = server.addPlayer("Thief"); victim = server.addPlayer("Victim");
@@ -66,17 +65,16 @@ class StealReferencesTest {
         gui.when(() -> StealGui.isUnknownPane(unknown)).thenReturn(true);
         gui.when(() -> StealGui.isNonInteractivePane(filler)).thenReturn(true);
         gui.when(() -> StealGui.isRobberyPouchPane(pouch)).thenReturn(true);
-        gui.when(() -> StealGui.forChest(any(), anyInt(), anyDouble(), any(), anyDouble(), anyBoolean(), anyBoolean())).thenReturn("Chest title");
+        gui.when(() -> StealGui.forChest(any(), anyInt(), anyDouble(), any(), anyInt(), anyBoolean(), anyBoolean())).thenReturn("Chest title");
         gui.when(() -> StealGui.forPickpocket(any(), anyInt(), any())).thenReturn("Pockets title");
         gui.when(() -> StealGui.forRobbery(anyLong(), any())).thenReturn("Robbery title");
         risk = mockStatic(RiskCalculator.class); risk.when(() -> RiskCalculator.getDexterity(thief)).thenReturn(7);
         database = mockStatic(Database.class); factions = mockStatic(FactionManager.class); alerts = mockStatic(PickpocketVictimAlerter.class);
         oldCoreProtect = Cache.coreProtect; Cache.coreProtect = false;
-        oldBreakRamp = Parameters.chestBreakChanceRampPerSlot; Parameters.chestBreakChanceRampPerSlot = 1.0;
         StealIgnoreRules.load(List.of());
     }
     @AfterEach void tearDown() {
-        Cache.coreProtect = oldCoreProtect; Parameters.chestBreakChanceRampPerSlot = oldBreakRamp; StealIgnoreRules.load(List.of());
+        Cache.coreProtect = oldCoreProtect; StealIgnoreRules.load(List.of());
         for (MockedStatic<?> mocked : new MockedStatic<?>[]{alerts, factions, database, risk, gui, managers, thievery}) if (mocked != null) mocked.close();
         MockBukkit.unmock();
     }
@@ -151,7 +149,7 @@ class StealReferencesTest {
         Runnable close = mock(Runnable.class); var ref = new ChestStealReference(session, close);
         Inventory inv = inventory(ref); int slot = session.getLayout().getGuiSlotForLogical(0);
         assertSame(session, ref.getSession()); assertEquals("Chest title", ref.buildTitle(thief));
-        ref.onOpen(thief, inv); assertTrue(thief.nextMessage().contains("probe inside"));
+        ref.onOpen(thief, inv); assertTrue(thief.nextMessage().contains("feel for seized pins"));
         ref.revealSlot(thief, inv, slot);
         assertTrue(session.isRevealed(slot));
         verify(data).addRiskGain(7, 0.6, RiskSource.CHEST, 1.0); database.verify(() -> Database.savePlayerData(data));
@@ -163,11 +161,12 @@ class StealReferencesTest {
 
     @Test void chestFailureConsumesOnePickAndBlocksFurtherProbes() {
         for (int heldAmount : new int[]{2, 1, 0}) {
-            Inventory chest = server.createInventory(null, 9); var session = chestSession(chestBlock(chest), chest, 0);
+            Inventory chest = server.createInventory(null, 9); var session = chestSession(chestBlock(chest), chest, 1);
             var ref = new ChestStealReference(session, () -> {}); Inventory inv = inventory(ref);
             thief.getInventory().setItemInMainHand(heldAmount == 0 ? null : new ItemStack(Material.STICK, heldAmount));
-            int slot = session.getLayout().getGuiSlotForLogical(0); ref.revealSlot(thief, inv, slot);
+            int slot = armSeizedPin(session); ref.revealSlot(thief, inv, slot);
             assertTrue(session.isLockpickBroken()); assertFalse(session.isRevealed(slot));
+            assertEquals(Material.IRON_BARS, inv.getItem(slot).getType());
             if (heldAmount == 2) assertEquals(1, thief.getInventory().getItemInMainHand().getAmount());
             else assertTrue(thief.getInventory().getItemInMainHand().getType().isAir());
             assertTrue(thief.nextMessage().contains("lockpick broke"));
@@ -357,9 +356,9 @@ class StealReferencesTest {
 
     @Test void failedProbeWithAnEmptyHandKeepsOtherItemsAndClosesNormally() {
         Inventory chest=server.createInventory(null,9);ItemStack loot=new ItemStack(Material.DIAMOND);chest.setItem(0,loot);
-        var session=chestSession(chestBlock(chest),chest,0);Runnable closed=mock(Runnable.class);var ref=new ChestStealReference(session,closed);Inventory inv=inventory(ref);
+        var session=chestSession(chestBlock(chest),chest,1);Runnable closed=mock(Runnable.class);var ref=new ChestStealReference(session,closed);Inventory inv=inventory(ref);
         thief.getInventory().setItemInMainHand(new ItemStack(Material.STICK));thief.getInventory().setItem(8,new ItemStack(Material.EMERALD,4));ref.onOpen(thief,inv);thief.nextMessage();
-        thief.getInventory().setItemInMainHand(new ItemStack(Material.AIR));ref.revealSlot(thief,inv,session.getLayout().getGuiSlotForLogical(0));
+        thief.getInventory().setItemInMainHand(new ItemStack(Material.AIR));ref.revealSlot(thief,inv,armSeizedPin(session));
         assertTrue(session.isLockpickBroken());assertTrue(session.getRevealedGuiSlots().isEmpty());assertTrue(thief.getInventory().getItemInMainHand().getType().isAir());
         assertEquals(new ItemStack(Material.EMERALD,4),thief.getInventory().getItem(8));assertEquals(loot,chest.getItem(0));assertTrue(thief.nextMessage().contains("lockpick broke"));ref.onClose(thief);verify(closed).run();
     }
@@ -453,13 +452,59 @@ class StealReferencesTest {
         }
     }
 
+    @Test void rightClickMarksSuspectedSeizedPinsAndMarkedSlotsCannotBeProbed() {
+        Inventory chest=server.createInventory(null,18);var session=chestSession(chestBlock(chest),chest,3);var ref=new ChestStealReference(session,()->{});Inventory inv=inventory(ref);
+        gui.when(StealGui::createUnknownPane).thenReturn(unknown);
+        int slot=session.getLayout().getGuiSlotForLogical(0);inv.setItem(slot,unknown);
+        ref.handleClick(click(inv,slot,unknown,ClickType.RIGHT),thief);
+        assertTrue(session.isMarked(slot));assertEquals(Material.RED_STAINED_GLASS_PANE,inv.getItem(slot).getType());assertEquals(2,session.getUnmarkedSeizedCount());
+        thief.assertSoundHeard(org.bukkit.Sound.UI_BUTTON_CLICK);
+        ref.handleClick(click(inv,slot,inv.getItem(slot),ClickType.LEFT),thief);
+        assertFalse(session.isRevealed(slot));assertFalse(session.getSeizedPins().isPlaced());verify(data,never()).addRiskGain(anyInt(),anyDouble(),any(),anyDouble());
+        ref.handleClick(click(inv,slot,inv.getItem(slot),ClickType.RIGHT),thief);
+        assertFalse(session.isMarked(slot));assertEquals(unknown,inv.getItem(slot));assertEquals(3,session.getUnmarkedSeizedCount());
+
+        int revealed=session.getLayout().getGuiSlotForLogical(1);ref.revealSlot(thief,inv,revealed);assertTrue(session.isRevealed(revealed));
+        ref.handleClick(click(inv,revealed,null,ClickType.RIGHT),thief);assertFalse(session.isMarked(revealed));
+        int unmapped=unmappedSlot(session.getLayout());ref.handleClick(click(inv,unmapped,filler,ClickType.RIGHT),thief);assertFalse(session.isMarked(unmapped));
+        var below=click(inv,slot,unknown,ClickType.RIGHT);when(below.getClickedInventory()).thenReturn(thief.getInventory());ref.handleClick(below,thief);assertFalse(session.isMarked(slot));
+
+        int probe=java.util.stream.IntStream.range(0,18).map(logical->session.getLayout().getGuiSlotForLogical(logical)).filter(cell->cell!=slot&&!session.isRevealed(cell)&&!session.getSeizedPins().isSeized(cell)).findFirst().orElseThrow();
+        // Stray number keys and double clicks never probe; a shift-right-click marks like a right-click.
+        ref.handleClick(click(inv,probe,unknown,ClickType.NUMBER_KEY),thief);ref.handleClick(click(inv,probe,unknown,ClickType.DOUBLE_CLICK),thief);assertFalse(session.isRevealed(probe));
+        ref.handleClick(click(inv,probe,unknown,ClickType.SHIFT_RIGHT),thief);assertTrue(session.isMarked(probe));ref.handleClick(click(inv,probe,inv.getItem(probe),ClickType.SHIFT_RIGHT),thief);assertFalse(session.isMarked(probe));
+        ref.handleClick(click(inv,probe,unknown,ClickType.LEFT),thief);assertTrue(session.isRevealed(probe));assertFalse(session.isLockpickBroken());
+        session.markLockpickBroken();ref.handleClick(click(inv,slot,unknown,ClickType.RIGHT),thief);assertFalse(session.isMarked(slot));assertEquals(unknown,inv.getItem(slot));
+    }
+
+    @Test void safeProbesPlacePinsAwayFromTheFirstSlotAndCountThoseNearby() {
+        Inventory chest=server.createInventory(null,27);var session=chestSession(chestBlock(chest),chest,4);var ref=new ChestStealReference(session,()->{},new java.util.Random(5));Inventory inv=inventory(ref);
+        ItemStack nothing=new ItemStack(Material.RED_STAINED_GLASS_PANE);gui.when(()->StealGui.isNothingPane(nothing)).thenReturn(true);
+        gui.when(()->StealGui.placeRevealedSlot(any(),anyInt(),any(),any(),any(),any())).thenAnswer(call->{((Inventory)call.getArgument(0)).setItem((int)call.getArgument(1),nothing);return null;});
+        var pins=session.getSeizedPins();int first=session.getLayout().getGuiSlotForLogical(0);
+        ref.revealSlot(thief,inv,first);
+        assertTrue(pins.isPlaced());assertEquals(4,pins.seized().size());assertFalse(pins.isSeized(first));assertFalse(session.isLockpickBroken());
+        assertEquals(Material.WHITE_STAINED_GLASS_PANE,inv.getItem(first).getType());
+        int hinted=java.util.stream.IntStream.range(0,27).filter(cell->!pins.isSeized(cell)&&pins.nearby(cell)>1).findFirst().orElseThrow();
+        ref.revealSlot(thief,inv,hinted);
+        assertEquals(pins.nearby(hinted),inv.getItem(hinted).getAmount());
+        ref.refreshGui(thief,inv);
+        assertEquals(pins.nearby(hinted),inv.getItem(hinted).getAmount());assertEquals(Material.WHITE_STAINED_GLASS_PANE,inv.getItem(first).getType());
+        var seizedFirst=pins.seized();ref.revealSlot(thief,inv,hinted);assertEquals(seizedFirst,pins.seized());
+    }
+
     private int unmappedSlot(StealGui.Layout layout) {
         return java.util.stream.IntStream.range(0,layout.getGuiSize()).filter(slot->layout.getLogicalForGui(slot)==null).findFirst().orElseThrow();
     }
 
-    private ChestLockpickSession chestSession(Block block, Inventory chest, double chance) {
+    private ChestLockpickSession chestSession(Block block, Inventory chest, int seized) {
         var config = new YamlConfiguration(); config.set("strength", 0.6); config.set("capacity", 50);
-        return new ChestLockpickSession(thief.getUniqueId(), block, new LockpickDefinition("pick", config), chance, chest, "chest", LockTypeProfile.IDENTITY);
+        return new ChestLockpickSession(thief.getUniqueId(), block, new LockpickDefinition("pick", config), seized, chest, "chest", LockTypeProfile.IDENTITY);
+    }
+    /** Places the chest's pins as if logical slot 0 were probed first, and returns the seized slot. */
+    private int armSeizedPin(ChestLockpickSession session) {
+        session.getSeizedPins().place(session.getLayout().getGuiSlotForLogical(0), session.getSeizedCount(), new java.util.Random(3));
+        return session.getSeizedPins().seized().iterator().next();
     }
     private Block chestBlock(Inventory chest) {
         Block block = mock(Block.class); Container state = mock(Container.class); when(state.getInventory()).thenReturn(chest);

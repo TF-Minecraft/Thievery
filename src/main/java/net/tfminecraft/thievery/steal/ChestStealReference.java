@@ -1,15 +1,20 @@
 package net.tfminecraft.thievery.steal;
 
+import java.util.Random;
+
 import org.bukkit.Sound;
 import org.bukkit.block.Block;
 import org.bukkit.block.Container;
 import org.bukkit.entity.Player;
+import org.bukkit.event.inventory.ClickType;
+import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
 import net.tfminecraft.thievery.Thievery;
 import net.tfminecraft.thievery.cache.Cache;
 import net.tfminecraft.thievery.door.ChestLockpickSession;
+import net.tfminecraft.thievery.door.SeizedPins;
 import net.tfminecraft.thievery.player.PlayerData;
 import net.tfminecraft.thievery.player.RiskSource;
 import net.tfminecraft.thievery.database.Database;
@@ -29,11 +34,17 @@ public class ChestStealReference extends HiddenStealReference {
 
     private final ChestLockpickSession session;
     private final Runnable onClose;
+    private final Random random;
 
     public ChestStealReference(ChestLockpickSession session, Runnable onClose) {
+        this(session, onClose, new Random());
+    }
+
+    ChestStealReference(ChestLockpickSession session, Runnable onClose, Random random) {
         super(session.getThiefId(), StealGuiHolder.Kind.CHEST);
         this.session = session;
         this.onClose = onClose;
+        this.random = random;
     }
 
     @Override
@@ -47,13 +58,44 @@ public class ChestStealReference extends HiddenStealReference {
         PlayerData thiefData = Thievery.getPlayerManager().get(thief.getUniqueId());
         double lockpickStrength = session.getLockpickDef().getStrength();
         return StealGui.forChest(thiefData, dexterity, lockpickStrength, session.getBudget(),
-                session.getNextRevealSuccessChance(), session.isLockpickBroken(),
+                session.getUnmarkedSeizedCount(), session.isLockpickBroken(),
                 session.getLockType().criticalRisk());
     }
 
     @Override
     public void onOpen(Player thief, Inventory gui) {
-        thief.sendMessage(ThieveryTexts.msg("§o" + ThieveryTexts.CRITICAL + "Click a slot to probe inside."));
+        thief.sendMessage(ThieveryTexts.msg("§o" + ThieveryTexts.CRITICAL
+                + "Probe a slot to feel for seized pins. Each probe counts the seized pins around it;"
+                + " right-click a slot to mark one."));
+    }
+
+    @Override
+    protected void handleStealClick(InventoryClickEvent event, Player thief) {
+        Inventory guiInv = event.getView().getTopInventory();
+        int guiSlot = event.getSlot();
+        if (event.getClickedInventory() == guiInv && !session.isRevealed(guiSlot)
+                && session.getLayout().getLogicalForGui(guiSlot) != null) {
+            ClickType click = event.getClick();
+            if (click.isRightClick()) {
+                toggleMark(thief, guiInv, guiSlot);
+                return;
+            }
+            // Only a deliberate left click probes: a stray number key, drop or double click must not snap the pick.
+            if (session.isMarked(guiSlot) || !click.isLeftClick() || click == ClickType.DOUBLE_CLICK) {
+                return;
+            }
+        }
+        super.handleStealClick(event, thief);
+    }
+
+    private void toggleMark(Player thief, Inventory guiInv, int guiSlot) {
+        if (session.isLockpickBroken()) {
+            return;
+        }
+        boolean marked = session.toggleMarked(guiSlot);
+        guiInv.setItem(guiSlot, marked ? SeizedPinPanes.markedPane() : StealGui.createUnknownPane());
+        thief.playSound(thief.getLocation(), Sound.UI_BUTTON_CLICK, 0.4f, marked ? 1.4f : 0.9f);
+        updateTitle(thief);
     }
 
     @Override
@@ -90,11 +132,18 @@ public class ChestStealReference extends HiddenStealReference {
                 session.getLockType().riskMultiplier());
         Database.savePlayerData(thiefData);
 
-        if (Math.random() >= session.getNextRevealSuccessChance()) {
+        SeizedPins pins = session.getSeizedPins();
+        if (!pins.isPlaced()) {
+            pins.place(guiSlot, session.getSeizedCount(), random);
+        }
+        if (pins.isSeized(guiSlot)) {
             breakLockpick(thief);
             session.markLockpickBroken();
+            for (int seized : pins.seized()) {
+                guiInv.setItem(seized, SeizedPinPanes.seizedPane());
+            }
             thief.playSound(thief.getLocation(), Sound.ENTITY_ITEM_BREAK, 1f, 1f);
-            thief.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "Your lockpick broke!"));
+            thief.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You hit a seized pin and your lockpick broke!"));
             updateTitle(thief);
             return false;
         }
@@ -128,6 +177,7 @@ public class ChestStealReference extends HiddenStealReference {
             ItemStack realItem = chestInv.getItem(chestSlot);
             StealGui.placeRevealedSlot(guiInv, revealedGuiSlot, realItem, session.getBudget(),
                     thiefData, cluePreview);
+            SeizedPinPanes.annotate(guiInv, revealedGuiSlot, session.getSeizedPins().nearby(revealedGuiSlot));
         }
         updateTitle(thief);
     }

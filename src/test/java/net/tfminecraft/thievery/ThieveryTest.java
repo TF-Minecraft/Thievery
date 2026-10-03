@@ -138,6 +138,7 @@ class ThieveryTest {
         assertSame(plugin, Thievery.getInstance());
         assertSame(containers.constructed().getFirst(), plugin.getContainerManager());
         assertNotNull(plugin.getLockPickManager());
+        assertNotNull(plugin.getLockMinigameManager());
         assertTrue(Files.readString(new File(plugin.getDataFolder(), "config.yml").toPath()).contains("category_points"));
         assertTrue(new File(plugin.getDataFolder(), "categories.yml").isFile());
         verify(configs.constructed().getFirst()).loadConfig(new File(plugin.getDataFolder(), "config.yml"));
