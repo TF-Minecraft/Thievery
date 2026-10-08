@@ -171,8 +171,8 @@ public class CommandManager implements CommandExecutor, TabCompleter {
                         + ThieveryTexts.MUTED + "- Set thievery risk level");
                 msg(player, ThieveryTexts.WARN + "/thievery itemvalue " + ThieveryTexts.MUTED + "- Inspect held item steal value");
                 msg(player, ThieveryTexts.WARN + "/thievery keychain " + ThieveryTexts.MUTED + "- Get an empty keychain");
-                msg(player, ThieveryTexts.WARN + "/thievery testpick [grid|dial] " + ThieveryTexts.MUTED
-                        + "- Test-pick the container you look at");
+                msg(player, ThieveryTexts.WARN + "/thievery testpick [grid|dial|pocket] " + ThieveryTexts.MUTED
+                        + "- Test-pick the container you look at, or a pocket");
             }
             msg(player, ThieveryTexts.WARN + "/thievery loadout " + ThieveryTexts.MUTED + "- Open thievery category loadout");
             msg(player, ThieveryTexts.WARN + "/thievery clearclues " + ThieveryTexts.MUTED + "- Clear clues on a door or container");
@@ -220,12 +220,18 @@ public class CommandManager implements CommandExecutor, TabCompleter {
                 msg(player, ThieveryTexts.ERROR + "You don't have permission to use this command.");
                 return true;
             }
+            if (args.length >= 2 && args[1].equalsIgnoreCase("pocket")) {
+                // No mark: the ring plays on its own and nothing opens.
+                Thievery.getInstance().getLockMinigameManager().startPickpocket(player, null,
+                        () -> msg(player, ThieveryTexts.SUCCESS + "[Thievery] " + ThieveryTexts.WARN + "Pocket picked."));
+                return true;
+            }
             LockMinigameManager.Mode mode = null;
             if (args.length >= 2) {
                 try {
                     mode = LockMinigameManager.Mode.valueOf(args[1].toUpperCase(Locale.ROOT));
                 } catch (IllegalArgumentException e) {
-                    msg(player, ThieveryTexts.ERROR + "Usage: " + ThieveryTexts.WARN + "/thievery testpick [grid|dial]");
+                    msg(player, ThieveryTexts.ERROR + "Usage: " + ThieveryTexts.WARN + "/thievery testpick [grid|dial|pocket]");
                     return true;
                 }
             }
@@ -257,7 +263,7 @@ public class CommandManager implements CommandExecutor, TabCompleter {
 
         if (args.length == 2 && args[0].equalsIgnoreCase("testpick") && sender.hasPermission("thievery.admin")) {
             String prefix = args[1].toLowerCase(Locale.ROOT);
-            return List.of("grid", "dial").stream().filter(option -> option.startsWith(prefix)).collect(Collectors.toList());
+            return List.of("grid", "dial", "pocket").stream().filter(option -> option.startsWith(prefix)).collect(Collectors.toList());
         }
 
         if (args.length == 2 && (args[0].equalsIgnoreCase("resetcooldowns") || args[0].equalsIgnoreCase("setrisk"))

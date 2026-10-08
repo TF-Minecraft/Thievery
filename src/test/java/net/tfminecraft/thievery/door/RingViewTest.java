@@ -276,6 +276,119 @@ class RingViewTest {
         assertEquals(RingView.BURST_SIZE * 0.5f, dust.getValue().getSize(), 1e-6);
     }
 
+    /** The gauge part floating at height {@code y} in the ring's plane, at full size. */
+    private TextDisplay gaugePartAt(float y) {
+        return spawned.stream().filter(d -> d instanceof TextDisplay
+                        && Math.abs(transforms.get(d).getTranslation().y - y) < 1e-5
+                        && transforms.get(d).getTranslation().x == 0)
+                .map(TextDisplay.class::cast).findFirst().orElseThrow();
+    }
+
+    @Test
+    void theGaugeIsATouchingBandOfDotsWithPipsAHintAndAReadout() {
+        RingView.openGauge(plugin, viewer, null, 2);
+        assertEquals(RingView.GAUGE_DOTS + 2 + 4, spawned.size());
+        for (Display display : spawned) {
+            verify(display).setVisibleByDefault(false);
+            verify(viewer).showEntity(plugin, display);
+        }
+        List<TextDisplay> dots = textsWith(RingView.DOT);
+        assertEquals(RingView.GAUGE_DOTS, dots.size());
+        assertVector(new Vector3f(0, RingLayout.RADIUS - 0.07f, 0), transforms.get(dots.get(0)).getTranslation());
+        assertVector(RingLayout.onRing(90, RingLayout.RADIUS).add(0, -0.07f, 0),
+                transforms.get(dots.get(RingView.GAUGE_DOTS / 4)).getTranslation());
+        // Neighbouring dots sit no further apart than a dot is wide, so the band reads as one ring.
+        double gap = 2 * Math.PI * RingLayout.RADIUS / RingView.GAUGE_DOTS;
+        assertTrue(gap < 0.1, "gap " + gap);
+        List<TextDisplay> pips = textsWith(RingView.PIP);
+        assertEquals(2, pips.size());
+        assertEquals(RingView.pinAt(1, 2, false), transforms.get(pips.get(1)).getTranslation());
+        assertTrue(spawned.stream().noneMatch(d -> d instanceof TextDisplay t && " ".equals(
+                net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(texts.get(t)))));
+        Component key = texts.get(gaugePartAt(-0.48f));
+        assertEquals(RingView.GOLD, key.color());
+        assertTrue(key.hasDecoration(net.kyori.adventure.text.format.TextDecoration.BOLD));
+        assertEquals("key.jump", ((net.kyori.adventure.text.KeybindComponent) key.children().get(0)).keybind());
+        Component hint = texts.get(gaugePartAt(RingLayout.RADIUS + 0.5f));
+        assertEquals(RingView.DIM, hint.color());
+        assertEquals("key.sneak", ((net.kyori.adventure.text.KeybindComponent) hint.children().get(2)).keybind());
+    }
+
+    @Test
+    void theGaugeFloatsInFrontOfAMarkStandingCloserThanTheRing() {
+        // The eye is at 0.5, 65.62, 0.5 facing +z; the mark's body spans z 1.2 to 1.8, a block wide and two tall.
+        org.bukkit.entity.Entity mark = mock(org.bukkit.entity.Entity.class);
+        when(mark.getBoundingBox()).thenReturn(new org.bukkit.util.BoundingBox(0, 64, 1.2, 1, 66, 1.8));
+        RingView.openGauge(plugin, viewer, mark, 2);
+        ArgumentCaptor<Location> where = ArgumentCaptor.forClass(Location.class);
+        verify(world, atLeastOnce()).spawn(where.capture(), any(Class.class), any(Consumer.class));
+        // 60% of the 0.7 blocks to the body's face along the crosshair, shrunk to match.
+        double distance = 0.7 * RingLayout.CLEARANCE;
+        assertEquals(0.5 + distance, where.getValue().getZ(), 1e-6);
+        assertEquals(65.62 + RingView.LIFT * distance / RingLayout.DISTANCE, where.getValue().getY(), 1e-6);
+    }
+
+    @Test
+    void aMarkOffToTheSideLeavesTheGaugeWhereItWas() {
+        org.bukkit.entity.Entity mark = mock(org.bukkit.entity.Entity.class);
+        when(mark.getBoundingBox()).thenReturn(new org.bukkit.util.BoundingBox(20, 64, 1.2, 21, 66, 1.8));
+        RingView.openGauge(plugin, viewer, mark, 2);
+        ArgumentCaptor<Location> where = ArgumentCaptor.forClass(Location.class);
+        verify(world, atLeastOnce()).spawn(where.capture(), any(Class.class), any(Consumer.class));
+        assertEquals(0.5 + 2.4, where.getValue().getZ(), 1e-6);
+    }
+
+    @Test
+    void theGaugeFillsClockwiseSendingOnlyTheDotsThatChange() {
+        RingView view = RingView.openGauge(plugin, viewer, null, 2);
+        List<TextDisplay> dots = textsWith(RingView.DOT);
+        TextColor cyan = TextColor.color(0x2dd4e8);
+        TextColor track = TextColor.color(0x24525c);
+        clearInvocations(dots.toArray());
+        view.fill(0.25, cyan, track);
+        assertEquals(List.of(0, 1, 2, 3, 4, 5, 6, 7, 8, 9), lit(dots, cyan));
+        // A new colour repaints every dot.
+        for (TextDisplay dot : dots) {
+            verify(dot).text(any(Component.class));
+        }
+        clearInvocations(dots.toArray());
+        view.fill(0.3, cyan, track);
+        assertEquals(12, lit(dots, cyan).size());
+        verify(dots.get(10)).text(Component.text(RingView.DOT, cyan));
+        verify(dots.get(11)).text(Component.text(RingView.DOT, cyan));
+        verify(dots.get(9), never()).text(any(Component.class));
+        verify(dots.get(12), never()).text(any(Component.class));
+        view.fill(0.1, cyan, track);
+        assertEquals(4, lit(dots, cyan).size());
+        assertEquals(RingView.GAUGE_DOTS - 4, lit(dots, track).size());
+        clearInvocations(dots.toArray());
+        view.fill(0.1, cyan, RingView.RED);
+        verify(dots.get(39)).text(Component.text(RingView.DOT, RingView.RED));
+        view.fill(2.0, RingView.GREEN, track);
+        assertEquals(RingView.GAUGE_DOTS, lit(dots, RingView.GREEN).size());
+        view.fill(-1.0, RingView.GREEN, track);
+        assertEquals(RingView.GAUGE_DOTS, lit(dots, track).size());
+    }
+
+    @Test
+    void theGaugeCaptionAndPipsChange() {
+        RingView view = RingView.openGauge(plugin, viewer, null, 2);
+        TextDisplay caption = gaugePartAt(0.24f);
+        view.caption(Component.text("PHASE I"));
+        assertEquals(Component.text("PHASE I"), texts.get(caption));
+        List<TextDisplay> pips = textsWith(RingView.PIP);
+        view.pip(1, RingView.GREEN, true);
+        assertEquals(RingView.GREEN, texts.get(pips.get(1)).color());
+        assertEquals(RingView.pinAt(1, 2, true), transforms.get(pips.get(1)).getTranslation());
+        assertEquals(0.7f, transforms.get(pips.get(1)).getScale().x, 1e-6);
+        verify(pips.get(1)).setInterpolationDuration(4);
+        view.pip(0, RingView.GOLD, false);
+        assertEquals(RingView.pinAt(0, 2, false), transforms.get(pips.get(0)).getTranslation());
+        TextDisplay label = gaugePartAt(-0.16f);
+        view.label(Component.text(42), 1.6f);
+        assertEquals(Component.text(42), texts.get(label));
+    }
+
     @Test
     void removeTakesEveryPartDown() {
         RingView view = open();

@@ -7,6 +7,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Input;
 import org.bukkit.Sound;
 import org.bukkit.block.Block;
+import org.bukkit.block.Container;
 import org.bukkit.boss.BarColor;
 import org.bukkit.boss.BarStyle;
 import org.bukkit.boss.BossBar;
@@ -17,13 +18,19 @@ import org.bukkit.scheduler.BukkitTask;
 import net.tfminecraft.thievery.utils.ThieveryTexts;
 
 /**
- * A chest lock minigame. Subclasses draw and run the puzzle; this class holds the boss bar and the end-of-game
- * pause, and reports the outcome to {@link LockMinigameManager}.
+ * A chest lock or pickpocket minigame. Subclasses draw and run the puzzle; this class holds the boss bar and the
+ * end-of-game pause, and reports the outcome to {@link LockMinigameManager}.
  */
 public abstract class LockMinigame {
 
     static final int SOLVED_TICKS = 15;
     static final int FAILED_TICKS = 30;
+
+    /** What the thief is told when the attempt is interrupted or ends; bar titles have no full stop. */
+    record Wording(String flinched, String pulledAway, String gaveUp, String solved, String failed) {}
+
+    static final Wording LOCK = new Wording("You flinch and lose the pins.", "You were pulled away from the lock.",
+            "You ease the pick back out.", "The lock gives way", "The pins slip");
 
     enum Outcome {
         NONE,
@@ -33,6 +40,7 @@ public abstract class LockMinigame {
 
     final LockMinigameManager manager;
     final UUID playerId;
+    /** The chest being picked; null for a pickpocket. */
     final Block target;
     final String targetId;
     final IntConsumer onSolved;
@@ -75,6 +83,21 @@ public abstract class LockMinigame {
     void input(Player player, Input input) {
     }
 
+    Wording wording() {
+        return LOCK;
+    }
+
+    /** Whether the chest has gone, so there is nothing left to pick. */
+    boolean targetGone() {
+        // No snapshot: a full chest's snapshot copies every item, and this runs every tick.
+        return !(target.getState(false) instanceof Container);
+    }
+
+    /** A failed attempt: the lock fail cooldown and perhaps a snapped pick. */
+    void penalise(Player player) {
+        manager.penalise(player, this);
+    }
+
     /** Whether the boss bar shows the thief the puzzle's state and countdown. */
     boolean showsBar() {
         return true;
@@ -88,17 +111,21 @@ public abstract class LockMinigame {
     void solve(Player player) {
         outcome = Outcome.SOLVED;
         endTicks = SOLVED_TICKS;
-        status(ThieveryTexts.SUCCESS + "The lock gives way", BarColor.GREEN);
+        status(ThieveryTexts.SUCCESS + wording().solved(), BarColor.GREEN);
         showOutcome(player);
-        player.playSound(player.getLocation(), Sound.BLOCK_IRON_TRAPDOOR_OPEN, 0.8f, 1.2f);
+        player.playSound(player.getLocation(), solvedSound(), 0.8f, 1.2f);
     }
 
     void fail(Player player) {
         outcome = Outcome.FAILED;
         endTicks = FAILED_TICKS;
-        status(ThieveryTexts.ERROR + "The pins slip", BarColor.RED);
+        status(ThieveryTexts.ERROR + wording().failed(), BarColor.RED);
         showOutcome(player);
-        manager.penalise(player, this);
+        penalise(player);
+    }
+
+    Sound solvedSound() {
+        return Sound.BLOCK_IRON_TRAPDOOR_OPEN;
     }
 
     void status(String text, BarColor colour) {

@@ -103,6 +103,13 @@ class PickpocketVictimAlerterTest {
         verify(victim, times(2)).playSound(victim.getLocation(), Sound.BLOCK_IRON_TRAPDOOR_OPEN, 1f, 1f);
     }
 
+    @Test void aFumbledPickAlertsTheVictimOutrightWithoutTouchingRisk() {
+        PickpocketVictimAlerter.alert(victim);
+        assertAlert("§cSomeone is stealing!", 1);
+        verifyNoInteractions(thief);
+        roleplay.verifyNoInteractions(); database.verifyNoInteractions();
+    }
+
     private void activeCharacter() {
         RPCharacter character = mock(RPCharacter.class); when(character.getName()).thenReturn("Robin");
         when(rpData.hasActiveCharacter()).thenReturn(true); when(rpData.getActiveCharacter()).thenReturn(character);

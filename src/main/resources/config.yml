@@ -224,6 +224,13 @@ pickpocket:
   max-distance: 4
   alert-subtitle: "#d65c5cSomeone is pickpocketing you!"
   alert-subtitle-critical: "#d65c5c{character_name} is pickpocketing you!"
+  # Before a pocket opens, a ring floats in front of the thief, who is held still, and drains while
+  # they mash jump to fill it (level 2 of the NoPixel lockpick): two phases, the first half length.
+  # Fill both within time-limit-seconds while the mark stays within max-distance. Sneaking gives up.
+  # A failed attempt alerts the mark and starts lockpicking.fail-cooldown-ms on them.
+  minigame:
+    enabled: true
+    time-limit-seconds: 30
   ignore:
     name-contains:
       - Slot
