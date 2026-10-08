@@ -29,28 +29,18 @@ With Java 21 and the pinned plugin dependencies installed (see the build workflo
 mvn -B --no-transfer-progress clean verify
 ```
 
-JUnit, MockBukkit and Mockito exercise configuration, persistence, inventory transfers,
-ownership rules, commands, plugin lifecycle and theft sessions. Fixtures use temporary
-directories; legacy relative persistence paths are isolated under `target/test-runtime`.
-Tests mock external plugin APIs where a live server is required and assert the observable
-result of each scenario. Optional RPCharacters API compatibility uses a test fixture
-loaded separately to model servers with and without that API.
+JUnit, MockBukkit and Mockito exercise configuration, persistence, inventory
+transfers, ownership rules, commands, plugin lifecycle and theft sessions.
+External plugin APIs are mocked or represented by fixtures; live Paper gameplay
+and integration checks remain separate.
 
-JaCoCo includes every production class. Open `target/site/jacoco/index.html` for the
-HTML report, or use `target/site/jacoco/jacoco.xml` for tooling. CI uploads the coverage
-report and Surefire test results. Use a clean full run for combined coverage; focused
-test runs are for development and do not establish the suite's coverage.
-
-`verify` requires 100% instruction, line, branch, method and class coverage,
-without excluding production code. CI also rejects skipped tests.
-Unused utility constructors, empty hooks and demonstrably unreachable alternatives
-have been removed; guards for real configuration, metadata and integration failures
-remain and have behavioral tests.
-
-Coverage is a guide to missing behavior checks. Tests should verify a contract or a
-regression, not invoke private constructors or invent impossible inventory states
-to increase the percentage. MockBukkit's unimplemented operations can appear as skipped
-tests; a successful coverage run must also have zero skipped tests.
+Surefire writes test results to `target/surefire-reports/`; JaCoCo writes HTML
+and XML coverage reports to `target/site/jacoco/`. Build CI uploads both.
+`verify` requires 100% production instruction, line, branch, method and class
+coverage, with no exclusions. CI also rejects skipped tests. Use a clean full
+run for combined coverage; focused runs do not establish the suite's coverage.
+See the [testing guide](https://github.com/TF-Minecraft/Docs/blob/main/projects/Thievery/docs/testing.md)
+for fixture isolation and local report checks.
 
 ## License
 
