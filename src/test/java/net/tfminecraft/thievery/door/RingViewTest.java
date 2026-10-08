@@ -286,7 +286,7 @@ class RingViewTest {
 
     @Test
     void theGaugeIsATouchingBandOfDotsWithPipsAHintAndAReadout() {
-        RingView.openGauge(plugin, viewer, 2);
+        RingView.openGauge(plugin, viewer, null, 2);
         assertEquals(RingView.GAUGE_DOTS + 2 + 4, spawned.size());
         for (Display display : spawned) {
             verify(display).setVisibleByDefault(false);
@@ -315,8 +315,32 @@ class RingViewTest {
     }
 
     @Test
+    void theGaugeFloatsInFrontOfAMarkStandingCloserThanTheRing() {
+        // The eye is at 0.5, 65.62, 0.5 facing +z; the mark's body spans z 1.2 to 1.8, a block wide and two tall.
+        org.bukkit.entity.Entity mark = mock(org.bukkit.entity.Entity.class);
+        when(mark.getBoundingBox()).thenReturn(new org.bukkit.util.BoundingBox(0, 64, 1.2, 1, 66, 1.8));
+        RingView.openGauge(plugin, viewer, mark, 2);
+        ArgumentCaptor<Location> where = ArgumentCaptor.forClass(Location.class);
+        verify(world, atLeastOnce()).spawn(where.capture(), any(Class.class), any(Consumer.class));
+        // 60% of the 0.7 blocks to the body's face along the crosshair, shrunk to match.
+        double distance = 0.7 * RingLayout.CLEARANCE;
+        assertEquals(0.5 + distance, where.getValue().getZ(), 1e-6);
+        assertEquals(65.62 + RingView.LIFT * distance / RingLayout.DISTANCE, where.getValue().getY(), 1e-6);
+    }
+
+    @Test
+    void aMarkOffToTheSideLeavesTheGaugeWhereItWas() {
+        org.bukkit.entity.Entity mark = mock(org.bukkit.entity.Entity.class);
+        when(mark.getBoundingBox()).thenReturn(new org.bukkit.util.BoundingBox(20, 64, 1.2, 21, 66, 1.8));
+        RingView.openGauge(plugin, viewer, mark, 2);
+        ArgumentCaptor<Location> where = ArgumentCaptor.forClass(Location.class);
+        verify(world, atLeastOnce()).spawn(where.capture(), any(Class.class), any(Consumer.class));
+        assertEquals(0.5 + 2.4, where.getValue().getZ(), 1e-6);
+    }
+
+    @Test
     void theGaugeFillsClockwiseSendingOnlyTheDotsThatChange() {
-        RingView view = RingView.openGauge(plugin, viewer, 2);
+        RingView view = RingView.openGauge(plugin, viewer, null, 2);
         List<TextDisplay> dots = textsWith(RingView.DOT);
         TextColor cyan = TextColor.color(0x2dd4e8);
         TextColor track = TextColor.color(0x24525c);
@@ -348,7 +372,7 @@ class RingViewTest {
 
     @Test
     void theGaugeCaptionAndPipsChange() {
-        RingView view = RingView.openGauge(plugin, viewer, 2);
+        RingView view = RingView.openGauge(plugin, viewer, null, 2);
         TextDisplay caption = gaugePartAt(0.24f);
         view.caption(Component.text("PHASE I"));
         assertEquals(Component.text("PHASE I"), texts.get(caption));

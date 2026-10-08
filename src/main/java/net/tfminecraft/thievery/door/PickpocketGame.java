@@ -121,7 +121,7 @@ final class PickpocketGame extends LockMinigame {
     }
 
     private void open(Player player) {
-        view = views.open(player, PHASES);
+        view = views.open(player, victim, PHASES);
         view.label(Component.text("Steady...", NamedTextColor.GRAY), WORD_SIZE);
         phase = Phase.PREPARE;
         ticksLeft = PREPARE_TICKS;
@@ -258,6 +258,6 @@ final class PickpocketGame extends LockMinigame {
 
     /** Opens the floating gauge; the display entity implementation is {@link RingView#openGauge}. */
     interface GaugeViews {
-        RingView open(Player player, int phases);
+        RingView open(Player player, Player mark, int phases);
     }
 }

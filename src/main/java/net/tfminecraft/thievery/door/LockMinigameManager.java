@@ -56,8 +56,8 @@ public class LockMinigameManager implements Listener {
     PinGridGame.GridScreens gridScreens = GridDialogs::frames;
     RingDialGame.RingViews ringViews = (player, tumblers, slips) ->
             RingView.open(Thievery.getInstance(), player, tumblers, slips);
-    PickpocketGame.GaugeViews gaugeViews = (player, phases) ->
-            RingView.openGauge(Thievery.getInstance(), player, phases);
+    PickpocketGame.GaugeViews gaugeViews = (player, mark, phases) ->
+            RingView.openGauge(Thievery.getInstance(), player, mark, phases);
 
     public LockMinigameManager(LockPickManager lockPickManager) {
         this(lockPickManager, new Random());

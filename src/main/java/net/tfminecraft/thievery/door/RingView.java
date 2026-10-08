@@ -15,6 +15,7 @@ import org.bukkit.entity.TextDisplay;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.util.RayTraceResult;
 import org.bukkit.util.Transformation;
+import org.bukkit.util.Vector;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
@@ -94,26 +95,32 @@ final class RingView {
 
     /** Floats the lockpick ring in front of the viewer's eyes, closer if a block is in the way. */
     static RingView open(Plugin plugin, Player viewer, int tumblers, int maxSlips) {
-        RingView view = place(plugin, viewer);
+        RingView view = inFront(plugin, viewer, null);
         view.build(tumblers, maxSlips);
         return view;
     }
 
-    /** Floats the pickpocket gauge where {@link #open} would float the lockpick ring. */
-    static RingView openGauge(Plugin plugin, Player viewer, int phases) {
-        RingView view = place(plugin, viewer);
+    /**
+     * Floats the pickpocket gauge where {@link #open} would float the lockpick ring, but in front of {@code mark}
+     * too, whose body would otherwise hide it. A null mark is a staff test.
+     */
+    static RingView openGauge(Plugin plugin, Player viewer, Entity mark, int phases) {
+        RingView view = inFront(plugin, viewer, mark);
         view.buildGauge(phases);
         return view;
     }
 
-    private static RingView place(Plugin plugin, Player viewer) {
+    /** Where the ring floats: short of any block, and of {@code mark}'s body when there is one. */
+    private static RingView inFront(Plugin plugin, Player viewer, Entity mark) {
         Location eye = viewer.getEyeLocation();
         World world = viewer.getWorld();
         double distance = RingLayout.fitDistance(Parameters.chestDialDistance, eye.getYaw(), eye.getPitch(), LIFT,
                 (line, reach) -> {
-                    RayTraceResult hit = world.rayTraceBlocks(eye, line.clone().normalize(), reach,
-                            FluidCollisionMode.NEVER, true);
-                    return hit == null ? Double.POSITIVE_INFINITY : hit.getHitPosition().distance(eye.toVector());
+                    Vector direction = line.clone().normalize();
+                    RayTraceResult block = world.rayTraceBlocks(eye, direction, reach, FluidCollisionMode.NEVER, true);
+                    RayTraceResult body = mark == null ? null
+                            : mark.getBoundingBox().rayTrace(eye.toVector(), direction, reach);
+                    return Math.min(along(eye, block), along(eye, body));
                 });
         float scale = (float) (distance / RingLayout.DISTANCE);
         // Lifted a little above the crosshair so the bottom of the ring clears the action bar.
@@ -198,6 +205,10 @@ final class RingView {
         shown.setInterpolationDelay(0);
         shown.setInterpolationDuration(4);
         shown.setTransformation(place(pinAt(index, pins.size(), raised), 0.7f, new Quaternionf()));
+    }
+
+    private static double along(Location eye, RayTraceResult hit) {
+        return hit == null ? Double.POSITIVE_INFINITY : hit.getHitPosition().distance(eye.toVector());
     }
 
     private TextDisplay bar(Color colour, float edge, float depth) {

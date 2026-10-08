@@ -63,8 +63,8 @@ class PickpocketGameTest {
         rolls = mock(Random.class);
         manager = new LockMinigameManager(lockPicks, rolls);
         view = mock(RingView.class);
-        manager.gaugeViews = (who, phases) -> {
-            opened.add(new Object[] {who, phases});
+        manager.gaugeViews = (who, mark, phases) -> {
+            opened.add(new Object[] {who, phases, mark});
             return view;
         };
         world = server.addSimpleWorld("market");
@@ -140,6 +140,7 @@ class PickpocketGameTest {
         assertEquals(1, opened.size());
         assertSame(player, opened.get(0)[0]);
         assertEquals(PickpocketGame.PHASES, opened.get(0)[1]);
+        assertSame(victim, opened.get(0)[2]);
         verify(view).label(Component.text("Steady...", NamedTextColor.GRAY), PickpocketGame.WORD_SIZE);
         assertTrue(game.bar.getTitle().contains("Pick their pocket"));
         assertTrue(game.bar.getPlayers().contains(player));
@@ -451,9 +452,9 @@ class PickpocketGameTest {
     void theRealGaugeIsOpenedForThePlugin() {
         LockMinigameManager real = new LockMinigameManager(lockPicks);
         try (var views = mockStatic(RingView.class)) {
-            views.when(() -> RingView.openGauge(any(), any(), anyInt())).thenReturn(view);
-            assertSame(view, real.gaugeViews.open(player, 2));
-            views.verify(() -> RingView.openGauge(Thievery.getInstance(), player, 2));
+            views.when(() -> RingView.openGauge(any(), any(), any(), anyInt())).thenReturn(view);
+            assertSame(view, real.gaugeViews.open(player, victim, 2));
+            views.verify(() -> RingView.openGauge(Thievery.getInstance(), player, victim, 2));
         }
     }
 
