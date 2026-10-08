@@ -5,6 +5,7 @@ import static org.mockito.Mockito.*;
 
 import java.util.*;
 
+import net.tfminecraft.thievery.door.LockMinigameManager;
 import net.tfminecraft.thievery.loader.PickpocketLoader;
 import net.tfminecraft.thievery.steal.*;
 import net.tfminecraft.thievery.utils.EvilRpPlays;
@@ -32,6 +33,9 @@ class PickpocketManagerTest {
     private PlayerTargetData data;
     private StealManager steals;
     private Inventory gui;
+    private LockMinigameManager minigames;
+    /** The pocket each started minigame opens once filled; tests run it to stand for a filled ring. */
+    private final List<Runnable> picks = new ArrayList<>();
     private PickpocketManager manager;
 
     private <T> MockedStatic<T> statics(Class<T> type) {
@@ -51,6 +55,7 @@ class PickpocketManagerTest {
     void setUp() {
         pickpocket = player("thief");
         victim = player("victim");
+        when(victim.isOnline()).thenReturn(true);
         data = new PlayerTargetData(victim.getUniqueId());
         steals = mock(StealManager.class);
         gui = mock(Inventory.class);
@@ -74,7 +79,12 @@ class PickpocketManagerTest {
         evil = statics(EvilRpPlays.class);
         String targetKey = victim.getName();
         statics(TargetKeyResolver.class).when(() -> TargetKeyResolver.resolve(victim.getUniqueId())).thenReturn(targetKey);
-        manager = new PickpocketManager();
+        minigames = mock(LockMinigameManager.class);
+        when(minigames.startPickpocket(eq(pickpocket), eq(victim), any())).thenAnswer(call -> {
+            picks.add(call.getArgument(2));
+            return true;
+        });
+        manager = new PickpocketManager(minigames);
     }
 
     @AfterEach
@@ -140,6 +150,11 @@ class PickpocketManagerTest {
         manager.startAwaitingTarget(pickpocket);
         click(victim);
         assertFalse(manager.isAwaitingTarget(pickpocket.getUniqueId()));
+        // Nothing opens or is recorded until the pickpocket ring is filled.
+        assertTrue(references.constructed().isEmpty());
+        guilds.verify(() -> GuildAccessCooldown.recordAccessMillis(any(), any(), anyLong()), never());
+        assertEquals(1, picks.size());
+        picks.getFirst().run();
         assertEquals(1, sessions.size());
         PickpocketSession session = sessions.getFirst();
         assertEquals(pickpocket.getUniqueId(), session.getPickpocketId());
@@ -152,17 +167,54 @@ class PickpocketManagerTest {
         evil.verify(() -> EvilRpPlays.record(pickpocket));
         verify(steals).openSession(pickpocket, references.constructed().getFirst(), gui);
         click(victim);
+        assertEquals(1, picks.size());
         assertEquals(1, references.constructed().size());
         endCallbacks.getFirst().run();
         manager.startAwaitingTarget(pickpocket);
         click(victim);
+        picks.get(1).run();
         assertEquals(2, references.constructed().size());
+    }
+
+    @Test
+    void aThiefWhoCannotStartTheRingKeepsTheirSelection() {
+        when(minigames.startPickpocket(eq(pickpocket), eq(victim), any())).thenReturn(false);
+        manager.startAwaitingTarget(pickpocket);
+        click(victim);
+        assertTrue(manager.isAwaitingTarget(pickpocket.getUniqueId()));
+        when(minigames.isPlaying(pickpocket.getUniqueId())).thenReturn(true);
+        clearInvocations(minigames);
+        click(victim);
+        verify(pickpocket).sendMessage(contains("hands are already busy"));
+        verify(minigames, never()).startPickpocket(any(), any(), any());
+        assertTrue(manager.isAwaitingTarget(pickpocket.getUniqueId()));
+    }
+
+    @Test
+    void aMarkWhoLeftOrWasTakenByAGuildmateWhileTheRingFilledKeepsTheirPocket() {
+        manager.startAwaitingTarget(pickpocket);
+        click(victim);
+        when(victim.isOnline()).thenReturn(false);
+        picks.getFirst().run();
+        verify(pickpocket).sendMessage(contains("out of reach"));
+        when(victim.isOnline()).thenReturn(true);
+        range.when(() -> RobberyUtil.isWithinRange(pickpocket, victim, 4)).thenReturn(false);
+        picks.getFirst().run();
+        verify(pickpocket, times(2)).sendMessage(contains("out of reach"));
+        range.when(() -> RobberyUtil.isWithinRange(pickpocket, victim, 4)).thenReturn(true);
+        guilds.when(() -> GuildAccessCooldown.isOnCooldownMillis(data.getPickpocketAccessMap(), pickpocket, 60_000)).thenReturn(true);
+        guilds.when(() -> GuildAccessCooldown.formatRemaining(anyLong())).thenReturn("an hour");
+        picks.getFirst().run();
+        verify(pickpocket).sendMessage(contains("wait an hour"));
+        assertTrue(references.constructed().isEmpty());
+        guilds.verify(() -> GuildAccessCooldown.recordAccessMillis(any(), any(), anyLong()), never());
     }
 
     @Test
     void quitClearsSelectionInteractionCooldownAndActiveSession() {
         manager.startAwaitingTarget(pickpocket);
         click(victim);
+        picks.getFirst().run();
         PlayerQuitEvent event = mock(PlayerQuitEvent.class);
         when(event.getPlayer()).thenReturn(pickpocket);
         clearInvocations(steals);

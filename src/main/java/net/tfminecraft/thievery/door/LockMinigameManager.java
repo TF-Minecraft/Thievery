@@ -11,7 +11,6 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Sound;
 import org.bukkit.block.Block;
-import org.bukkit.block.Container;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -33,13 +32,15 @@ import org.bukkit.inventory.ItemStack;
 
 import net.tfminecraft.thievery.Thievery;
 import net.tfminecraft.thievery.cache.Parameters;
+import net.tfminecraft.thievery.loader.PickpocketLoader;
 import net.tfminecraft.thievery.player.RiskCalculator;
 import net.tfminecraft.thievery.utils.ThieveryTexts;
 
 /**
  * Runs the lock minigame that must be solved before a chest lockpick session opens: the pin grid dialog or, for
- * {@code dial-chance} of locks, the floating lockpick ring. Handles the fail cooldown, penalties, and everything
- * that can interrupt a pick: leaving, being hit, being moved, a crash, a reload.
+ * {@code dial-chance} of locks, the floating lockpick ring. Also runs the floating pickpocket ring that must be
+ * filled before a pocket opens. Handles the fail cooldown, penalties, and everything that can interrupt a pick:
+ * leaving, being hit, being moved, a crash, a reload.
  */
 public class LockMinigameManager implements Listener {
 
@@ -49,12 +50,14 @@ public class LockMinigameManager implements Listener {
         DIAL
     }
 
-    private final LockPickManager lockPickManager;
+    final LockPickManager lockPickManager;
     private final Random random;
     private final Map<UUID, LockMinigame> games = new HashMap<>();
     PinGridGame.GridScreens gridScreens = GridDialogs::frames;
     RingDialGame.RingViews ringViews = (player, tumblers, slips) ->
             RingView.open(Thievery.getInstance(), player, tumblers, slips);
+    PickpocketGame.GaugeViews gaugeViews = (player, phases) ->
+            RingView.openGauge(Thievery.getInstance(), player, phases);
 
     public LockMinigameManager(LockPickManager lockPickManager) {
         this(lockPickManager, new Random());
@@ -98,11 +101,9 @@ public class LockMinigameManager implements Listener {
             return false;
         }
         boolean dial = mode == null ? random.nextDouble() < Parameters.chestDialChance : mode == Mode.DIAL;
-        if (dial && (player.isInsideVehicle() || player.isGliding())) {
-            player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You need both feet on the ground to work this lock."));
+        if (dial && !canHoldStill(player, "work this lock")) {
             return false;
         }
-        cancel(playerId);
 
         int dexterity = RiskCalculator.getDexterity(player);
         LockMinigame game;
@@ -115,21 +116,59 @@ public class LockMinigameManager implements Listener {
                     + dexterity * Parameters.chestMinigameRecallSecondsPerDexterity);
             game = new PinGridGame(this, playerId, target, targetId, grid, recallTicks, gridScreens, onSolved);
         }
+        play(player, game);
+        return true;
+    }
+
+    /**
+     * Opens the pickpocket ring on {@code victim}, then runs {@code onPicked} once it is filled. Runs it straight
+     * away when the pickpocket minigame is off. A null victim is a staff test, which always plays and alerts no
+     * one. Returns false when the thief cannot start: still on the fail cooldown for this victim, or riding or
+     * gliding.
+     */
+    public boolean startPickpocket(Player thief, Player victim, Runnable onPicked) {
+        if (victim != null && !PickpocketLoader.isMinigameEnabled()) {
+            onPicked.run();
+            return true;
+        }
+        UUID thiefId = thief.getUniqueId();
+        String targetId = "pocket:" + (victim == null ? "test" : victim.getUniqueId());
+        if (lockPickManager.isOnCooldown(thiefId, targetId)) {
+            thief.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "Your mark is still on guard. Try again in "
+                    + lockPickManager.getCooldownRemainingSeconds(thiefId, targetId) + "s."));
+            return false;
+        }
+        if (!canHoldStill(thief, "pick a pocket")) {
+            return false;
+        }
+        play(thief, new PickpocketGame(this, thiefId, targetId, victim, random, gaugeViews, mistakes -> onPicked.run()));
+        return true;
+    }
+
+    /** The floating rings hold the thief still, which cannot be done on a mount or in flight. */
+    private static boolean canHoldStill(Player player, String task) {
+        if (player.isInsideVehicle() || player.isGliding()) {
+            player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You need both feet on the ground to " + task + "."));
+            return false;
+        }
+        return true;
+    }
+
+    private void play(Player player, LockMinigame game) {
+        cancel(game.playerId);
         game.player = player;
         game.pick = player.getInventory().getItemInMainHand().clone();
-        LockMinigame started = game;
-        game.task = Bukkit.getScheduler().runTaskTimer(Thievery.getInstance(), () -> tick(player, started), 1L, 1L);
-        games.put(playerId, game);
+        game.task = Bukkit.getScheduler().runTaskTimer(Thievery.getInstance(), () -> tick(player, game), 1L, 1L);
+        games.put(game.playerId, game);
         if (game.showsBar()) {
             game.bar.addPlayer(player);
         }
         game.begin(player);
-        return true;
     }
 
     public boolean isPicking(Block target) {
         for (LockMinigame game : games.values()) {
-            if (game.target.equals(target)) {
+            if (target.equals(game.target)) {
                 return true;
             }
         }
@@ -172,8 +211,7 @@ public class LockMinigameManager implements Listener {
         if (games.get(game.playerId) != game) {
             return;
         }
-        // No snapshot: a full chest's snapshot copies every item, and this runs every tick.
-        if (!player.isOnline() || !(game.target.getState(false) instanceof Container)) {
+        if (!player.isOnline() || game.targetGone()) {
             cancel(game.playerId);
             return;
         }
@@ -192,7 +230,7 @@ public class LockMinigameManager implements Listener {
     /** The thief gave up: it counts as a failed attempt, the same as letting the pins slip. */
     void giveUp(Player player, LockMinigame game) {
         if (games.get(game.playerId) == game && game.outcome == LockMinigame.Outcome.NONE) {
-            player.sendMessage(ThieveryTexts.msg(ThieveryTexts.MUTED + "You ease the pick back out."));
+            player.sendMessage(ThieveryTexts.msg(ThieveryTexts.MUTED + game.wording().gaveUp()));
             game.fail(player);
         }
     }
@@ -216,7 +254,7 @@ public class LockMinigameManager implements Listener {
         Player player = event.getPlayer();
         LockMinigame game = playing(player);
         if (game != null) {
-            penalise(player, game);
+            game.penalise(player);
         }
         LockMinigame any = games.get(player.getUniqueId());
         if (any != null) {
@@ -240,7 +278,7 @@ public class LockMinigameManager implements Listener {
         }
         LockMinigame game = playing(player);
         if (game != null && event.getFinalDamage() > 0) {
-            player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You flinch and lose the pins."));
+            player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + game.wording().flinched()));
             game.fail(player);
         }
     }
@@ -262,17 +300,17 @@ public class LockMinigameManager implements Listener {
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onTeleport(PlayerTeleportEvent event) {
         Player player = event.getPlayer();
-        if (!isPlaying(player.getUniqueId())) {
+        LockMinigame game = games.get(player.getUniqueId());
+        if (game == null) {
             return;
         }
         Location from = event.getFrom();
         Location to = event.getTo();
         if (from.getWorld() != to.getWorld() || from.distanceSquared(to) > 1.0) {
-            LockMinigame running = playing(player);
-            if (running != null && (running.ranCommand || selfTeleport(event.getCause()))) {
-                penalise(player, running);
+            if (game.outcome == LockMinigame.Outcome.NONE && (game.ranCommand || selfTeleport(event.getCause()))) {
+                game.penalise(player);
             }
-            player.sendMessage(ThieveryTexts.msg(ThieveryTexts.MUTED + "You were pulled away from the lock."));
+            player.sendMessage(ThieveryTexts.msg(ThieveryTexts.MUTED + game.wording().pulledAway()));
             cancel(player.getUniqueId());
         }
     }

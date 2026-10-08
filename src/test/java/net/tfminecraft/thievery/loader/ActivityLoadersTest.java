@@ -38,6 +38,8 @@ class ActivityLoadersTest {
         assertEquals(10, RobberyLoader.getPouchClickAmount());
         assertEquals(100, RobberyLoader.getPouchShiftAmount());
         assertEquals(List.of("Slot"), RobberyLoader.getIgnoreNameContains());
+        assertTrue(PickpocketLoader.isMinigameEnabled());
+        assertEquals(30.0, PickpocketLoader.getMinigameTimeLimitSeconds());
         assertEquals(List.of("Slot"), StealIgnoreRules.getNameContains());
         assertEquals(List.of("thief"), PickpocketLoader.getTraits());
         assertEquals(10, PickpocketLoader.getBudget());
@@ -68,6 +70,9 @@ class ActivityLoadersTest {
                   max-distance: 2.5
                   alert-subtitle: '#56ccf2Watch your pockets'
                   alert-subtitle-critical: '#d65c5cCaught {character_name}'
+                  minigame:
+                    enabled: false
+                    time-limit-seconds: 12.5
                   ignore:
                     name-contains: [Soulbound]
                 """);
@@ -89,6 +94,11 @@ class ActivityLoadersTest {
         assertEquals(ThieveryTexts.formatGui("#56ccf2Watch your pockets"), PickpocketLoader.getAlertSubtitle());
         assertEquals(ThieveryTexts.formatGui("#d65c5cCaught {character_name}"),
                 PickpocketLoader.getAlertSubtitleCritical());
+        assertFalse(PickpocketLoader.isMinigameEnabled());
+        assertEquals(12.5, PickpocketLoader.getMinigameTimeLimitSeconds());
+        config.set("pickpocket.minigame.time-limit-seconds", 2);
+        PickpocketLoader.load(config);
+        assertEquals(5.0, PickpocketLoader.getMinigameTimeLimitSeconds());
         assertThrows(UnsupportedOperationException.class, () -> RobberyLoader.getTraits().add("x"));
         assertThrows(UnsupportedOperationException.class, () -> RobberyLoader.getIgnoreNameContains().clear());
         assertThrows(UnsupportedOperationException.class, () -> PickpocketLoader.getTraits().clear());

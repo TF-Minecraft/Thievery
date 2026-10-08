@@ -63,7 +63,7 @@ public class Thievery extends JavaPlugin {
         doorManager = new DoorManager(lockPickManager);
         lockMinigameManager = new LockMinigameManager(lockPickManager);
         robberyManager = new RobberyManager();
-        pickpocketManager = new PickpocketManager();
+        pickpocketManager = new PickpocketManager(lockMinigameManager);
         stealGuiUpdater = new StealGuiUpdater(stealManager);
         stealGuiUpdater.start();
         CooldownResetService cooldownResetService = new CooldownResetService(lockPickManager);

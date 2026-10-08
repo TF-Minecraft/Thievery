@@ -14,6 +14,7 @@ import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.Inventory;
 
+import net.tfminecraft.thievery.door.LockMinigameManager;
 import net.tfminecraft.thievery.player.PickpocketSession;
 import net.tfminecraft.thievery.player.PlayerTargetData;
 import net.tfminecraft.thievery.loader.PickpocketLoader;
@@ -32,9 +33,14 @@ import net.tfminecraft.thievery.utils.ThieveryTexts;
 
 public class PickpocketManager implements Listener {
 
+    private final LockMinigameManager minigames;
     private final PlayerTargetDataManager targetDataManager = new PlayerTargetDataManager();
     private final Set<UUID> awaitingTarget = new java.util.HashSet<>();
     private final Map<UUID, PickpocketSession> sessionsByPickpocket = new HashMap<>();
+
+    public PickpocketManager(LockMinigameManager minigames) {
+        this.minigames = minigames;
+    }
 
     public void startAwaitingTarget(Player pickpocket) {
         endSession(pickpocket.getUniqueId(), false);
@@ -70,20 +76,33 @@ public class PickpocketManager implements Listener {
             pickpocket.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "They are too far away."));
             return;
         }
-
-        PlayerTargetData targetData = targetDataManager.load(victim.getUniqueId());
-        if (GuildAccessCooldown.isOnCooldownMillis(targetData.getPickpocketAccessMap(), pickpocket,
-                PickpocketLoader.getCooldownMillis())) {
-            long remaining = GuildAccessCooldown.getMillisRemainingMillis(targetData.getPickpocketAccessMap(),
-                    pickpocket, PickpocketLoader.getCooldownMillis());
-            pickpocket.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "Your guild must wait "
-                    + GuildAccessCooldown.formatRemaining(remaining)
-                    + " before targeting them again."));
+        if (minigames.isPlaying(pickpocketId)) {
+            pickpocket.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "Your hands are already busy."));
             return;
         }
 
-        awaitingTarget.remove(pickpocketId);
+        if (onGuildCooldown(pickpocket, targetDataManager.load(victim.getUniqueId()))) {
+            return;
+        }
+
         endSession(pickpocketId, false);
+        // The pocket opens only once the pickpocket ring is filled.
+        if (minigames.startPickpocket(pickpocket, victim, () -> openPocket(pickpocket, victim))) {
+            awaitingTarget.remove(pickpocketId);
+        }
+    }
+
+    private void openPocket(Player pickpocket, Player victim) {
+        UUID pickpocketId = pickpocket.getUniqueId();
+        // The mark may have walked off, or a guildmate picked them, while the ring was being filled.
+        if (!victim.isOnline() || !RobberyUtil.isWithinRange(pickpocket, victim, PickpocketLoader.getMaxDistance())) {
+            pickpocket.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "Your mark is out of reach."));
+            return;
+        }
+        PlayerTargetData targetData = targetDataManager.load(victim.getUniqueId());
+        if (onGuildCooldown(pickpocket, targetData)) {
+            return;
+        }
 
         long now = System.currentTimeMillis();
         GuildAccessCooldown.recordAccessMillis(targetData.getPickpocketAccessMap(), pickpocketId, now);
@@ -99,6 +118,20 @@ public class PickpocketManager implements Listener {
         String title = reference.buildTitle(pickpocket);
         Inventory gui = StealGui.buildHiddenGui(reference.getHolder(), session.getLayout(), title);
         StealManager.getInstance().openSession(pickpocket, reference, gui);
+    }
+
+    /** Tells the thief and returns true when they or their guild picked this victim too recently. */
+    private static boolean onGuildCooldown(Player pickpocket, PlayerTargetData targetData) {
+        if (!GuildAccessCooldown.isOnCooldownMillis(targetData.getPickpocketAccessMap(), pickpocket,
+                PickpocketLoader.getCooldownMillis())) {
+            return false;
+        }
+        long remaining = GuildAccessCooldown.getMillisRemainingMillis(targetData.getPickpocketAccessMap(),
+                pickpocket, PickpocketLoader.getCooldownMillis());
+        pickpocket.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "Your guild must wait "
+                + GuildAccessCooldown.formatRemaining(remaining)
+                + " before targeting them again."));
+        return true;
     }
 
     @EventHandler

@@ -20,12 +20,16 @@ import org.joml.Vector3f;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 
 import net.tfminecraft.thievery.cache.Parameters;
 
 /**
  * The floating lockpick ring: display entities that only the thief can see. The server only sends where the pointer
  * should be a moment ahead; the client glides it there every frame, so it moves at the player's own frame rate.
+ *
+ * <p>The same ring, built as a gauge, is the pickpocket ring: a band of dots that fills clockwise from twelve
+ * o'clock, with the percentage, phase and key to press in the middle.
  */
 final class RingView {
 
@@ -56,6 +60,9 @@ final class RingView {
     static final String DOT = "\u25cf";
     static final String PIN = "\u258e";
     static final float LIFT = 0.14f;
+    /** The gauge's dots touch, so its band reads as one ring. */
+    static final int GAUGE_DOTS = 40;
+    static final String PIP = "\u25c6";
 
     private final Plugin plugin;
     private final Player viewer;
@@ -68,6 +75,10 @@ final class RingView {
     private final List<TextDisplay> slips = new ArrayList<>();
     private final List<Display> all = new ArrayList<>();
     private TextDisplay label;
+    private TextDisplay caption;
+    private int litDots;
+    private TextColor litColour;
+    private TextColor trackColour;
     private TextDisplay needle;
     private TextDisplay needleEdge;
     private double pointerDegrees;
@@ -81,8 +92,21 @@ final class RingView {
         this.pitch = pitch;
     }
 
-    /** Floats the ring in front of the viewer's eyes, closer if a block is in the way. */
+    /** Floats the lockpick ring in front of the viewer's eyes, closer if a block is in the way. */
     static RingView open(Plugin plugin, Player viewer, int tumblers, int maxSlips) {
+        RingView view = place(plugin, viewer);
+        view.build(tumblers, maxSlips);
+        return view;
+    }
+
+    /** Floats the pickpocket gauge where {@link #open} would float the lockpick ring. */
+    static RingView openGauge(Plugin plugin, Player viewer, int phases) {
+        RingView view = place(plugin, viewer);
+        view.buildGauge(phases);
+        return view;
+    }
+
+    private static RingView place(Plugin plugin, Player viewer) {
         Location eye = viewer.getEyeLocation();
         World world = viewer.getWorld();
         double distance = RingLayout.fitDistance(Parameters.chestDialDistance, eye.getYaw(), eye.getPitch(), LIFT,
@@ -97,9 +121,7 @@ final class RingView {
                 .add(RingLayout.worldOffset(eye.getYaw(), eye.getPitch(), new Vector3f(0, LIFT * scale, 0)));
         centre.setYaw(eye.getYaw() + 180f);
         centre.setPitch(-eye.getPitch());
-        RingView view = new RingView(plugin, viewer, centre, scale, eye.getYaw(), eye.getPitch());
-        view.build(tumblers, maxSlips);
-        return view;
+        return new RingView(plugin, viewer, centre, scale, eye.getYaw(), eye.getPitch());
     }
 
     void build(int tumblers, int maxSlips) {
@@ -118,6 +140,64 @@ final class RingView {
         label = text(Component.empty(), new Vector3f(0, -0.16f, 0.01f), 1.1f);
         needleEdge = bar(NEEDLE_EDGE, NEEDLE_EDGE_WIDTH, 0.015f);
         needle = bar(NEEDLE, 0, 0.02f);
+    }
+
+    /**
+     * An empty gauge: a dim band, a pip above it for each phase, and in the middle the phase above the
+     * percentage, which {@link #label} sets, above the key to mash.
+     */
+    void buildGauge(int phases) {
+        trackColour = DIM;
+        for (int dot = 0; dot < GAUGE_DOTS; dot++) {
+            dots.add(text(Component.text(DOT, DIM), RingLayout.onRing(gaugeAngle(dot), RingLayout.RADIUS)
+                    .add(0, -0.07f, 0), 0.75f));
+        }
+        for (int i = 0; i < phases; i++) {
+            pins.add(text(Component.text(PIP, DIM), pinAt(i, phases, false), 0.7f));
+        }
+        text(Component.text("Mash ").append(Component.keybind("key.jump"))
+                .append(Component.text(" \u00b7 ")).append(Component.keybind("key.sneak"))
+                .append(Component.text(" to give up")).color(DIM), new Vector3f(0, RingLayout.RADIUS + 0.5f, 0), 0.34f);
+        caption = text(Component.empty(), new Vector3f(0, 0.24f, 0.01f), 0.55f);
+        label = text(Component.empty(), new Vector3f(0, -0.16f, 0.01f), 1.1f);
+        text(Component.text("[", GOLD).append(Component.keybind("key.jump")).append(Component.text("]"))
+                .decoration(TextDecoration.BOLD, true), new Vector3f(0, -0.48f, 0.01f), 0.45f);
+    }
+
+    static double gaugeAngle(int dot) {
+        return 360.0 * dot / GAUGE_DOTS;
+    }
+
+    /**
+     * Lights the first {@code share} of the gauge's band in {@code lit} and leaves the rest {@code track}.
+     * Only dots that change are sent.
+     */
+    void fill(double share, TextColor lit, TextColor track) {
+        int count = (int) Math.floor(Math.max(0.0, Math.min(1.0, share)) * GAUGE_DOTS);
+        boolean recolour = !lit.equals(litColour) || !track.equals(trackColour);
+        for (int dot = 0; dot < dots.size(); dot++) {
+            boolean on = dot < count;
+            if (recolour || on != dot < litDots) {
+                dots.get(dot).text(Component.text(DOT, on ? lit : track));
+            }
+        }
+        litDots = count;
+        litColour = lit;
+        trackColour = track;
+    }
+
+    /** The small text above the gauge's percentage. */
+    void caption(Component content) {
+        caption.text(content);
+    }
+
+    /** Colours a gauge pip; a finished phase's pip springs up. */
+    void pip(int index, TextColor colour, boolean raised) {
+        TextDisplay shown = pins.get(index);
+        shown.text(Component.text(PIP, colour));
+        shown.setInterpolationDelay(0);
+        shown.setInterpolationDuration(4);
+        shown.setTransformation(place(pinAt(index, pins.size(), raised), 0.7f, new Quaternionf()));
     }
 
     private TextDisplay bar(Color colour, float edge, float depth) {

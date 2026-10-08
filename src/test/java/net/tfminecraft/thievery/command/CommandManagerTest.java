@@ -209,7 +209,7 @@ class CommandManagerTest {
         assertTrue(complete(player, "testpick", "").isEmpty());
         when(player.hasPermission("thievery.admin")).thenReturn(true);
         assertEquals(List.of("loadout", "clearclues", "feedback", "reload", "resetcooldowns", "setrisk", "itemvalue", "keychain", "testpick"), complete(player, ""));
-        assertEquals(List.of("grid", "dial"), complete(player, "testpick", ""));
+        assertEquals(List.of("grid", "dial", "pocket"), complete(player, "testpick", ""));
         assertEquals(List.of("dial"), complete(player, "TESTPICK", "D"));
         server.addPlayer("Alice"); server.addPlayer("Bob");
         assertEquals(List.of("all", "Alice", "Bob"), complete(player, "resetcooldowns", ""));
@@ -234,8 +234,24 @@ class CommandManagerTest {
         assertTrue(run(player, "TestPick", "GRID"));
         verify(containers).testPick(player, block, net.tfminecraft.thievery.door.LockMinigameManager.Mode.GRID);
         assertTrue(run(player, "testpick", "spin"));
-        verify(player).sendMessage("§cUsage: §e/thievery testpick [grid|dial]");
+        verify(player).sendMessage("§cUsage: §e/thievery testpick [grid|dial|pocket]");
         verify(containers, times(3)).testPick(any(), any(), any());
+    }
+
+    @Test void testPickPocketPlaysThePickpocketRingWithNoMark() {
+        when(player.hasPermission("thievery.admin")).thenReturn(true);
+        Thievery plugin = mock(Thievery.class);
+        var minigames = mock(net.tfminecraft.thievery.door.LockMinigameManager.class);
+        when(plugin.getLockMinigameManager()).thenReturn(minigames);
+        try (var thievery = mockStatic(Thievery.class)) {
+            thievery.when(Thievery::getInstance).thenReturn(plugin);
+            assertTrue(run(player, "testpick", "Pocket"));
+        }
+        var picked = org.mockito.ArgumentCaptor.forClass(Runnable.class);
+        verify(minigames).startPickpocket(eq(player), isNull(), picked.capture());
+        picked.getValue().run();
+        verify(player).sendMessage("§a[Thievery] §ePocket picked.");
+        verifyNoInteractions(containers);
     }
 
     private boolean run(CommandSender sender, String... args) { return commands.onCommand(sender, null, "thievery", args); }

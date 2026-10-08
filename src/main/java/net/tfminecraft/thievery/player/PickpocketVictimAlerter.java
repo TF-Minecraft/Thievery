@@ -43,6 +43,11 @@ public final class PickpocketVictimAlerter {
         }
     }
 
+    /** Tells the victim outright, as when a pickpocket fumbles. */
+    public static void alert(Player victim) {
+        alertVictim(victim, PickpocketLoader.getAlertSubtitle());
+    }
+
     // Keep the existing legacy text representation, formatting, and exact-string comparisons.
     @SuppressWarnings("deprecation")
     private static void alertVictim(Player victim, String subtitle) {
