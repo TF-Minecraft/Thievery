@@ -144,6 +144,21 @@ class ContainerManagerTest {
         verify(inventory,never()).getHolder();
     }
 
+    @Test void clickingDoubleChestWhoseLeftHalfIsNoLongerAChestIsIgnored() {
+        var inventory=mock(DoubleChestInventory.class); var leftless=mock(Inventory.class);
+        when(leftless.getHolder(false)).thenReturn(mock(org.bukkit.inventory.InventoryHolder.class));
+        when(inventory.getLeftSide()).thenReturn(leftless); when(inventory.getHolder(false)).thenReturn(new DoubleChest(inventory));
+        var event=mock(InventoryClickEvent.class);
+        when(event.getWhoClicked()).thenReturn(player);
+        when(event.getInventory()).thenReturn(inventory);
+        when(event.getClick()).thenReturn(ClickType.LEFT);
+        when(event.getCurrentItem()).thenReturn(new ItemStack(Material.DIAMOND));
+
+        assertDoesNotThrow(()->manager.onInventoryClick(event));
+
+        verifyNoInteractions(storage);
+    }
+
     @Test void accessToLeftHalfDoesNotAllowOpeningForeignRightHalfButStaffCanBypassSilently() {
         var chest=doubleChest();
         var left=lock(chest.block(),player.getUniqueId());

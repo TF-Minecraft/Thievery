@@ -314,7 +314,8 @@ public class ContainerManager implements Listener {
 
         if (holder instanceof DoubleChest doubleChest) {
             // Always use the left side as the primary location
-            location = ((Chest) doubleChest.getLeftSide(false)).getBlock().getLocation();
+            if (!(doubleChest.getLeftSide(false) instanceof Chest left)) return;
+            location = left.getBlock().getLocation();
         } else if (holder instanceof Container container) {
             location = container.getBlock().getLocation();
         } else {
