@@ -307,13 +307,14 @@ public class ContainerManager implements Listener {
         if (!(event.getWhoClicked() instanceof Player player)) return;
 
         Inventory inv = event.getInventory();
-        InventoryHolder holder = inv.getHolder();
+        // Fires on every inventory click, so avoid block-state snapshots here.
+        InventoryHolder holder = inv.getHolder(false);
 
         Location location;
 
         if (holder instanceof DoubleChest doubleChest) {
             // Always use the left side as the primary location
-            location = ((Chest) doubleChest.getLeftSide()).getBlock().getLocation();
+            location = ((Chest) doubleChest.getLeftSide(false)).getBlock().getLocation();
         } else if (holder instanceof Container container) {
             location = container.getBlock().getLocation();
         } else {
@@ -324,9 +325,10 @@ public class ContainerManager implements Listener {
         if (event.getClick() == ClickType.LEFT || event.getClick() == ClickType.SHIFT_LEFT) {
             if (event.getCurrentItem() == null || event.getCurrentItem().getType().isAir()) return;
 
-            ContainerData data = containerDataManager.loadContainerData(location);
+            // The cached owner skips the disk read for unowned containers.
+            if (containerDataManager.getOwner(location) == null) return;
 
-            if (data.getOwner() == null) return;
+            ContainerData data = containerDataManager.loadContainerData(location);
 
             if (!data.canAccess(player) && !player.hasPermission("thievery.admin")) {
                 long now = System.currentTimeMillis();

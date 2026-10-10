@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import java.util.*;
 import net.tfminecraft.thievery.Thievery;
+import net.tfminecraft.thievery.TestInventories;
 import net.tfminecraft.thievery.cache.Cache;
 import net.tfminecraft.thievery.category.ItemCategory;
 import net.tfminecraft.thievery.loader.CategoryLoader;
@@ -24,7 +25,7 @@ class InventoryManagerTest {
         MockBukkit.mock(); points=Cache.categoryPoints; Cache.categoryPoints=30; categories=new ArrayList<>(); byId=new HashMap<>();
         plugins=mockStatic(Thievery.class,RETURNS_DEEP_STUBS); var plugin=mock(Thievery.class); when(plugin.namespace()).thenReturn("thievery"); plugins.when(Thievery::getInstance).thenReturn(plugin);
         player=mock(Player.class); when(player.getUniqueId()).thenReturn(UUID.randomUUID()); data=new PlayerData(player.getUniqueId()); when(Thievery.getPlayerManager().get(player)).thenReturn(data);
-        view=mock(InventoryView.class); when(player.getOpenInventory()).thenReturn(view); doAnswer(call->{inventory=call.getArgument(0); when(view.getTopInventory()).thenReturn(inventory); return view;}).when(player).openInventory(any(Inventory.class));
+        view=mock(InventoryView.class); when(player.getOpenInventory()).thenReturn(view); doAnswer(call->{inventory=TestInventories.withHolderLookup(call.getArgument(0)); when(view.getTopInventory()).thenReturn(inventory); return view;}).when(player).openInventory(any(Inventory.class));
         loader=mockStatic(CategoryLoader.class); loader.when(CategoryLoader::getLoadoutCategories).thenReturn(categories); loader.when(()->CategoryLoader.getById(anyString())).thenAnswer(call->byId.get(call.getArgument(0))); manager=new InventoryManager();
     }
     @AfterEach void close() { loader.close(); plugins.close(); Cache.categoryPoints=points; MockBukkit.unmock(); }
@@ -33,7 +34,7 @@ class InventoryManagerTest {
         when(category.getIconItem(anyBoolean())).thenAnswer(call->{var icon=new ItemStack(Material.PAPER); var meta=icon.getItemMeta(); meta.getPersistentDataContainer().set(Keys.categoryId,PersistentDataType.STRING,id); meta.setDisplayName(id+(call.getArgument(0,Boolean.class)?" active":" inactive")); icon.setItemMeta(meta); return icon;});
         categories.add(category); byId.put(id,category); return category;
     }
-    InventoryClickEvent click(int slot) { var event=mock(InventoryClickEvent.class); when(event.getWhoClicked()).thenReturn(player); when(event.getView()).thenReturn(view); when(event.getClickedInventory()).thenReturn(inventory); when(event.getSlot()).thenReturn(slot); if(slot>=0 && slot<inventory.getSize()) when(event.getCurrentItem()).thenReturn(inventory.getItem(slot)); return event; }
+    InventoryClickEvent click(int slot) { var event=mock(InventoryClickEvent.class); when(event.getWhoClicked()).thenReturn(player); when(event.getView()).thenReturn(view); when(event.getClickedInventory()).thenReturn(inventory); when(event.getSlot()).thenReturn(slot); if(slot>=0 && slot<inventory.getSize()) { var item=inventory.getItem(slot); when(event.getCurrentItem()).thenReturn(item); } return event; }
     @Test void confirmChargesOnlyNewSelectionsAndCancelDiscardsDraft() {
         category("saved",5); category("new",7); data.setActiveCategories(new ArrayList<>(List.of("saved"))); data.setPoints(10);
         manager.openLoadout(player); var holder=(LoadoutHolder)inventory.getHolder(); assertEquals(player.getUniqueId(),holder.getPlayerId()); assertEquals(0,holder.getPage()); assertNull(holder.getInventory()); assertEquals(54,inventory.getSize());
@@ -62,8 +63,8 @@ class InventoryManagerTest {
     }
     @Test void otherOwnersAndOtherMenusAreIgnoredByClickAndCloseHandlers() {
         category("one",1); manager.openLoadout(player); var event=click(0); var close=mock(InventoryCloseEvent.class); when(close.getPlayer()).thenReturn(player); when(close.getView()).thenReturn(view);
-        var other=MockBukkit.getMock().createInventory(new LoadoutHolder(UUID.randomUUID(),0),54); when(view.getTopInventory()).thenReturn(other); manager.onInventoryClick(event); manager.onInventoryClose(close); verify(event,never()).setCancelled(true);
-        when(view.getTopInventory()).thenReturn(MockBukkit.getMock().createInventory(null,9)); manager.onInventoryClick(event); manager.onInventoryClose(close); verify(event,never()).setCancelled(true);
+        var other=TestInventories.withHolderLookup(MockBukkit.getMock().createInventory(new LoadoutHolder(UUID.randomUUID(),0),54)); when(view.getTopInventory()).thenReturn(other); manager.onInventoryClick(event); manager.onInventoryClose(close); verify(event,never()).setCancelled(true);
+        var menu=TestInventories.withHolderLookup(MockBukkit.getMock().createInventory(null,9)); when(view.getTopInventory()).thenReturn(menu); manager.onInventoryClick(event); manager.onInventoryClose(close); verify(event,never()).setCancelled(true);
         when(close.getPlayer()).thenReturn(mock(HumanEntity.class)); manager.onInventoryClose(close);
         when(view.getTopInventory()).thenReturn(inventory); manager.onInventoryClick(click(0)); manager.onInventoryClick(click(49)); assertEquals(List.of("one"),data.getActiveCategories());
     }

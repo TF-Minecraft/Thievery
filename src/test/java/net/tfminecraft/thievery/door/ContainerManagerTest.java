@@ -5,6 +5,7 @@ import static org.mockito.Mockito.*;
 import java.util.*;
 import net.tfminecraft.rpcharacters.grave.GraveManager;
 import net.tfminecraft.thievery.utils.ToolResolver;
+import net.tfminecraft.thievery.TestInventories;
 import org.bukkit.*;
 import org.bukkit.block.*;
 import org.bukkit.entity.*;
@@ -114,7 +115,7 @@ class ContainerManagerTest {
     }
 
     @Test void clickingPluginMenuDoesNotInspectLocksOrAlertStaff() {
-        var inventory=Bukkit.createInventory(null,9,"Menu");
+        var inventory=TestInventories.withHolderLookup(Bukkit.createInventory(null,9,"Menu"));
         var event=mock(InventoryClickEvent.class);
         when(event.getWhoClicked()).thenReturn(player);
         when(event.getInventory()).thenReturn(inventory);
@@ -126,6 +127,21 @@ class ContainerManagerTest {
         verifyNoInteractions(storage);
         verify(player,never()).sendMessage(anyString());
         verify(event,never()).setCancelled(true);
+    }
+
+    @Test void takingFromUnownedContainerSkipsTheDataFileAndBlockSnapshot() {
+        var barrel=block(0,Material.BARREL); var inventory=TestInventories.withHolderLookup(((Container)barrel.getState()).getInventory());
+        var event=mock(InventoryClickEvent.class);
+        when(event.getWhoClicked()).thenReturn(player);
+        when(event.getInventory()).thenReturn(inventory);
+        when(event.getClick()).thenReturn(ClickType.LEFT);
+        when(event.getCurrentItem()).thenReturn(new ItemStack(Material.DIAMOND));
+
+        manager.onInventoryClick(event);
+
+        verify(storage).getOwner(barrel.getLocation());
+        verify(storage,never()).loadContainerData(any());
+        verify(inventory,never()).getHolder();
     }
 
     @Test void accessToLeftHalfDoesNotAllowOpeningForeignRightHalfButStaffCanBypassSilently() {
@@ -278,7 +294,7 @@ class ContainerManagerTest {
         data.put(chest.left().getLocation(),new ContainerData(chest.left().getLocation(),UUID.randomUUID())); manager.onInventoryMoveItem(event); verify(event).setCancelled(true);
     }
     @Test void takingFromForeignContainerAlertsOnlyOptedInStaffAndThrottlesRepeats() {
-        var barrel=block(0,Material.BARREL); var inventory=((Container)barrel.getState()).getInventory(); var lock=lock(barrel,UUID.randomUUID());
+        var barrel=block(0,Material.BARREL); var inventory=TestInventories.withHolderLookup(((Container)barrel.getState()).getInventory()); var lock=lock(barrel,UUID.randomUUID());
         var staff=mock(Player.class); when(staff.getUniqueId()).thenReturn(UUID.randomUUID()); when(staff.hasPermission("thievery.admin")).thenReturn(true);
         var disabled=mock(Player.class); when(disabled.getUniqueId()).thenReturn(UUID.randomUUID()); when(disabled.hasPermission("thievery.admin")).thenReturn(true); var ordinary=mock(Player.class);
         manager.enableFeedback(staff);

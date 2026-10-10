@@ -163,7 +163,7 @@ public class InventoryManager implements Listener {
     @EventHandler
     public void onInventoryClick(InventoryClickEvent e) {
         if (!(e.getWhoClicked() instanceof Player player)) return;
-        if (!(e.getView().getTopInventory().getHolder() instanceof LoadoutHolder holder)) return;
+        if (!(e.getView().getTopInventory().getHolder(false) instanceof LoadoutHolder holder)) return;
         if (!holder.getPlayerId().equals(player.getUniqueId())) return;
 
         e.setCancelled(true);
@@ -235,7 +235,7 @@ public class InventoryManager implements Listener {
     @EventHandler
     public void onInventoryClose(InventoryCloseEvent e) {
         if (!(e.getPlayer() instanceof Player player)) return;
-        if (!(e.getView().getTopInventory().getHolder() instanceof LoadoutHolder holder)) return;
+        if (!(e.getView().getTopInventory().getHolder(false) instanceof LoadoutHolder holder)) return;
         if (!holder.getPlayerId().equals(player.getUniqueId())) return;
 
         sessions.remove(player.getUniqueId());

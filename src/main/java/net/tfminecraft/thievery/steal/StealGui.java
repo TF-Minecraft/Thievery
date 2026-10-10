@@ -438,7 +438,7 @@ public final class StealGui {
         if (player == null || !player.isOnline() || holder == null || title == null) {
             return;
         }
-        if (!(player.getOpenInventory().getTopInventory().getHolder() instanceof StealGuiHolder openHolder)) {
+        if (!(player.getOpenInventory().getTopInventory().getHolder(false) instanceof StealGuiHolder openHolder)) {
             return;
         }
         if (!openHolder.getPlayerId().equals(holder.getPlayerId()) || openHolder.getKind() != holder.getKind()) {

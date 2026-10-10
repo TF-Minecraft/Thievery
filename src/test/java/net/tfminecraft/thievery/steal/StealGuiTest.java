@@ -131,10 +131,10 @@ class StealGuiTest {
         UUID id=UUID.randomUUID(); var holder=new StealGuiHolder(id,StealGuiHolder.Kind.CHEST); var player=mock(Player.class,RETURNS_DEEP_STUBS);
         StealGui.updateTitle(null,holder,"new"); StealGui.updateTitle(player,holder,"new"); verify(player,never()).getOpenInventory();
         when(player.isOnline()).thenReturn(true); StealGui.updateTitle(player,null,"new"); StealGui.updateTitle(player,holder,null); verify(player,never()).getOpenInventory();
-        var view=player.getOpenInventory(); var top=view.getTopInventory(); when(top.getHolder()).thenReturn(null); StealGui.updateTitle(player,holder,"new"); verify(view,never()).setTitle(anyString());
-        when(top.getHolder()).thenReturn(new StealGuiHolder(UUID.randomUUID(),StealGuiHolder.Kind.CHEST)); StealGui.updateTitle(player,holder,"new"); verify(view,never()).setTitle(anyString());
-        when(top.getHolder()).thenReturn(new StealGuiHolder(id,StealGuiHolder.Kind.ROBBERY)); StealGui.updateTitle(player,holder,"new"); verify(view,never()).setTitle(anyString());
-        when(top.getHolder()).thenReturn(holder); when(view.getTitle()).thenReturn("new"); StealGui.updateTitle(player,holder,"new"); verify(view,never()).setTitle(anyString());
+        var view=player.getOpenInventory(); var top=view.getTopInventory(); when(top.getHolder(false)).thenReturn(null); StealGui.updateTitle(player,holder,"new"); verify(view,never()).setTitle(anyString());
+        when(top.getHolder(false)).thenReturn(new StealGuiHolder(UUID.randomUUID(),StealGuiHolder.Kind.CHEST)); StealGui.updateTitle(player,holder,"new"); verify(view,never()).setTitle(anyString());
+        when(top.getHolder(false)).thenReturn(new StealGuiHolder(id,StealGuiHolder.Kind.ROBBERY)); StealGui.updateTitle(player,holder,"new"); verify(view,never()).setTitle(anyString());
+        when(top.getHolder(false)).thenReturn(holder); when(view.getTitle()).thenReturn("new"); StealGui.updateTitle(player,holder,"new"); verify(view,never()).setTitle(anyString());
         when(view.getTitle()).thenReturn("old"); StealGui.updateTitle(player,holder,"new"); verify(view).setTitle("new");
     }
 }
