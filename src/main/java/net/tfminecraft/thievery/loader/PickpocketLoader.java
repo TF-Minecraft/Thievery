@@ -15,8 +15,7 @@ public final class PickpocketLoader {
     private static double budget = 10;
     private static int cooldownHours = 1;
     private static double maxDistance = 4;
-    private static String alertSubtitle = "#d65c5cSomeone is pickpocketing you!";
-    private static String alertSubtitleCritical = "#d65c5c{character_name} is pickpocketing you!";
+    private static String alertCritical = "#d65c5cYou catch {character_name} going through your pockets";
     private static boolean minigameEnabled = true;
     private static double minigameTimeLimitSeconds = 30;
 
@@ -30,10 +29,8 @@ public final class PickpocketLoader {
         budget = config.getDouble("pickpocket.budget", 10);
         cooldownHours = config.getInt("pickpocket.cooldown-hours", 1);
         maxDistance = config.getDouble("pickpocket.max-distance", 4);
-        alertSubtitle = ThieveryTexts.formatGui(config.getString("pickpocket.alert-subtitle",
-                "#d65c5cSomeone is pickpocketing you!"));
-        alertSubtitleCritical = ThieveryTexts.formatGui(config.getString("pickpocket.alert-subtitle-critical",
-                "#d65c5c{character_name} is pickpocketing you!"));
+        alertCritical = ThieveryTexts.formatGui(config.getString("pickpocket.alert-critical",
+                "#d65c5cYou catch {character_name} going through your pockets"));
         minigameEnabled = config.getBoolean("pickpocket.minigame.enabled", true);
         minigameTimeLimitSeconds = Math.max(5.0, config.getDouble("pickpocket.minigame.time-limit-seconds", 30));
 
@@ -59,12 +56,8 @@ public final class PickpocketLoader {
         return maxDistance;
     }
 
-    public static String getAlertSubtitle() {
-        return alertSubtitle;
-    }
-
-    public static String getAlertSubtitleCritical() {
-        return alertSubtitleCritical;
+    public static String getAlertCritical() {
+        return alertCritical;
     }
 
     public static boolean isMinigameEnabled() {

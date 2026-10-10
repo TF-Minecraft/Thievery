@@ -258,7 +258,7 @@ class PickpocketGameTest {
         verify(view).remove();
         assertFalse(LockFreeze.isFrozen(player));
         assertEquals(0.2f, player.getWalkSpeed());
-        verify(victim, never()).sendTitle(anyString(), anyString(), anyInt(), anyInt(), anyInt());
+        verify(victim, never()).playSound(any(Location.class), eq(Sound.ITEM_BUNDLE_REMOVE_ONE), anyFloat(), anyFloat());
         assertFalse(lockPicks.isOnCooldown(player.getUniqueId(), game.targetId));
     }
 
@@ -277,7 +277,7 @@ class PickpocketGameTest {
         assertTrue(game.bar.getTitle().contains("Your mark felt that"));
         verify(view).label(Component.text("Noticed", RingView.RED), PickpocketGame.WORD_SIZE);
         verify(view).fill(1.0, RingView.RED, RingView.RED);
-        verify(victim).sendTitle(eq(""), contains("pickpocketing you"), eq(5), eq(40), eq(10));
+        verify(victim).playSound(any(Location.class), eq(Sound.ITEM_BUNDLE_REMOVE_ONE), eq(1f), eq(0.8f));
         verify(player).playSound(any(Location.class), eq(Sound.BLOCK_NOTE_BLOCK_BASS), eq(0.8f), eq(0.6f));
         drainMessages();
         assertTrue(lockPicks.isOnCooldown(player.getUniqueId(), game.targetId));
@@ -311,7 +311,7 @@ class PickpocketGameTest {
         assertEquals(LockMinigame.Outcome.FAILED, game.outcome);
         assertEquals("§7You draw your hand back.", player.nextMessage());
         assertEquals("§cYour mark felt your hand!", player.nextMessage());
-        verify(victim).sendTitle(eq(""), contains("pickpocketing you"), eq(5), eq(40), eq(10));
+        verify(victim).playSound(any(Location.class), eq(Sound.ITEM_BUNDLE_REMOVE_ONE), eq(1f), eq(0.8f));
         assertTrue(lockPicks.isOnCooldown(player.getUniqueId(), game.targetId));
     }
 
@@ -340,14 +340,14 @@ class PickpocketGameTest {
         PickpocketGame game = mashing();
         manager.onQuit(new PlayerQuitEvent(player, Component.empty(), PlayerQuitEvent.QuitReason.DISCONNECTED));
         assertTrue(lockPicks.isOnCooldown(player.getUniqueId(), game.targetId));
-        verify(victim).sendTitle(eq(""), contains("pickpocketing you"), eq(5), eq(40), eq(10));
+        verify(victim).playSound(any(Location.class), eq(Sound.ITEM_BUNDLE_REMOVE_ONE), eq(1f), eq(0.8f));
 
         lockPicks.clearCooldown(player.getUniqueId());
         drainMessages();
         PickpocketGame second = mashing();
         doReturn(false).when(victim).isOnline();
         second.penalise(player);
-        verify(victim, times(1)).sendTitle(anyString(), anyString(), anyInt(), anyInt(), anyInt());
+        verify(victim, times(1)).playSound(any(Location.class), eq(Sound.ITEM_BUNDLE_REMOVE_ONE), anyFloat(), anyFloat());
         assertNull(player.nextMessage());
     }
 
@@ -423,7 +423,7 @@ class PickpocketGameTest {
         assertEquals("§7You draw your hand back.", player.nextMessage());
         assertNull(player.nextMessage());
         assertTrue(lockPicks.isOnCooldown(player.getUniqueId(), "pocket:test"));
-        verify(victim, never()).sendTitle(anyString(), anyString(), anyInt(), anyInt(), anyInt());
+        verify(victim, never()).playSound(any(Location.class), eq(Sound.ITEM_BUNDLE_REMOVE_ONE), anyFloat(), anyFloat());
     }
 
     @Test

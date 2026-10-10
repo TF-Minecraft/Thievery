@@ -3,6 +3,8 @@ package net.tfminecraft.thievery.player;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
+
 import net.tfminecraft.rpcharacters.managers.PlayerManager;
 import net.tfminecraft.rpcharacters.objects.RPCharacter;
 import net.tfminecraft.thievery.Thievery;
@@ -31,27 +33,25 @@ public final class PickpocketVictimAlerter {
             if (Math.random() < criticalChance && !thiefData.isCriticalOnCooldown(targetKey)) {
                 thiefData.recordCriticalClue(targetKey);
                 Database.savePlayerData(thiefData);
-                String subtitle = PickpocketLoader.getAlertSubtitleCritical()
-                        .replace("{character_name}", character.getName());
-                alertVictim(victim, subtitle);
+                rummage(victim);
+                victim.sendActionBar(LegacyComponentSerializer.legacySection().deserialize(
+                        PickpocketLoader.getAlertCritical().replace("{character_name}", character.getName())));
                 return;
             }
         }
 
         if (Math.random() < risk) {
-            alertVictim(victim, PickpocketLoader.getAlertSubtitle());
+            rummage(victim);
         }
     }
 
     /** Tells the victim outright, as when a pickpocket fumbles. */
     public static void alert(Player victim) {
-        alertVictim(victim, PickpocketLoader.getAlertSubtitle());
+        rummage(victim);
     }
 
-    // Keep the existing legacy text representation, formatting, and exact-string comparisons.
-    @SuppressWarnings("deprecation")
-    private static void alertVictim(Player victim, String subtitle) {
-        victim.sendTitle("", subtitle, 5, 40, 10);
-        victim.playSound(victim.getLocation(), Sound.BLOCK_IRON_TRAPDOOR_OPEN, 1f, 1f);
+    // Only the mark hears someone going through their bag.
+    private static void rummage(Player victim) {
+        victim.playSound(victim.getLocation(), Sound.ITEM_BUNDLE_REMOVE_ONE, 1f, 0.8f);
     }
 }

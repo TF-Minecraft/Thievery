@@ -45,10 +45,8 @@ class ActivityLoadersTest {
         assertEquals(10, PickpocketLoader.getBudget());
         assertEquals(3_600_000L, PickpocketLoader.getCooldownMillis());
         assertEquals(4, PickpocketLoader.getMaxDistance());
-        assertEquals(ThieveryTexts.formatGui("#d65c5cSomeone is pickpocketing you!"),
-                PickpocketLoader.getAlertSubtitle());
-        assertEquals(ThieveryTexts.formatGui("#d65c5c{character_name} is pickpocketing you!"),
-                PickpocketLoader.getAlertSubtitleCritical());
+        assertEquals(ThieveryTexts.formatGui("#d65c5cYou catch {character_name} going through your pockets"),
+                PickpocketLoader.getAlertCritical());
     }
 
     @Test
@@ -68,8 +66,7 @@ class ActivityLoadersTest {
                   budget: 25.5
                   cooldown-hours: 1000000
                   max-distance: 2.5
-                  alert-subtitle: '#56ccf2Watch your pockets'
-                  alert-subtitle-critical: '#d65c5cCaught {character_name}'
+                  alert-critical: '#d65c5cCaught {character_name}'
                   minigame:
                     enabled: false
                     time-limit-seconds: 12.5
@@ -91,9 +88,7 @@ class ActivityLoadersTest {
         assertEquals(25.5, PickpocketLoader.getBudget());
         assertEquals(3_600_000_000_000L, PickpocketLoader.getCooldownMillis());
         assertEquals(2.5, PickpocketLoader.getMaxDistance());
-        assertEquals(ThieveryTexts.formatGui("#56ccf2Watch your pockets"), PickpocketLoader.getAlertSubtitle());
-        assertEquals(ThieveryTexts.formatGui("#d65c5cCaught {character_name}"),
-                PickpocketLoader.getAlertSubtitleCritical());
+        assertEquals(ThieveryTexts.formatGui("#d65c5cCaught {character_name}"), PickpocketLoader.getAlertCritical());
         assertFalse(PickpocketLoader.isMinigameEnabled());
         assertEquals(12.5, PickpocketLoader.getMinigameTimeLimitSeconds());
         config.set("pickpocket.minigame.time-limit-seconds", 2);
