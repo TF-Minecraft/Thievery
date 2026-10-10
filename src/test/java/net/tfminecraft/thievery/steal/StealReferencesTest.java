@@ -5,6 +5,7 @@ import static org.mockito.Mockito.*;
 
 import java.util.*;
 import net.tfminecraft.thievery.Thievery;
+import net.tfminecraft.thievery.TestInventories;
 import net.tfminecraft.thievery.cache.Cache;
 import net.tfminecraft.thievery.cache.Parameters;
 import net.tfminecraft.thievery.category.DenarMoney;
@@ -515,7 +516,7 @@ class StealReferencesTest {
         var session = new RobberySession(thief.getUniqueId(), victim.getUniqueId(), new StealBudget(100), StealGui.Layout.createRobbery(36));
         session.setState(RobberySession.State.ACTIVE); session.setActiveEndMs(System.currentTimeMillis() + 60000); return session;
     }
-    private Inventory inventory(StealReference ref) { return server.createInventory(ref.getHolder(), ref.getLayout().getGuiSize()); }
+    private Inventory inventory(StealReference ref) { return TestInventories.withHolderLookup(server.createInventory(ref.getHolder(), ref.getLayout().getGuiSize())); }
     private InventoryClickEvent click(Inventory inv, int slot, ItemStack item, ClickType type) {
         InventoryClickEvent event = mock(InventoryClickEvent.class, RETURNS_DEEP_STUBS);
         when(event.getClickedInventory()).thenReturn(inv); when(event.getView().getTopInventory()).thenReturn(inv);

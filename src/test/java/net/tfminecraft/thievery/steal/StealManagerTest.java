@@ -37,18 +37,18 @@ class StealManagerTest {
         var manager=new StealManager(); UUID id=UUID.randomUUID(); var player=player(id); var reference=reference(id); manager.registerSession(reference);
         try(var bukkit=mockStatic(Bukkit.class)) {
             manager.tickAll(); verify(reference,never()).tick(any()); bukkit.when(()->Bukkit.getPlayer(id)).thenReturn(player); when(player.isOnline()).thenReturn(false); manager.tickAll(); verify(reference,never()).tick(any()); when(player.isOnline()).thenReturn(true);
-            var top=player.getOpenInventory().getTopInventory(); when(top.getHolder()).thenReturn(null); manager.tickAll();
-            when(top.getHolder()).thenReturn(new StealGuiHolder(id,StealGuiHolder.Kind.ROBBERY)); manager.tickAll();
-            when(top.getHolder()).thenReturn(new StealGuiHolder(UUID.randomUUID(),StealGuiHolder.Kind.CHEST)); manager.tickAll(); verify(reference,never()).tick(any());
-            when(top.getHolder()).thenReturn(new StealGuiHolder(id,StealGuiHolder.Kind.CHEST)); doAnswer(call->{manager.endSession(id,false); return null;}).when(reference).tick(player); manager.tickAll(); verify(reference).tick(player); assertFalse(manager.hasSession(id));
+            var top=player.getOpenInventory().getTopInventory(); when(top.getHolder(false)).thenReturn(null); manager.tickAll();
+            when(top.getHolder(false)).thenReturn(new StealGuiHolder(id,StealGuiHolder.Kind.ROBBERY)); manager.tickAll();
+            when(top.getHolder(false)).thenReturn(new StealGuiHolder(UUID.randomUUID(),StealGuiHolder.Kind.CHEST)); manager.tickAll(); verify(reference,never()).tick(any());
+            when(top.getHolder(false)).thenReturn(new StealGuiHolder(id,StealGuiHolder.Kind.CHEST)); doAnswer(call->{manager.endSession(id,false); return null;}).when(reference).tick(player); manager.tickAll(); verify(reference).tick(player); assertFalse(manager.hasSession(id));
         }
     }
     @Test void clickAndCloseEventsDispatchOnlyPlayerTheftInventoriesWithMatchingSessionKind() {
         var manager=new StealManager(); UUID id=UUID.randomUUID(); var player=player(id); var reference=reference(id);
         var click=mock(InventoryClickEvent.class,RETURNS_DEEP_STUBS); var close=mock(InventoryCloseEvent.class,RETURNS_DEEP_STUBS);
         var nonplayer=mock(HumanEntity.class); when(click.getWhoClicked()).thenReturn(nonplayer); when(close.getPlayer()).thenReturn(nonplayer); manager.onInventoryClick(click); manager.onInventoryClose(close);
-        when(click.getWhoClicked()).thenReturn(player); when(close.getPlayer()).thenReturn(player); when(click.getView().getTopInventory().getHolder()).thenReturn(null); when(close.getView().getTopInventory().getHolder()).thenReturn(null); manager.onInventoryClick(click); manager.onInventoryClose(close);
-        var holder=new StealGuiHolder(id,StealGuiHolder.Kind.CHEST); when(click.getView().getTopInventory().getHolder()).thenReturn(holder); when(close.getView().getTopInventory().getHolder()).thenReturn(holder); manager.onInventoryClick(click); manager.onInventoryClose(close);
+        when(click.getWhoClicked()).thenReturn(player); when(close.getPlayer()).thenReturn(player); when(click.getView().getTopInventory().getHolder(false)).thenReturn(null); when(close.getView().getTopInventory().getHolder(false)).thenReturn(null); manager.onInventoryClick(click); manager.onInventoryClose(close);
+        var holder=new StealGuiHolder(id,StealGuiHolder.Kind.CHEST); when(click.getView().getTopInventory().getHolder(false)).thenReturn(holder); when(close.getView().getTopInventory().getHolder(false)).thenReturn(holder); manager.onInventoryClick(click); manager.onInventoryClose(close);
         manager.registerSession(reference); when(reference.getKind()).thenReturn(StealGuiHolder.Kind.ROBBERY); manager.onInventoryClick(click); manager.onInventoryClose(close); verify(reference,never()).handleClick(any(),any()); verify(reference,never()).onClose(any());
         when(reference.getKind()).thenReturn(StealGuiHolder.Kind.CHEST); manager.onInventoryClick(click); verify(reference).handleClick(click,player); manager.onInventoryClose(close); verify(reference).onClose(player); assertFalse(manager.hasSession(id));
         assertNull(StealManager.getStealGuiHolder(null)); assertSame(holder,StealManager.getStealGuiHolder(click.getView().getTopInventory()));

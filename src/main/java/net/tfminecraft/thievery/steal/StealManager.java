@@ -112,7 +112,9 @@ public class StealManager implements Listener {
         if (inventory == null) {
             return null;
         }
-        InventoryHolder inventoryHolder = inventory.getHolder();
+        // Runs on every inventory click and close, and every tick per session. getHolder() would copy a block
+        // inventory (a barrel reloads all of its items) just to answer this.
+        InventoryHolder inventoryHolder = inventory.getHolder(false);
         return inventoryHolder instanceof StealGuiHolder stealGuiHolder ? stealGuiHolder : null;
     }
 
