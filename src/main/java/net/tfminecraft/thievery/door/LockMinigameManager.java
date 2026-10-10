@@ -37,23 +37,15 @@ import net.tfminecraft.thievery.player.RiskCalculator;
 import net.tfminecraft.thievery.utils.ThieveryTexts;
 
 /**
- * Runs the lock minigame that must be solved before a chest lockpick session opens: the pin grid dialog or, for
- * {@code dial-chance} of locks, the floating lockpick ring. Also runs the floating pickpocket ring that must be
- * filled before a pocket opens. Handles the fail cooldown, penalties, and everything that can interrupt a pick:
+ * Runs the floating lockpick ring that must be solved before a chest lockpick session opens, and the floating
+ * pickpocket ring that must be filled before a pocket opens. Handles the fail cooldown, penalties, and everything that can interrupt a pick:
  * leaving, being hit, being moved, a crash, a reload.
  */
 public class LockMinigameManager implements Listener {
 
-    /** A lock minigame forced by staff testing; {@code null} means the configured random choice. */
-    public enum Mode {
-        GRID,
-        DIAL
-    }
-
     final LockPickManager lockPickManager;
     private final Random random;
     private final Map<UUID, LockMinigame> games = new HashMap<>();
-    PinGridGame.GridScreens gridScreens = GridDialogs::frames;
     RingDialGame.RingViews ringViews = (player, tumblers, slips) ->
             RingView.open(Thievery.getInstance(), player, tumblers, slips);
     PickpocketGame.GaugeViews gaugeViews = (player, mark, phases) ->
@@ -79,17 +71,17 @@ public class LockMinigameManager implements Listener {
     }
 
     /**
-     * Opens a lock minigame, then passes the number of mistakes to {@code onSolved} once it is solved. Passes 0
+     * Opens the lockpick ring, then passes the number of slips to {@code onSolved} once it is solved. Passes 0
      * straight away when the minigame is off. Returns false when the thief cannot start: still on the fail
-     * cooldown for this lock, or riding or gliding when the ring needs them still.
+     * cooldown for this lock, or riding or gliding.
      */
     public boolean start(Player player, Block target, IntConsumer onSolved) {
-        return start(player, target, null, onSolved);
+        return start(player, target, false, onSolved);
     }
 
-    /** As {@link #start(Player, Block, IntConsumer)}, but a forced {@code mode} runs even when the minigame is off. */
-    public boolean start(Player player, Block target, Mode mode, IntConsumer onSolved) {
-        if (mode == null && !Parameters.chestMinigameEnabled) {
+    /** As {@link #start(Player, Block, IntConsumer)}, but a {@code forced} ring runs even when the minigame is off. */
+    public boolean start(Player player, Block target, boolean forced, IntConsumer onSolved) {
+        if (!forced && !Parameters.chestMinigameEnabled) {
             onSolved.accept(0);
             return true;
         }
@@ -100,23 +92,11 @@ public class LockMinigameManager implements Listener {
                     + lockPickManager.getCooldownRemainingSeconds(playerId, targetId) + "s."));
             return false;
         }
-        boolean dial = mode == null ? random.nextDouble() < Parameters.chestDialChance : mode == Mode.DIAL;
-        if (dial && !canHoldStill(player, "work this lock")) {
+        if (!canHoldStill(player, "work this lock")) {
             return false;
         }
-
         int dexterity = RiskCalculator.getDexterity(player);
-        LockMinigame game;
-        if (dial) {
-            game = new RingDialGame(this, playerId, target, targetId, random, dexterity, ringViews, onSolved);
-        } else {
-            PinGrid grid = new PinGrid(Parameters.chestMinigameRows, Parameters.chestMinigameColumns,
-                    Parameters.chestMinigamePins, random);
-            int recallTicks = LockMinigame.ticks(Parameters.chestMinigameRecallSeconds
-                    + dexterity * Parameters.chestMinigameRecallSecondsPerDexterity);
-            game = new PinGridGame(this, playerId, target, targetId, grid, recallTicks, gridScreens, onSolved);
-        }
-        play(player, game);
+        play(player, new RingDialGame(this, playerId, target, targetId, random, dexterity, ringViews, onSolved));
         return true;
     }
 
@@ -160,9 +140,7 @@ public class LockMinigameManager implements Listener {
         game.pick = player.getInventory().getItemInMainHand().clone();
         game.task = Bukkit.getScheduler().runTaskTimer(Thievery.getInstance(), () -> tick(player, game), 1L, 1L);
         games.put(game.playerId, game);
-        if (game.showsBar()) {
-            game.bar.addPlayer(player);
-        }
+        game.bar.addPlayer(player);
         game.begin(player);
     }
 
@@ -321,14 +299,14 @@ public class LockMinigameManager implements Listener {
     }
 
     /**
-     * Keeps a ring thief in place, so knockback, water or a nudge cannot drift them away; looking around is fine.
+     * Keeps the thief in place, so knockback, water or a nudge cannot drift them away; looking around is fine.
      * Only the horizontal position is held, so a thief who started mid-jump still lands instead of hovering until
      * the server kicks them for flying.
      */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onMove(PlayerMoveEvent event) {
         LockMinigame game = games.get(event.getPlayer().getUniqueId());
-        if (game == null || !game.holdsStill()) {
+        if (game == null) {
             return;
         }
         Location from = event.getFrom();
@@ -345,16 +323,10 @@ public class LockMinigameManager implements Listener {
     /**
      * Keeps the lockpick in hand while a lock is being worked: no scrolling the hotbar, dropping, swapping hands or
      * moving items, any of which could leave a solved lock with no pick to open it, or a failed one breaking
-     * something else. The grid's dialog blocks these keys on a vanilla client, but not a modified one.
+     * something else.
      */
     private boolean handsOnTheLock(org.bukkit.entity.HumanEntity player) {
         return games.containsKey(player.getUniqueId());
-    }
-
-    /** The ring holds the thief still with their off hand free; the grid's dialog leaves nothing to click. */
-    private boolean heldStill(org.bukkit.entity.HumanEntity player) {
-        LockMinigame game = games.get(player.getUniqueId());
-        return game != null && game.holdsStill();
     }
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
@@ -379,12 +351,12 @@ public class LockMinigameManager implements Listener {
     }
 
     /**
-     * The off hand is free, so without this a ring thief could throw a pearl, eat or place blocks mid-pick. Clicks
+     * The off hand is free, so without this a thief could throw a pearl, eat or place blocks mid-pick. Clicks
      * at the air arrive already cancelled but still use the item, so cancelled events are handled too.
      */
     @EventHandler(priority = EventPriority.LOWEST)
     public void onInteract(PlayerInteractEvent event) {
-        if (heldStill(event.getPlayer())) {
+        if (handsOnTheLock(event.getPlayer())) {
             event.setCancelled(true);
         }
     }
@@ -392,7 +364,7 @@ public class LockMinigameManager implements Listener {
     /** A frozen thief can still right-click a horse or a boat, which would carry them off with the ring. */
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
     public void onMount(EntityMountEvent event) {
-        if (event.getEntity() instanceof org.bukkit.entity.HumanEntity rider && heldStill(rider)) {
+        if (event.getEntity() instanceof org.bukkit.entity.HumanEntity rider && handsOnTheLock(rider)) {
             event.setCancelled(true);
         }
     }

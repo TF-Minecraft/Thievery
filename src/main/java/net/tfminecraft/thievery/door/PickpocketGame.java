@@ -99,11 +99,6 @@ final class PickpocketGame extends LockMinigame {
     }
 
     @Override
-    boolean holdsStill() {
-        return true;
-    }
-
-    @Override
     Sound solvedSound() {
         return Sound.ITEM_BUNDLE_REMOVE_ONE;
     }
