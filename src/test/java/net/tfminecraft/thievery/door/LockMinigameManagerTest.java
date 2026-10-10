@@ -59,17 +59,12 @@ class LockMinigameManagerTest {
         risk = mockStatic(RiskCalculator.class);
         saved.take();
         Parameters.chestMinigameEnabled = true;
-        Parameters.chestDialChance = 0.5;
-        Parameters.chestMinigameRows = 2;
-        Parameters.chestMinigameColumns = 3;
-        Parameters.chestMinigamePins = 2;
         Parameters.chestMinigamePrepareSeconds = 0.05;
         Parameters.chestMinigameFailBreakChance = 0.0;
         Parameters.lockpickFailCooldownMs = 60_000L;
         lockPicks = new LockPickManager();
         random = mock(Random.class);
         manager = new LockMinigameManager(lockPicks, random);
-        manager.gridScreens = (onCell, onGiveUp) -> (who, screen) -> {};
         view = mock(RingView.class);
         manager.ringViews = (who, tumblers, slips) -> view;
         world = server.addSimpleWorld("vault");
@@ -89,8 +84,8 @@ class LockMinigameManagerTest {
         MockBukkit.unmock();
     }
 
-    private boolean start(LockMinigameManager.Mode mode) {
-        return manager.start(player, chest, mode, mistakes -> solved.incrementAndGet());
+    private boolean start() {
+        return manager.start(player, chest, true, slips -> solved.incrementAndGet());
     }
 
     private void ticks(int count) {
@@ -105,7 +100,7 @@ class LockMinigameManagerTest {
             assertSame(view, real.ringViews.open(player, 4, 3));
             views.verify(() -> RingView.open(Thievery.getInstance(), player, 4, 3));
         }
-        assertTrue(start(LockMinigameManager.Mode.GRID));
+        assertTrue(start());
         LockMinigame old = manager.game(player.getUniqueId());
         manager.cancel(player.getUniqueId());
         manager.giveUp(player, old);
@@ -127,20 +122,14 @@ class LockMinigameManagerTest {
         assertTrue(manager.start(player, chest, mistakes -> solved.incrementAndGet()));
         assertEquals(1, solved.get());
         assertFalse(manager.isPlaying(player.getUniqueId()));
-        assertTrue(start(LockMinigameManager.Mode.GRID));
-        assertInstanceOf(PinGridGame.class, manager.game(player.getUniqueId()));
+        assertTrue(start());
+        assertInstanceOf(RingDialGame.class, manager.game(player.getUniqueId()));
         assertEquals(1, solved.get());
     }
 
     @Test
-    void theRollPicksTheRingOrTheGridAndForcedModesWin() {
-        when(random.nextDouble()).thenReturn(0.4);
-        assertTrue(start(null));
-        assertInstanceOf(RingDialGame.class, manager.game(player.getUniqueId()));
-        when(random.nextDouble()).thenReturn(0.6);
-        assertTrue(start(null));
-        assertInstanceOf(PinGridGame.class, manager.game(player.getUniqueId()));
-        assertTrue(start(LockMinigameManager.Mode.DIAL));
+    void everyChestPickOpensTheRing() {
+        assertTrue(manager.start(player, chest, slips -> solved.incrementAndGet()));
         assertInstanceOf(RingDialGame.class, manager.game(player.getUniqueId()));
         assertTrue(manager.isPicking(chest));
         assertFalse(manager.isPicking(chest.getRelative(1, 0, 0)));
@@ -149,14 +138,14 @@ class LockMinigameManagerTest {
     @Test
     void aThiefOnCooldownIsSentAwayAndStartingAgainReplacesTheLastGame() {
         lockPicks.applyCooldown(player.getUniqueId(), LockMinigameManager.targetId(chest.getLocation()));
-        assertFalse(start(LockMinigameManager.Mode.GRID));
+        assertFalse(start());
         String message = ((PlayerMock) player).nextMessage();
         assertTrue(message.startsWith("§cYour hands are still shaking. Try this lock again in "), message);
         assertFalse(manager.isPlaying(player.getUniqueId()));
         lockPicks.clearCooldown(player.getUniqueId());
-        assertTrue(start(LockMinigameManager.Mode.GRID));
+        assertTrue(start());
         LockMinigame first = manager.game(player.getUniqueId());
-        assertTrue(start(LockMinigameManager.Mode.GRID));
+        assertTrue(start());
         assertNotSame(first, manager.game(player.getUniqueId()));
         assertTrue(first.task.isCancelled());
         assertTrue(first.bar.getPlayers().isEmpty());
@@ -165,18 +154,18 @@ class LockMinigameManagerTest {
     @Test
     void theRingNeedsBothFeetOnTheGround() {
         doReturn(true).when(player).isInsideVehicle();
-        assertFalse(start(LockMinigameManager.Mode.DIAL));
+        assertFalse(start());
         assertEquals("§cYou need both feet on the ground to work this lock.", ((PlayerMock) player).nextMessage());
         doReturn(false).when(player).isInsideVehicle();
         doReturn(true).when(player).isGliding();
-        assertFalse(start(LockMinigameManager.Mode.DIAL));
-        assertTrue(start(LockMinigameManager.Mode.GRID));
-        assertInstanceOf(PinGridGame.class, manager.game(player.getUniqueId()));
+        assertFalse(start());
+        assertEquals("§cYou need both feet on the ground to work this lock.", ((PlayerMock) player).nextMessage());
+        assertFalse(manager.isPlaying(player.getUniqueId()));
     }
 
     @Test
     void cancellingEndsGamesQuietlyAndTicksStopForGoneThievesOrChests() {
-        assertTrue(start(LockMinigameManager.Mode.DIAL));
+        assertTrue(start());
         LockMinigame game = manager.game(player.getUniqueId());
         manager.cancel(player.getUniqueId());
         assertFalse(manager.isPlaying(player.getUniqueId()));
@@ -186,23 +175,25 @@ class LockMinigameManagerTest {
         manager.cancel(player.getUniqueId());
         manager.tick(player, game);
 
-        assertTrue(start(LockMinigameManager.Mode.GRID));
+        assertTrue(start());
         chest.setType(Material.STONE);
         ticks(1);
         assertFalse(manager.isPlaying(player.getUniqueId()));
 
         chest.setType(Material.CHEST);
-        assertTrue(start(LockMinigameManager.Mode.GRID));
+        assertTrue(start());
         doReturn(false).when(player).isOnline();
         ticks(1);
         assertFalse(manager.isPlaying(player.getUniqueId()));
         doReturn(true).when(player).isOnline();
 
-        PlayerMock other = server.addPlayer();
+        Player other = spy(server.addPlayer());
+        doReturn(true).when(other).isOnGround();
+        doReturn(RingDialGameTest.input(false, false, false, false, false)).when(other).getCurrentInput();
         Block barrel = chest.getRelative(2, 0, 0);
         barrel.setType(Material.BARREL);
-        assertTrue(start(LockMinigameManager.Mode.GRID));
-        assertTrue(manager.start(other, barrel, LockMinigameManager.Mode.GRID, mistakes -> {}));
+        assertTrue(start());
+        assertTrue(manager.start(other, barrel, true, slips -> {}));
         manager.cancelAll();
         assertFalse(manager.isPicking(chest));
         assertFalse(manager.isPicking(barrel));
@@ -211,7 +202,7 @@ class LockMinigameManagerTest {
 
     @Test
     void movementKeysReachOnlyAGameStillBeingPlayed() {
-        assertTrue(start(LockMinigameManager.Mode.DIAL));
+        assertTrue(start());
         RingDialGame game = (RingDialGame) manager.game(player.getUniqueId());
         manager.onInput(new PlayerInputEvent(player, RingDialGameTest.input(false, false, false, false, true)));
         assertEquals(LockMinigame.Outcome.FAILED, game.outcome);
@@ -226,7 +217,7 @@ class LockMinigameManagerTest {
 
     @Test
     void leavingMidPickIsAFailedAttemptButLeavingAfterASolveIsNot() {
-        assertTrue(start(LockMinigameManager.Mode.DIAL));
+        assertTrue(start());
         LockMinigame game = manager.game(player.getUniqueId());
         manager.onQuit(new PlayerQuitEvent(player, net.kyori.adventure.text.Component.empty(), PlayerQuitEvent.QuitReason.DISCONNECTED));
         assertFalse(manager.isPlaying(player.getUniqueId()));
@@ -235,7 +226,7 @@ class LockMinigameManagerTest {
         verify(view).remove();
 
         lockPicks.clearCooldown(player.getUniqueId());
-        assertTrue(start(LockMinigameManager.Mode.GRID));
+        assertTrue(start());
         LockMinigame solvedGame = manager.game(player.getUniqueId());
         solvedGame.solve(player);
         manager.onQuit(new PlayerQuitEvent(player, net.kyori.adventure.text.Component.empty(), PlayerQuitEvent.QuitReason.DISCONNECTED));
@@ -255,14 +246,14 @@ class LockMinigameManagerTest {
         manager.onJoin(new PlayerJoinEvent(player, net.kyori.adventure.text.Component.empty()));
         assertEquals(0.25f, player.getWalkSpeed());
 
-        assertTrue(start(LockMinigameManager.Mode.DIAL));
+        assertTrue(start());
         manager.onJoin(new PlayerJoinEvent(player, net.kyori.adventure.text.Component.empty()));
         assertTrue(LockFreeze.isFrozen(player));
     }
 
     @Test
     void beingHurtLosesThePins() {
-        assertTrue(start(LockMinigameManager.Mode.GRID));
+        assertTrue(start());
         LockMinigame game = manager.game(player.getUniqueId());
         EntityDamageEvent graze = mock(EntityDamageEvent.class);
         when(graze.getEntity()).thenReturn(player);
@@ -289,7 +280,7 @@ class LockMinigameManagerTest {
 
     @Test
     void beingMovedAwayEndsThePickWithoutAPenalty() {
-        assertTrue(start(LockMinigameManager.Mode.DIAL));
+        assertTrue(start());
         Location here = player.getLocation();
         manager.onTeleport(new PlayerTeleportEvent(player, here, here.clone().add(0.5, 0, 0.5)));
         assertTrue(manager.isPlaying(player.getUniqueId()));
@@ -299,7 +290,7 @@ class LockMinigameManagerTest {
         assertFalse(lockPicks.isOnCooldown(player.getUniqueId(), game.targetId));
         assertEquals("§7You were pulled away from the lock.", ((PlayerMock) player).nextMessage());
 
-        assertTrue(start(LockMinigameManager.Mode.GRID));
+        assertTrue(start());
         World other = server.addSimpleWorld("elsewhere");
         manager.onTeleport(new PlayerTeleportEvent(player, here, new Location(other, 0, 64, 0)));
         assertFalse(manager.isPlaying(player.getUniqueId()));
@@ -312,7 +303,7 @@ class LockMinigameManagerTest {
         Location away = here.clone().add(20, 0, 0);
         manager.onCommand(new PlayerCommandPreprocessEvent(player, "/spawn"));
 
-        assertTrue(start(LockMinigameManager.Mode.GRID));
+        assertTrue(start());
         LockMinigame game = manager.game(player.getUniqueId());
         assertFalse(game.ranCommand);
         manager.onCommand(new PlayerCommandPreprocessEvent(player, "/spawn"));
@@ -326,17 +317,17 @@ class LockMinigameManagerTest {
         for (PlayerTeleportEvent.TeleportCause cause : new PlayerTeleportEvent.TeleportCause[] {
                 PlayerTeleportEvent.TeleportCause.ENDER_PEARL, PlayerTeleportEvent.TeleportCause.CONSUMABLE_EFFECT}) {
             lockPicks.clearCooldown(player.getUniqueId());
-            assertTrue(start(LockMinigameManager.Mode.DIAL));
+            assertTrue(start());
             manager.onTeleport(new PlayerTeleportEvent(player, here, away, cause));
             assertTrue(lockPicks.isOnCooldown(player.getUniqueId(), game.targetId), cause.name());
         }
 
         // A staff /tp is a command too, but not the thief's own, and a teleport after the lock gave way costs nothing.
         lockPicks.clearCooldown(player.getUniqueId());
-        assertTrue(start(LockMinigameManager.Mode.DIAL));
+        assertTrue(start());
         manager.onTeleport(new PlayerTeleportEvent(player, here, away, PlayerTeleportEvent.TeleportCause.COMMAND));
         assertFalse(lockPicks.isOnCooldown(player.getUniqueId(), game.targetId));
-        assertTrue(start(LockMinigameManager.Mode.DIAL));
+        assertTrue(start());
         LockMinigame solved = manager.game(player.getUniqueId());
         solved.ranCommand = true;
         solved.outcome = LockMinigame.Outcome.SOLVED;
@@ -346,8 +337,8 @@ class LockMinigameManagerTest {
     }
 
     @Test
-    void aRingThiefIsHeldInPlaceButMayLookAroundAndStillFalls() {
-        assertTrue(start(LockMinigameManager.Mode.DIAL));
+    void aThiefIsHeldInPlaceButMayLookAroundAndStillFalls() {
+        assertTrue(start());
         Location from = new Location(world, 1, 64, 1, 0, 0);
         PlayerMoveEvent drift = new PlayerMoveEvent(player, from, new Location(world, 1.4, 64, 1, 30, 10));
         manager.onMove(drift);
@@ -366,11 +357,7 @@ class LockMinigameManagerTest {
         manager.onMove(look);
         assertEquals(90f, look.getTo().getYaw());
 
-        assertTrue(start(LockMinigameManager.Mode.GRID));
         Location walk = new Location(world, 3, 64, 1);
-        PlayerMoveEvent free = new PlayerMoveEvent(player, from, walk);
-        manager.onMove(free);
-        assertSame(walk, free.getTo());
         manager.cancel(player.getUniqueId());
         PlayerMoveEvent idle = new PlayerMoveEvent(player, from, walk);
         manager.onMove(idle);
@@ -378,8 +365,8 @@ class LockMinigameManagerTest {
     }
 
     @Test
-    void aRingThiefKeepsTheLockpickInHand() {
-        assertTrue(start(LockMinigameManager.Mode.DIAL));
+    void aThiefKeepsTheLockpickInHand() {
+        assertTrue(start());
         var held = new org.bukkit.event.player.PlayerItemHeldEvent(player, 0, 3);
         manager.onHotbar(held);
         assertTrue(held.isCancelled());
@@ -405,19 +392,10 @@ class LockMinigameManagerTest {
         manager.onMount(riderless);
         assertFalse(riderless.isCancelled());
 
-        assertTrue(start(LockMinigameManager.Mode.GRID));
-        var mountFree = new EntityMountEvent(player, horse);
-        manager.onMount(mountFree);
-        assertFalse(mountFree.isCancelled());
-        var eat = new org.bukkit.event.player.PlayerInteractEvent(player, org.bukkit.event.block.Action.RIGHT_CLICK_AIR,
-                new ItemStack(Material.BREAD), null, org.bukkit.block.BlockFace.SELF, org.bukkit.inventory.EquipmentSlot.OFF_HAND);
-        manager.onInteract(eat);
-        assertNotEquals(org.bukkit.event.Event.Result.DENY, eat.useItemInHand());
-        // The grid keeps the pick in hand too, against a modified client, but leaves clicks and mounts alone.
-        var gridHotbar = new org.bukkit.event.player.PlayerItemHeldEvent(player, 0, 3);
-        manager.onHotbar(gridHotbar);
-        assertTrue(gridHotbar.isCancelled());
         manager.cancel(player.getUniqueId());
+        var mountIdle = new EntityMountEvent(player, horse);
+        manager.onMount(mountIdle);
+        assertFalse(mountIdle.isCancelled());
         var hotbarIdle = new org.bukkit.event.player.PlayerItemHeldEvent(player, 0, 3);
         manager.onHotbar(hotbarIdle);
         assertFalse(hotbarIdle.isCancelled());
@@ -440,7 +418,7 @@ class LockMinigameManagerTest {
     @Test
     void penaltiesSnapOnePickFromAStackOrTheLastOneOrNoneInAnEmptyHand() {
         Parameters.chestMinigameFailBreakChance = 1.0;
-        assertTrue(start(LockMinigameManager.Mode.GRID));
+        assertTrue(start());
         LockMinigame game = manager.game(player.getUniqueId());
         player.getInventory().getItemInMainHand().setAmount(2);
         manager.penalise(player, game);
@@ -465,7 +443,7 @@ class LockMinigameManagerTest {
         assertFalse(LockMinigameManager.isWorkingALock(player));
         when(instance.getLockMinigameManager()).thenReturn(manager);
         assertFalse(LockMinigameManager.isWorkingALock(player));
-        assertTrue(start(LockMinigameManager.Mode.GRID));
+        assertTrue(start());
         assertTrue(LockMinigameManager.isWorkingALock(player));
         plugin.when(Thievery::getInstance).thenReturn(null);
         assertFalse(LockMinigameManager.isWorkingALock(player));

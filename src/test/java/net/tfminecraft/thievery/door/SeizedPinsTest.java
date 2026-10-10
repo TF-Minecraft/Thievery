@@ -77,14 +77,14 @@ class SeizedPinsTest {
     }
 
     @Test
-    void seizedCountSpreadsTheBreakChanceAcrossTheChestAndAddsGridMistakes() {
+    void seizedCountSpreadsTheBreakChanceAcrossTheChestAndAddsSlips() {
         double density = Parameters.chestSeizedDensity;
-        int perMistake = Parameters.chestSeizedPerGridMistake;
+        int perSlip = Parameters.chestSeizedPerSlip;
         double base = Parameters.chestBaseSuccessChance;
         double max = Parameters.maxSuccessChance;
         try (var risk = mockStatic(RiskCalculator.class)) {
             Parameters.chestSeizedDensity = 0.3;
-            Parameters.chestSeizedPerGridMistake = 1;
+            Parameters.chestSeizedPerSlip = 1;
             Parameters.chestBaseSuccessChance = 1.0;
             Parameters.maxSuccessChance = 0.95;
             risk.when(() -> RiskCalculator.getDexterityLerpValue(0)).thenReturn(1.0);
@@ -96,11 +96,11 @@ class SeizedPinsTest {
             assertEquals(11, ChestLockpickSession.computeSeizedCount(0, 0.35, LockTypeProfile.IDENTITY, 54, 0));
             assertEquals(3, ChestLockpickSession.computeSeizedCount(0, 0.35, new LockTypeProfile(1, 1, true, 0.5), 27, 0));
             assertEquals(0, ChestLockpickSession.computeSeizedCount(40, 0.35, LockTypeProfile.IDENTITY, 27, 0));
-            Parameters.chestSeizedPerGridMistake = 3;
+            Parameters.chestSeizedPerSlip = 3;
             assertEquals(6, ChestLockpickSession.computeSeizedCount(40, 0.35, LockTypeProfile.IDENTITY, 27, 2));
         } finally {
             Parameters.chestSeizedDensity = density;
-            Parameters.chestSeizedPerGridMistake = perMistake;
+            Parameters.chestSeizedPerSlip = perSlip;
             Parameters.chestBaseSuccessChance = base;
             Parameters.maxSuccessChance = max;
         }

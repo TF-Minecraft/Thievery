@@ -801,10 +801,10 @@ public class ContainerManager implements Listener {
     }
 
     /**
-     * Staff testing: runs a lock minigame on any container, skipping the trait, clue, ownership and access checks,
-     * then opens the probe menu as a real pick would.
+     * Staff testing: runs the lockpick ring on any container, even with the minigame off, skipping the trait, clue,
+     * ownership and access checks, then opens the probe menu as a real pick would.
      */
-    public void testPick(Player p, Block target, LockMinigameManager.Mode mode) {
+    public void testPick(Player p, Block target) {
         if (target == null || !(target.getState() instanceof Container)
                 || Parameters.excludedContainerMaterials.contains(target.getType())) {
             p.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "Look at a container within 5 blocks."));
@@ -823,7 +823,7 @@ public class ContainerManager implements Listener {
             p.sendMessage(ThieveryTexts.msg(ThieveryTexts.CRITICAL + "Someone is already picking this lock!"));
             return;
         }
-        Thievery.getInstance().getLockMinigameManager().start(p, b, mode, mistakes -> openLockpickSession(p, b, mistakes));
+        Thievery.getInstance().getLockMinigameManager().start(p, b, true, slips -> openLockpickSession(p, b, slips));
     }
 
     private boolean isBeingPicked(Block b) {
@@ -835,7 +835,7 @@ public class ContainerManager implements Listener {
         return Thievery.getInstance().getLockMinigameManager().isPicking(b);
     }
 
-    private void openLockpickSession(Player p, Block b, int gridMistakes) {
+    private void openLockpickSession(Player p, Block b, int slips) {
         // The chest or the held lockpick may have changed while the minigame ran.
         if (!(b.getState() instanceof Container container)) return;
         LockpickDefinition lockpickDef = ToolResolver.resolveLockpick(p.getInventory().getItemInMainHand());
@@ -849,7 +849,7 @@ public class ContainerManager implements Listener {
         String targetKey = TargetKeyResolver.resolve(getOwnerFromInventory(chestInv));
         LockTypeProfile lockType = Parameters.lockTypeProfile(data.getLockState());
         int seizedCount = ChestLockpickSession.computeSeizedCount(dexterity, lockpickDef.getStrength(), lockType,
-                chestInv.getSize(), gridMistakes);
+                chestInv.getSize(), slips);
         ChestLockpickSession session = new ChestLockpickSession(playerId, b, lockpickDef, seizedCount, chestInv,
                 targetKey, lockType);
         lockpickingSessions.put(playerId, session);

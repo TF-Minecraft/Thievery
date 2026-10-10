@@ -18,8 +18,9 @@ import org.bukkit.scheduler.BukkitTask;
 import net.tfminecraft.thievery.utils.ThieveryTexts;
 
 /**
- * A chest lock or pickpocket minigame. Subclasses draw and run the puzzle; this class holds the boss bar and the
- * end-of-game pause, and reports the outcome to {@link LockMinigameManager}.
+ * A chest lock or pickpocket minigame, played on a ring floating in front of the thief, who is held still.
+ * Subclasses draw and run the puzzle; this class holds the boss bar and the end-of-game pause, and reports the
+ * outcome to {@link LockMinigameManager}.
  */
 public abstract class LockMinigame {
 
@@ -80,8 +81,7 @@ public abstract class LockMinigame {
     abstract void cleanup(Player player);
 
     /** Movement keys while the puzzle is open. */
-    void input(Player player, Input input) {
-    }
+    abstract void input(Player player, Input input);
 
     Wording wording() {
         return LOCK;
@@ -96,16 +96,6 @@ public abstract class LockMinigame {
     /** A failed attempt: the lock fail cooldown and perhaps a snapped pick. */
     void penalise(Player player) {
         manager.penalise(player, this);
-    }
-
-    /** Whether the boss bar shows the thief the puzzle's state and countdown. */
-    boolean showsBar() {
-        return true;
-    }
-
-    /** Whether the thief must stay put while playing. */
-    boolean holdsStill() {
-        return false;
     }
 
     void solve(Player player) {

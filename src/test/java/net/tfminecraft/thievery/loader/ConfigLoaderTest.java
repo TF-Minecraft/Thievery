@@ -83,22 +83,12 @@ class ConfigLoaderTest {
         assertFalse(Cache.debugCluePreview);
         assertEquals(1, Parameters.chestBaseSuccessChance);
         assertEquals(0.3, Parameters.chestSeizedDensity);
-        assertEquals(1, Parameters.chestSeizedPerGridMistake);
+        assertEquals(1, Parameters.chestSeizedPerSlip);
         assertEquals(0.95, Parameters.maxSuccessChance);
         assertTrue(Parameters.chestMinigameEnabled);
-        assertEquals(6, Parameters.chestMinigameRows);
-        assertEquals(6, Parameters.chestMinigameColumns);
-        assertEquals(14, Parameters.chestMinigamePins);
         assertEquals(1.0, Parameters.chestMinigamePrepareSeconds);
-        assertEquals(4.0, Parameters.chestMinigameMemoriseSeconds);
-        assertEquals(6.0, Parameters.chestMinigameRecallSeconds);
-        assertEquals(0.05, Parameters.chestMinigameRecallSecondsPerDexterity);
-        assertEquals(3, Parameters.chestMinigameMistakesToFail);
         assertEquals(0.5, Parameters.chestMinigameFailBreakChance);
-        assertEquals(0.5, Parameters.chestDialChance);
         assertEquals(4, Parameters.chestDialTumblers);
-        assertTrue(Parameters.chestGridSprites);
-        assertFalse(Parameters.chestGridPack);
         assertEquals(0.14, Parameters.chestDialZoneWidth);
         assertEquals(0.15, Parameters.chestDialZoneShrinkPerTumbler);
         assertEquals(1.44, Parameters.chestDialMinLapSeconds);
@@ -203,7 +193,7 @@ class ConfigLoaderTest {
         assertEquals(ThieveryTexts.formatGui("#56ccf2Clue {character_name}"), Cache.criticalClue);
         assertEquals(0.8, Parameters.chestBaseSuccessChance);
         assertEquals(0.2, Parameters.chestSeizedDensity);
-        assertEquals(2, Parameters.chestSeizedPerGridMistake);
+        assertEquals(2, Parameters.chestSeizedPerSlip);
         assertEquals(0.9, Parameters.maxSuccessChance);
         assertEquals(0.5, RiskCalculator.getDexterityLerpValue(5), 1e-12);
         assertTrue(Cache.requireOwnerOnline);
@@ -360,29 +350,20 @@ class ConfigLoaderTest {
     }
 
     @Test
-    void chestMinigameSettingsLoadAndClampToTheChestMenu() throws Exception {
+    void chestMinigameSettingsLoadAndClamp() throws Exception {
         load("""
                 lockpicking:
                   chest:
+                    seized-per-slip: 3
+                    seized-per-grid-mistake: 2
                     minigame:
                       enabled: false
-                      rows: 4
-                      columns: 5
-                      pins: 9
                       prepare-seconds: 0.5
-                      memorise-seconds: 3
-                      recall-seconds: 8
-                      recall-seconds-per-dexterity: 0.1
-                      mistakes-to-fail: 2
                       fail-break-chance: 0.25
-                      dial-chance: 0.75
-                      grid: {sprites: false, pack: true}
                       dial: {tumblers: 5, zone-width: 0.2, zone-shrink-per-tumbler: 0.1, min-lap-seconds: 2, max-lap-seconds: 3, lap-seconds-per-dexterity: 0.02, alternate-direction: false, max-lag-ticks: 4, distance: 3, mistakes-to-fail: 2}
                 """);
-        assertEquals(0.75, Parameters.chestDialChance);
+        assertEquals(3, Parameters.chestSeizedPerSlip);
         assertEquals(5, Parameters.chestDialTumblers);
-        assertFalse(Parameters.chestGridSprites);
-        assertTrue(Parameters.chestGridPack);
         assertEquals(0.2, Parameters.chestDialZoneWidth);
         assertEquals(0.1, Parameters.chestDialZoneShrinkPerTumbler);
         assertEquals(2.0, Parameters.chestDialMinLapSeconds);
@@ -393,33 +374,17 @@ class ConfigLoaderTest {
         assertEquals(3.0, Parameters.chestDialDistance);
         assertEquals(2, Parameters.chestDialMistakesToFail);
         assertFalse(Parameters.chestMinigameEnabled);
-        assertEquals(4, Parameters.chestMinigameRows);
-        assertEquals(5, Parameters.chestMinigameColumns);
-        assertEquals(9, Parameters.chestMinigamePins);
         assertEquals(0.5, Parameters.chestMinigamePrepareSeconds);
-        assertEquals(3.0, Parameters.chestMinigameMemoriseSeconds);
-        assertEquals(8.0, Parameters.chestMinigameRecallSeconds);
-        assertEquals(0.1, Parameters.chestMinigameRecallSecondsPerDexterity);
-        assertEquals(2, Parameters.chestMinigameMistakesToFail);
         assertEquals(0.25, Parameters.chestMinigameFailBreakChance);
 
         load("""
                 lockpicking:
                   chest:
                     minigame:
-                      rows: 9
-                      columns: 12
-                      pins: 99
                       prepare-seconds: -1
-                      memorise-seconds: -1
-                      recall-seconds: -1
-                      recall-seconds-per-dexterity: -1
-                      mistakes-to-fail: 0
                       fail-break-chance: 3
-                      dial-chance: 2
                       dial: {tumblers: 9, zone-width: 1, zone-shrink-per-tumbler: 2, min-lap-seconds: 4, max-lap-seconds: 1, lap-seconds-per-dexterity: -1, max-lag-ticks: -1, distance: 9, mistakes-to-fail: 0}
                 """);
-        assertEquals(1.0, Parameters.chestDialChance);
         assertEquals(6, Parameters.chestDialTumblers);
         assertEquals(0.25, Parameters.chestDialZoneWidth);
         assertEquals(0.5, Parameters.chestDialZoneShrinkPerTumbler);
@@ -429,31 +394,20 @@ class ConfigLoaderTest {
         assertEquals(1, Parameters.chestDialMistakesToFail);
         assertEquals(0, Parameters.chestDialMaxLagTicks);
         assertEquals(4.0, Parameters.chestDialDistance);
-        assertEquals(6, Parameters.chestMinigameRows);
-        assertEquals(9, Parameters.chestMinigameColumns);
-        assertEquals(54, Parameters.chestMinigamePins);
         assertEquals(0.0, Parameters.chestMinigamePrepareSeconds);
-        assertEquals(0.0, Parameters.chestMinigameMemoriseSeconds);
-        assertEquals(0.0, Parameters.chestMinigameRecallSeconds);
-        assertEquals(0.0, Parameters.chestMinigameRecallSecondsPerDexterity);
-        assertEquals(1, Parameters.chestMinigameMistakesToFail);
         assertEquals(1.0, Parameters.chestMinigameFailBreakChance);
 
         load("""
                 lockpicking:
                   chest:
-                    minigame: {rows: 0, columns: 0, pins: 0, fail-break-chance: -1, dial-chance: -1, dial: {tumblers: 0, zone-width: 0, zone-shrink-per-tumbler: -1, min-lap-seconds: 0, distance: 0}}
+                    minigame: {fail-break-chance: -1, dial: {tumblers: 0, zone-width: 0, zone-shrink-per-tumbler: -1, min-lap-seconds: 0, distance: 0}}
                 """);
-        assertEquals(0.0, Parameters.chestDialChance);
         assertEquals(1, Parameters.chestDialTumblers);
         assertEquals(0.02, Parameters.chestDialZoneWidth);
         assertEquals(0.0, Parameters.chestDialZoneShrinkPerTumbler);
         assertEquals(0.5, Parameters.chestDialMinLapSeconds);
         assertEquals(2.08, Parameters.chestDialMaxLapSeconds);
         assertEquals(1.0, Parameters.chestDialDistance);
-        assertEquals(1, Parameters.chestMinigameRows);
-        assertEquals(1, Parameters.chestMinigameColumns);
-        assertEquals(1, Parameters.chestMinigamePins);
         assertEquals(0.0, Parameters.chestMinigameFailBreakChance);
     }
 

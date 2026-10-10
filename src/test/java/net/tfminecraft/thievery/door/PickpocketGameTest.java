@@ -130,7 +130,6 @@ class PickpocketGameTest {
     @Test
     void openingFreezesTheThiefAndFloatsAnEmptyGauge() {
         PickpocketGame game = start();
-        assertTrue(game.holdsStill());
         assertFalse(game.targetGone());
         assertSame(PickpocketGame.POCKET, game.wording());
         assertEquals(0, game.mistakes());

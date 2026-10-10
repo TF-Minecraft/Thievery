@@ -55,13 +55,13 @@ public class ChestLockpickSession extends HiddenStealSession {
 
     /**
      * Seized pins hidden in a chest: the old break chance spread over the chest's slots, scaled by lock type,
-     * plus extra pins for each wrong cell on the pin grid.
+     * plus extra pins for each slip on the lockpick ring.
      */
     public static int computeSeizedCount(int dexterity, double lockpickStrength, LockTypeProfile lockType,
-            int slots, int gridMistakes) {
+            int slots, int slips) {
         double breakChance = 1.0 - computeSuccessChance(dexterity, lockpickStrength);
         double fromSkill = slots * Parameters.chestSeizedDensity * breakChance * lockType.breakChanceMultiplier();
-        return (int) Math.round(fromSkill) + Math.max(0, gridMistakes) * Parameters.chestSeizedPerGridMistake;
+        return (int) Math.round(fromSkill) + Math.max(0, slips) * Parameters.chestSeizedPerSlip;
     }
 
     public java.util.Set<Integer> getRevealedChestSlots() {

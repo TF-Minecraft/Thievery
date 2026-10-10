@@ -93,11 +93,6 @@ final class RingDialGame extends LockMinigame {
     }
 
     @Override
-    boolean holdsStill() {
-        return true;
-    }
-
-    @Override
     void tickRunning(Player player) {
         if (phase == Phase.LANDING) {
             if (settled(player) || --ticksLeft <= 0) {

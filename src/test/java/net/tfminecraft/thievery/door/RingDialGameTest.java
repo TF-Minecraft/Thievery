@@ -59,7 +59,6 @@ class RingDialGameTest {
         saved.take();
         Parameters.chestMinigameEnabled = true;
         Parameters.chestMinigamePrepareSeconds = 0.05;
-        Parameters.chestMinigameMistakesToFail = 3;
         Parameters.chestMinigameFailBreakChance = 0.0;
         Parameters.chestDialTumblers = 4;
         Parameters.chestDialZoneWidth = 0.14;
@@ -109,7 +108,7 @@ class RingDialGameTest {
     }
 
     private RingDialGame start() {
-        assertTrue(manager.start(player, chest, LockMinigameManager.Mode.DIAL, mistakes -> {
+        assertTrue(manager.start(player, chest, true, mistakes -> {
             solved.incrementAndGet();
             solvedMistakes.set(mistakes);
         }));
@@ -142,7 +141,6 @@ class RingDialGameTest {
     @Test
     void openingFreezesTheThiefAndFloatsTheRing() {
         RingDialGame game = start();
-        assertTrue(game.holdsStill());
         assertEquals(0f, player.getWalkSpeed());
         assertTrue(LockFreeze.isFrozen(player));
         assertEquals(1, opened.size());

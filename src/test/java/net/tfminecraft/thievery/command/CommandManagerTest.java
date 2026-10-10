@@ -209,8 +209,9 @@ class CommandManagerTest {
         assertTrue(complete(player, "testpick", "").isEmpty());
         when(player.hasPermission("thievery.admin")).thenReturn(true);
         assertEquals(List.of("loadout", "clearclues", "feedback", "reload", "resetcooldowns", "setrisk", "itemvalue", "keychain", "testpick"), complete(player, ""));
-        assertEquals(List.of("grid", "dial", "pocket"), complete(player, "testpick", ""));
-        assertEquals(List.of("dial"), complete(player, "TESTPICK", "D"));
+        assertEquals(List.of("pocket"), complete(player, "testpick", ""));
+        assertEquals(List.of("pocket"), complete(player, "TESTPICK", "P"));
+        assertTrue(complete(player, "testpick", "d").isEmpty());
         server.addPlayer("Alice"); server.addPlayer("Bob");
         assertEquals(List.of("all", "Alice", "Bob"), complete(player, "resetcooldowns", ""));
         assertEquals(List.of("Alice"), complete(player, "SETRISK", "ALI"));
@@ -224,18 +225,14 @@ class CommandManagerTest {
         assertTrue(complete(player, "setrisk", "all", "0", "extra").isEmpty());
     }
 
-    @Test void testPickForcesTheNamedMinigameOnTheTargetedContainer() {
+    @Test void testPickRunsTheRingOnTheTargetedContainer() {
         when(player.hasPermission("thievery.admin")).thenReturn(true);
         var block = mock(org.bukkit.block.Block.class); when(player.getTargetBlockExact(5)).thenReturn(block);
-        assertTrue(run(player, "testpick"));
-        verify(containers).testPick(player, block, null);
-        assertTrue(run(player, "testpick", "dial"));
-        verify(containers).testPick(player, block, net.tfminecraft.thievery.door.LockMinigameManager.Mode.DIAL);
-        assertTrue(run(player, "TestPick", "GRID"));
-        verify(containers).testPick(player, block, net.tfminecraft.thievery.door.LockMinigameManager.Mode.GRID);
-        assertTrue(run(player, "testpick", "spin"));
-        verify(player).sendMessage("§cUsage: §e/thievery testpick [grid|dial|pocket]");
-        verify(containers, times(3)).testPick(any(), any(), any());
+        assertTrue(run(player, "TestPick"));
+        verify(containers).testPick(player, block);
+        assertTrue(run(player, "testpick", "grid"));
+        verify(player).sendMessage("§cUsage: §e/thievery testpick [pocket]");
+        verify(containers, times(1)).testPick(any(), any());
     }
 
     @Test void testPickPocketPlaysThePickpocketRingWithNoMark() {
