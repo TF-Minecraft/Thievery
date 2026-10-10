@@ -203,8 +203,9 @@ pickpocket:
   budget: 10
   cooldown-hours: 1
   max-distance: 4
-  alert-subtitle: "#d65c5cSomeone is pickpocketing you!"
-  alert-subtitle-critical: "#d65c5c{character_name} is pickpocketing you!"
+  # A noticed pickpocket plays a bag rummaging sound to the mark. A critical clue also names the
+  # thief's character on the mark's action bar.
+  alert-critical: "#d65c5cYou catch {character_name} going through your pockets"
   # Before a pocket opens, a ring floats in front of the thief, who is held still, and drains while
   # they mash jump to fill it (level 2 of the NoPixel lockpick): two phases, the first half length.
   # Fill both within time-limit-seconds while the mark stays within max-distance. Sneaking gives up.
