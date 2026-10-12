@@ -53,6 +53,13 @@ public class Thievery extends JavaPlugin {
 
     @Override
     public void onEnable() {
+        try {
+            net.tfminecraft.tlibs.character.Characters.available();
+        } catch (LinkageError error) {
+            getLogger().severe("Thievery requires TLibs 2.3.0 or newer. Update TLibs and restart the server.");
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
         instance = this;
         createConfigs();
         loadConfigs();

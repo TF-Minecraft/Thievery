@@ -116,6 +116,28 @@ class ThieveryTest {
     }
 
     @Test
+    void oldTLibsDisablesBeforeConfigurationOrServices() throws Exception {
+        var startup = mock(Thievery.class);
+        var startupServer = mock(org.bukkit.Server.class);
+        var plugins = mock(org.bukkit.plugin.PluginManager.class);
+        var logger = mock(java.util.logging.Logger.class);
+        when(startup.getServer()).thenReturn(startupServer);
+        when(startupServer.getPluginManager()).thenReturn(plugins);
+        when(startup.getLogger()).thenReturn(logger);
+        doCallRealMethod().when(startup).onEnable();
+        try (var unavailable = mockStatic(net.tfminecraft.tlibs.character.Characters.class)) {
+            unavailable.when(net.tfminecraft.tlibs.character.Characters::available)
+                    .thenThrow(new NoClassDefFoundError("CharacterIdentity"));
+            startup.onEnable();
+            verify(plugins).disablePlugin(startup);
+            verify(logger).severe("Thievery requires TLibs 2.3.0 or newer. Update TLibs and restart the server.");
+            verify(startup, never()).createConfigs();
+            verify(startup, never()).getCommand(anyString());
+            assertTrue(containers.constructed().isEmpty());
+        }
+    }
+
+    @Test
     void configurationFailureCanDisableBeforeServicesAreCreated() throws Exception {
         configs.close();
         configs = mockConstruction(ConfigLoader.class, (loader, context) ->

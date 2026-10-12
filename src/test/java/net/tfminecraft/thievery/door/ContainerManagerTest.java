@@ -6,6 +6,8 @@ import java.util.*;
 import net.tfminecraft.rpcharacters.grave.GraveManager;
 import net.tfminecraft.thievery.utils.ToolResolver;
 import net.tfminecraft.thievery.TestInventories;
+import net.tfminecraft.tlibs.character.*;
+import org.bukkit.plugin.ServicePriority;
 import org.bukkit.*;
 import org.bukkit.block.*;
 import org.bukkit.entity.*;
@@ -587,15 +589,28 @@ class ContainerManagerTest {
         net.tfminecraft.thievery.cache.Cache.traits=List.of("thief"); net.tfminecraft.thievery.cache.Cache.requireOwnerOnline=false;
         var barrel=lockpickBlock();lock(barrel,UUID.randomUUID());var event=interact(barrel,Action.RIGHT_CLICK_BLOCK);
         tools.when(()->ToolResolver.isLockpick(any())).thenReturn(true);
-        var profile=mock(net.tfminecraft.rpcharacters.objects.PlayerData.class);var character=mock(net.tfminecraft.rpcharacters.objects.RPCharacter.class);
-        var other=mock(net.tfminecraft.rpcharacters.objects.trait.Trait.class);when(other.getId()).thenReturn("scholar");
-        var required=mock(net.tfminecraft.rpcharacters.objects.trait.Trait.class);when(required.getId()).thenReturn("thief");
-        try(var roleplay=mockStatic(net.tfminecraft.rpcharacters.managers.PlayerManager.class);var clues=mockStatic(net.tfminecraft.thievery.clue.ClueChecker.class)) {
-            roleplay.when(()->net.tfminecraft.rpcharacters.managers.PlayerManager.get(player)).thenReturn(profile);
-            manager.onRightClickChest(event);verify(event).setCancelled(true);clues.verifyNoInteractions();
-            when(profile.hasActiveCharacter()).thenReturn(true);when(profile.getActiveCharacter()).thenReturn(character);when(character.getTraits()).thenReturn(List.of(other));
-            manager.onRightClickChest(event);verify(player).sendMessage("§cYou lack the training to pick locks!");clues.verifyNoInteractions();
-            when(character.getTraits()).thenReturn(List.of(other,required));manager.onRightClickChest(event);
+        var provider = mock(CharacterIdentity.class);
+        var providerPlugin = MockBukkit.createMockPlugin();
+        var session = new CharacterSession(new CharacterRef(player.getUniqueId(), UUID.randomUUID()), 1);
+        try(var clues=mockStatic(net.tfminecraft.thievery.clue.ClueChecker.class)) {
+            manager.onRightClickChest(event);
+            verify(event).setCancelled(true);
+            clues.verifyNoInteractions();
+            verify(player, never()).sendMessage(anyString());
+            MockBukkit.getMock().getServicesManager().register(CharacterIdentity.class, provider, providerPlugin, ServicePriority.Normal);
+            manager.onRightClickChest(event);
+            clues.verifyNoInteractions();
+            verify(player, never()).sendMessage(anyString());
+            when(provider.currentSession(player)).thenReturn(Optional.of(session));
+            when(provider.isCurrent(session)).thenReturn(true);
+            when(provider.info(session.ref().characterId())).thenReturn(Optional.of(
+                    new CharacterInfo(session.ref(), "Scholar", CharacterStatus.ALIVE, null, Set.of("scholar"), 0, null)));
+            manager.onRightClickChest(event);
+            verify(player).sendMessage("§cYou lack the training to pick locks!");
+            clues.verifyNoInteractions();
+            when(provider.info(session.ref().characterId())).thenReturn(Optional.of(
+                    new CharacterInfo(session.ref(), "Thief", CharacterStatus.ALIVE, null, Set.of("scholar", "thief"), 0, null)));
+            manager.onRightClickChest(event);
             clues.verify(()->net.tfminecraft.thievery.clue.ClueChecker.sendInsufficientCluesMessage(player));
             verify(storage,never()).saveContainerData(any());
         } finally {net.tfminecraft.thievery.cache.Cache.traits=savedTraits;net.tfminecraft.thievery.cache.Cache.requireOwnerOnline=online;}
