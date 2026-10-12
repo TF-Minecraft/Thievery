@@ -5,6 +5,9 @@ import static org.mockito.Mockito.*;
 
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Optional;
+import net.tfminecraft.tlibs.character.*;
+import org.bukkit.plugin.ServicePriority;
 import java.util.Set;
 import java.util.UUID;
 import net.tfminecraft.simplefactions.managers.FactionManager;
@@ -394,34 +397,33 @@ class DisplayStealManagerTest {
     }
 
     @Test
-    void configuredTraitsRequireAnActiveCharacterWithMatchingTrait() {
+    void configuredTraitsRequireAReadyCharacterWithMatchingTrait() {
         Cache.traits = List.of("thief");
-        try (var rp = mockStatic(net.tfminecraft.rpcharacters.managers.PlayerManager.class)) {
-            select(lootSlots);
-            var characterData = mock(net.tfminecraft.rpcharacters.objects.PlayerData.class);
-            rp.when(() -> net.tfminecraft.rpcharacters.managers.PlayerManager.get(player)).thenReturn(characterData);
-            select(lootSlots);
-            var character = mock(net.tfminecraft.rpcharacters.objects.RPCharacter.class);
-            when(characterData.hasActiveCharacter()).thenReturn(true);
-            when(characterData.getActiveCharacter()).thenReturn(character);
-            when(character.getTraits()).thenReturn(List.of());
-            select(lootSlots);
-            verify(player).sendMessage(contains("lack the training to pick locks"));
-            verify(picks, never()).startSession(any(), any(), any(), any(), anyDouble(), anyInt(), anyDouble(), any());
-            var trait = mock(net.tfminecraft.rpcharacters.objects.trait.Trait.class);
-            when(trait.getId()).thenReturn("thief");
-            var unrelated = mock(net.tfminecraft.rpcharacters.objects.trait.Trait.class);
-            when(unrelated.getId()).thenReturn("scholar");
-            when(character.getTraits()).thenReturn(List.of(unrelated, trait));
-            select(lootSlots);
-            String target = DoorLockpick.entityTargetId(stand.getUniqueId());
-            verify(picks).startSession(eq(player), any(DoorLockpick.EntityProximityAnchor.class),
-                    eq(LockPickManager.SessionKind.DISPLAY), eq(target),
-                    eq(Parameters.displayLockStrength * (1 - 0.7 * Parameters.lockpickMaxReduction)),
-                    eq(15), eq(0.7), isNull());
-            verify(playerData).addRiskGain(15, 0.7, RiskSource.DOOR);
-            database.verify(() -> Database.savePlayerData(playerData));
-        }
+        select(lootSlots);
+        verify(player, never()).sendMessage(anyString());
+        var provider = mock(CharacterIdentity.class);
+        var providerPlugin = MockBukkit.createMockPlugin();
+        MockBukkit.getMock().getServicesManager().register(CharacterIdentity.class, provider, providerPlugin, ServicePriority.Normal);
+        select(lootSlots);
+        verify(player, never()).sendMessage(anyString());
+        var session = new CharacterSession(new CharacterRef(player.getUniqueId(), UUID.randomUUID()), 1);
+        when(provider.currentSession(player)).thenReturn(Optional.of(session));
+        when(provider.isCurrent(session)).thenReturn(true);
+        when(provider.info(session.ref().characterId())).thenReturn(Optional.of(
+                new CharacterInfo(session.ref(), "Scholar", CharacterStatus.ALIVE, null, Set.of(), 0, null)));
+        select(lootSlots);
+        verify(player).sendMessage(contains("lack the training to pick locks"));
+        verify(picks, never()).startSession(any(), any(), any(), any(), anyDouble(), anyInt(), anyDouble(), any());
+        when(provider.info(session.ref().characterId())).thenReturn(Optional.of(
+                new CharacterInfo(session.ref(), "Thief", CharacterStatus.ALIVE, null, Set.of("scholar", "thief"), 0, null)));
+        select(lootSlots);
+        String target = DoorLockpick.entityTargetId(stand.getUniqueId());
+        verify(picks).startSession(eq(player), any(DoorLockpick.EntityProximityAnchor.class),
+                eq(LockPickManager.SessionKind.DISPLAY), eq(target),
+                eq(Parameters.displayLockStrength * (1 - 0.7 * Parameters.lockpickMaxReduction)),
+                eq(15), eq(0.7), isNull());
+        verify(playerData).addRiskGain(15, 0.7, RiskSource.DOOR);
+        database.verify(() -> Database.savePlayerData(playerData));
     }
 
     @Test

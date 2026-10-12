@@ -49,9 +49,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 
-import net.tfminecraft.rpcharacters.managers.PlayerManager;
-import net.tfminecraft.rpcharacters.objects.RPCharacter;
-import net.tfminecraft.rpcharacters.objects.trait.Trait;
+import net.tfminecraft.thievery.player.TraitChecker;
 import net.tfminecraft.thievery.Thievery;
 import net.tfminecraft.thievery.cache.Cache;
 import net.tfminecraft.thievery.cache.Parameters;
@@ -689,20 +687,7 @@ public class ContainerManager implements Listener {
         // Prevent opening container normally
         event.setCancelled(true);
 
-        if(Cache.traits.size() > 0) {
-            net.tfminecraft.rpcharacters.objects.PlayerData pd = PlayerManager.get(player);
-            if(!pd.hasActiveCharacter()) return;
-            RPCharacter character = pd.getActiveCharacter();
-
-            boolean hasTrait = false;
-            for(Trait trait : character.getTraits()) {
-                if(Cache.traits.contains(trait.getId())) hasTrait = true;
-            }
-            if(!hasTrait) {
-                player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You lack the training to pick locks!"));
-                return;
-            }
-        }
+        if (!TraitChecker.hasLockpickingTraits(player)) return;
 
         // Only allow lockpicking containers the player cannot already access
         Block clickedBlock = event.getClickedBlock();

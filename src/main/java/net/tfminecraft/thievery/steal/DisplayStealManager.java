@@ -31,9 +31,7 @@ import org.bukkit.inventory.EntityEquipment;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 
-import net.tfminecraft.rpcharacters.managers.PlayerManager;
-import net.tfminecraft.rpcharacters.objects.RPCharacter;
-import net.tfminecraft.rpcharacters.objects.trait.Trait;
+import net.tfminecraft.thievery.player.TraitChecker;
 import net.tfminecraft.thievery.Thievery;
 import net.tfminecraft.thievery.cache.Cache;
 import net.tfminecraft.thievery.cache.Parameters;
@@ -180,7 +178,7 @@ public class DisplayStealManager implements Listener {
 
     private void startLockpicking(Player player, Entity entity, UUID owner, LockState lockState,
             List<DisplayLoot.DisplaySlot> slots) {
-        if (!hasThiefTrait(player)) {
+        if (!TraitChecker.hasLockpickingTraits(player)) {
             return;
         }
         if (canUse(player, owner, lockState, false) && !Cache.debugAllowOwnChest) {
@@ -275,24 +273,6 @@ public class DisplayStealManager implements Listener {
             }
             default -> {}
         }
-    }
-
-    private static boolean hasThiefTrait(Player player) {
-        if (Cache.traits.isEmpty()) {
-            return true;
-        }
-        net.tfminecraft.rpcharacters.objects.PlayerData pd = PlayerManager.get(player);
-        if (pd == null || !pd.hasActiveCharacter()) {
-            return false;
-        }
-        RPCharacter character = pd.getActiveCharacter();
-        for (Trait trait : character.getTraits()) {
-            if (Cache.traits.contains(trait.getId())) {
-                return true;
-            }
-        }
-        player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "You lack the training to pick locks!"));
-        return false;
     }
 
     static List<DisplayLoot.DisplaySlot> slotsForEntity(Entity entity) {

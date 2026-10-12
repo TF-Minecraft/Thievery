@@ -2,31 +2,46 @@ package net.tfminecraft.thievery.player;
 
 import org.bukkit.entity.Player;
 
-import net.tfminecraft.rpcharacters.managers.PlayerManager;
-import net.tfminecraft.rpcharacters.objects.RPCharacter;
-import net.tfminecraft.rpcharacters.objects.trait.Trait;
 import java.util.List;
 
 import net.tfminecraft.thievery.cache.Cache;
 import net.tfminecraft.thievery.utils.ThieveryTexts;
+import net.tfminecraft.tlibs.character.CharacterInfo;
+import net.tfminecraft.tlibs.character.CharacterSession;
+import net.tfminecraft.tlibs.character.Characters;
 
 public final class TraitChecker {
 
     private TraitChecker() {}
 
     public static boolean hasTraits(Player player, List<String> configuredTraits) {
+        return hasTraits(player, configuredTraits, false);
+    }
+
+    public static boolean hasLockpickingTraits(Player player) {
+        return hasTraits(player, Cache.traits, true);
+    }
+
+    private static boolean hasTraits(Player player, List<String> configuredTraits, boolean explainMissing) {
         if (configuredTraits == null || configuredTraits.isEmpty()) {
             return true;
         }
-        net.tfminecraft.rpcharacters.objects.PlayerData pd = PlayerManager.get(player);
-        if (!pd.hasActiveCharacter()) {
+        CharacterSession session = Characters.currentSession(player).orElse(null);
+        if (session == null) {
             return false;
         }
-        RPCharacter character = pd.getActiveCharacter();
-        for (Trait trait : character.getTraits()) {
-            if (configuredTraits.contains(trait.getId())) {
+        CharacterInfo character = Characters.info(session.ref().characterId()).orElse(null);
+        if (character == null || !character.ref().equals(session.ref()) || !character.alive()
+                || !Characters.isCurrent(session)) {
+            return false;
+        }
+        for (String trait : character.traits()) {
+            if (configuredTraits.contains(trait)) {
                 return true;
             }
+        }
+        if (explainMissing) {
+            player.sendMessage("§cYou lack the training to pick locks!");
         }
         return false;
     }
