@@ -14,11 +14,11 @@
         <maven.compiler.proc>full</maven.compiler.proc>
         <advancedcrafting.version>2.0.0</advancedcrafting.version>
         <coreprotect.version>25.1.0</coreprotect.version>
-        <denareconomy.version>0.2.0</denareconomy.version>
+        <denareconomy.version>0.3.0</denareconomy.version>
         <interactiblefurniture.version>0.2.0</interactiblefurniture.version>
         <rpcharacters.version>2.16.0</rpcharacters.version>
-        <simplefactions.version>3.0.1</simplefactions.version>
-        <tlibs.version>2.3.0</tlibs.version>
+        <simplefactions.version>4.0.0</simplefactions.version>
+        <tlibs.version>2.4.0</tlibs.version>
     </properties>
 
     <dependencyManagement>
@@ -34,6 +34,9 @@
     </dependencyManagement>
 
     <dependencies>
+        <dependency>
+            <groupId>org.xerial</groupId><artifactId>sqlite-jdbc</artifactId><version>3.49.1.0</version><scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>local</groupId>
             <artifactId>ItemsAdder</artifactId>

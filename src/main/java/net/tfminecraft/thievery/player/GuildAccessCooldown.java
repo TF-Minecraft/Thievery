@@ -9,7 +9,8 @@ import java.util.Date;
 import java.util.Map;
 import java.util.UUID;
 
-import org.bukkit.Bukkit;
+import net.tfminecraft.simplefactions.identity.Members;
+import net.tfminecraft.thievery.utils.FactionAccess;
 import org.bukkit.entity.Player;
 
 import net.tfminecraft.simplefactions.guild.Guild;
@@ -21,14 +22,12 @@ public final class GuildAccessCooldown {
 
     private GuildAccessCooldown() {}
 
-    // Existing configuration identifies offline profiles by player name, not UUID.
-    @SuppressWarnings("deprecation")
     public static String getMostRecentGuildAccess(Map<UUID, String> accessMap, Player player) {
         if (accessMap == null || player == null) {
             return null;
         }
         String best = accessMap.get(player.getUniqueId());
-        Guild guild = FactionManager.getGuildByMember(player.getName());
+        Guild guild = FactionManager.getGuildByMember(player);
         if (guild == null) {
             return best;
         }
@@ -39,12 +38,12 @@ public final class GuildAccessCooldown {
             }
         } catch (ParseException ignored) {
         }
-        for (String memberName : guild.getMembers()) {
-            if (memberName.equalsIgnoreCase(player.getName())) {
+        for (String memberKey : guild.getMembers()) {
+            UUID member = Members.accountId(memberKey).orElse(null);
+            if (member == null || member.equals(player.getUniqueId())) {
                 continue;
             }
-            var member = Bukkit.getOfflinePlayer(memberName);
-            String access = accessMap.get(member.getUniqueId());
+            String access = accessMap.get(member);
             if (access == null) {
                 continue;
             }
@@ -61,6 +60,7 @@ public final class GuildAccessCooldown {
     }
 
     public static boolean isOnCooldown(Map<UUID, String> accessMap, Player player, int cooldownDays) {
+        if (!FactionAccess.ready()) return true;
         String lastAccessDate = getMostRecentGuildAccess(accessMap, player);
         if (lastAccessDate == null) {
             return false;
@@ -102,23 +102,21 @@ public final class GuildAccessCooldown {
         accessMap.put(attackerUuid, date);
     }
 
-    // Existing configuration identifies offline profiles by player name, not UUID.
-    @SuppressWarnings("deprecation")
     public static long getMostRecentGuildAccessMillis(Map<UUID, String> accessMap, Player player) {
         if (accessMap == null || player == null) {
             return 0L;
         }
         long best = parseMillis(accessMap.get(player.getUniqueId()));
-        Guild guild = FactionManager.getGuildByMember(player.getName());
+        Guild guild = FactionManager.getGuildByMember(player);
         if (guild == null) {
             return best;
         }
-        for (String memberName : guild.getMembers()) {
-            if (memberName.equalsIgnoreCase(player.getName())) {
+        for (String memberKey : guild.getMembers()) {
+            UUID member = Members.accountId(memberKey).orElse(null);
+            if (member == null || member.equals(player.getUniqueId())) {
                 continue;
             }
-            var member = Bukkit.getOfflinePlayer(memberName);
-            long access = parseMillis(accessMap.get(member.getUniqueId()));
+            long access = parseMillis(accessMap.get(member));
             if (access > best) {
                 best = access;
             }
@@ -127,6 +125,7 @@ public final class GuildAccessCooldown {
     }
 
     public static boolean isOnCooldownMillis(Map<UUID, String> accessMap, Player player, long cooldownMillis) {
+        if (!FactionAccess.ready()) return true;
         long lastAccess = getMostRecentGuildAccessMillis(accessMap, player);
         if (lastAccess <= 0L) {
             return false;

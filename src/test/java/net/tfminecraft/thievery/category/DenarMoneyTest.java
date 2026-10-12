@@ -5,6 +5,9 @@ import static org.mockito.Mockito.*;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.Optional;
+import net.tfminecraft.denareconomy.api.*;
+import net.tfminecraft.tlibs.character.*;
 import net.tfminecraft.denareconomy.DenarEconomy;
 import net.tfminecraft.denareconomy.item.Coin;
 import net.tfminecraft.denareconomy.managers.MoneyManager;
@@ -33,7 +36,7 @@ class DenarMoneyTest {
             assertFalse(DenarMoney.isMoney(item));
             assertFalse(DenarMoney.canStealPouch(new PlayerData(UUID.randomUUID())));
             assertEquals(0, DenarMoney.getPouchBalance(player));
-            DenarMoney.transferPouch(player, player, 5);
+            assertEquals(Result.UNAVAILABLE, DenarMoney.transferPouch("absent", null, null, 500));
             var plugin = MockBukkit.createMockPlugin("DenarEconomy");
             server.getPluginManager().disablePlugin(plugin);
             assertFalse(DenarMoney.present());
@@ -82,25 +85,33 @@ class DenarMoneyTest {
         assertEquals(0, DenarMoney.maxStealableDenars(10));
     }
 
-    @Test void balancesAndTransfersUseTheTwoPlayersPouchAccounts() {
+    @Test void balancesAndTransfersUseCapturedCharacterPouchesAndRejectStaleSessions() {
         MockBukkit.createMockPlugin("DenarEconomy");
-        var from = server.addPlayer();
-        var to = server.addPlayer();
-        try (var economy = mockStatic(DenarEconomy.class, RETURNS_DEEP_STUBS);
-                var transfers = mockStatic(MoneyManager.class)) {
-            var fromPouch = DenarEconomy.getPlayerManager().get(from).getPouch();
-            var toPouch = DenarEconomy.getPlayerManager().get(to).getPouch();
-            when(fromPouch.getBal()).thenReturn(12.5);
+        var from = server.addPlayer(); var to = server.addPlayer();
+        var a = new CharacterSession(new CharacterRef(from.getUniqueId(), UUID.randomUUID()), 1);
+        var b = new CharacterSession(new CharacterRef(to.getUniqueId(), UUID.randomUUID()), 2);
+        try (var denars = mockStatic(Denars.class); var chars = mockStatic(Characters.class)) {
+            denars.when(() -> Denars.pouch(a.ref())).thenReturn("char:a:pouch");
+            denars.when(() -> Denars.pouch(b.ref())).thenReturn("char:b:pouch");
+            denars.when(() -> Denars.active(from)).thenReturn(Optional.empty());
+            denars.when(Denars::ready).thenReturn(false);
+            assertEquals(Result.UNAVAILABLE, DenarMoney.transferPouch("test", a, b, 350));
+            denars.when(Denars::ready).thenReturn(true);
+            denars.when(() -> Denars.balance(Denars.pouch(a.ref()))).thenReturn(1250L);
+            denars.when(() -> Denars.transfer("test", "thievery:robbery", Denars.pouch(a.ref()), Denars.pouch(b.ref()), 350))
+                    .thenReturn(Result.APPLIED);
             assertEquals(0, DenarMoney.getPouchBalance(null));
+            assertEquals(0, DenarMoney.getPouchBalance(from));
+            denars.when(() -> Denars.active(from)).thenReturn(Optional.of(a.ref()));
             assertEquals(12.5, DenarMoney.getPouchBalance(from));
-            DenarMoney.transferPouch(null, to, 1);
-            DenarMoney.transferPouch(from, null, 1);
-            DenarMoney.transferPouch(from, to, 0);
-            DenarMoney.transferPouch(from, to, -1);
-            transfers.verifyNoInteractions();
-            DenarMoney.transferPouch(from, to, 3.5);
-            transfers.verify(() -> MoneyManager.transfer(fromPouch, toPouch, 3.5));
-            transfers.verifyNoMoreInteractions();
+            assertEquals(Result.REFUSED, DenarMoney.transferPouch("test", null, b, 350));
+            assertEquals(Result.REFUSED, DenarMoney.transferPouch("test", a, null, 350));
+            assertEquals(Result.REFUSED, DenarMoney.transferPouch("test", a, b, 0));
+            assertEquals(Result.REFUSED, DenarMoney.transferPouch("test", a, b, 350));
+            chars.when(() -> Characters.isCurrent(a)).thenReturn(true);
+            assertEquals(Result.REFUSED, DenarMoney.transferPouch("test", a, b, 350));
+            chars.when(() -> Characters.isCurrent(b)).thenReturn(true);
+            assertEquals(Result.APPLIED, DenarMoney.transferPouch("test", a, b, 350));
         }
     }
 
