@@ -15,6 +15,8 @@ import net.tfminecraft.thievery.cache.Cache;
 import net.tfminecraft.thievery.command.CommandManager;
 import net.tfminecraft.thievery.command.PickpocketCommand;
 import net.tfminecraft.thievery.command.RobberyCommand;
+import net.tfminecraft.thievery.inspection.HandsUpCharacterListener;
+import net.tfminecraft.thievery.inspection.HandsUpManager;
 import net.tfminecraft.thievery.database.Database;
 import net.tfminecraft.thievery.door.ContainerManager;
 import net.tfminecraft.thievery.door.DoorManager;
@@ -141,6 +143,7 @@ class ThieveryTest {
             assertTrue(listeners.contains(DoorManager.class));
             assertTrue(listeners.contains(RobberyManager.class));
             assertFalse(listeners.contains(RobberyCharacterListener.class));
+            assertFalse(listeners.contains(HandsUpCharacterListener.class));
             assertEquals(1, containers.constructed().size());
         } finally {
             java.util.logging.Logger.getLogger("").removeHandler(capture);
@@ -183,12 +186,18 @@ class ThieveryTest {
         assertInstanceOf(RobberyCommand.class, plugin.getCommand("robbery").getTabCompleter());
         assertInstanceOf(PickpocketCommand.class, plugin.getCommand("pickpocket").getExecutor());
         assertInstanceOf(PickpocketCommand.class, plugin.getCommand("pickpocket").getTabCompleter());
+        assertInstanceOf(HandsUpManager.class, plugin.getCommand("handsup").getExecutor());
+        assertSame(plugin.getCommand("handsup").getExecutor(), plugin.getCommand("handsup").getTabCompleter());
+        assertTrue(server.dispatchCommand(ordinary, "handsup"));
+        assertTrue(ordinary.nextMessage().contains("Hands up!"));
         Set<Class<?>> listeners = new HashSet<>();
         HandlerList.getRegisteredListeners(plugin).forEach(listener -> listeners.add(listener.getListener().getClass()));
         assertTrue(listeners.contains(GraveStealListener.class));
         assertTrue(listeners.contains(DoorManager.class));
         assertTrue(listeners.contains(PlayerManager.class));
         assertTrue(listeners.contains(RobberyCharacterListener.class));
+        assertTrue(listeners.contains(HandsUpManager.class));
+        assertTrue(listeners.contains(HandsUpCharacterListener.class));
         assertFalse(listeners.contains(FurnitureDisplayListener.class));
         assertEquals(2, pluginTasks().size());
         assertTrue(Thievery.getPlayerManager().exists(admin));

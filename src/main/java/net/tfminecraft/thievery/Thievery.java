@@ -14,6 +14,8 @@ import net.tfminecraft.thievery.cache.Cache;
 import net.tfminecraft.thievery.command.CommandManager;
 import net.tfminecraft.thievery.command.PickpocketCommand;
 import net.tfminecraft.thievery.command.RobberyCommand;
+import net.tfminecraft.thievery.inspection.HandsUpCharacterListener;
+import net.tfminecraft.thievery.inspection.HandsUpManager;
 import net.tfminecraft.thievery.loader.CategoryLoader;
 import net.tfminecraft.thievery.loader.ConfigLoader;
 import net.tfminecraft.thievery.clue.ClearCluesManager;
@@ -44,6 +46,7 @@ public class Thievery extends JavaPlugin {
     private DoorManager doorManager;
     private RobberyManager robberyManager;
     private PickpocketManager pickpocketManager;
+    private HandsUpManager handsUpManager;
     private LockPickManager lockPickManager;
     private LockMinigameManager lockMinigameManager;
     private StealManager stealManager;
@@ -70,6 +73,8 @@ public class Thievery extends JavaPlugin {
         lockMinigameManager = new LockMinigameManager(lockPickManager);
         robberyManager = new RobberyManager();
         pickpocketManager = new PickpocketManager(lockMinigameManager);
+        handsUpManager = new HandsUpManager();
+        Bukkit.getScheduler().runTaskTimer(this, handsUpManager::refresh, 5L, 5L);
         stealGuiUpdater = new StealGuiUpdater(stealManager);
         stealGuiUpdater.start();
         CooldownResetService cooldownResetService = new CooldownResetService(lockPickManager);
@@ -84,6 +89,8 @@ public class Thievery extends JavaPlugin {
         getCommand("robbery").setTabCompleter(new RobberyCommand(robberyManager));
         getCommand("pickpocket").setExecutor(new PickpocketCommand(pickpocketManager));
         getCommand("pickpocket").setTabCompleter(new PickpocketCommand(pickpocketManager));
+        getCommand("handsup").setExecutor(handsUpManager);
+        getCommand("handsup").setTabCompleter(handsUpManager);
 
         getServer().getPluginManager().registerEvents(stealManager, this);
         getServer().getPluginManager().registerEvents(new GraveStealListener(), this);
@@ -92,8 +99,10 @@ public class Thievery extends JavaPlugin {
         getServer().getPluginManager().registerEvents(lockMinigameManager, this);
         getServer().getPluginManager().registerEvents(doorManager, this);
         getServer().getPluginManager().registerEvents(robberyManager, this);
+        getServer().getPluginManager().registerEvents(handsUpManager, this);
         if (TraitChecker.characterApiAvailable()) {
             getServer().getPluginManager().registerEvents(new RobberyCharacterListener(robberyManager), this);
+            getServer().getPluginManager().registerEvents(new HandsUpCharacterListener(handsUpManager), this);
         }
         getServer().getPluginManager().registerEvents(pickpocketManager, this);
         getServer().getPluginManager().registerEvents(playerManager, this);
@@ -122,6 +131,9 @@ public class Thievery extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (handsUpManager != null) {
+            handsUpManager.shutdown();
+        }
         if (lockMinigameManager != null) {
             lockMinigameManager.cancelAll();
         }
@@ -137,6 +149,7 @@ public class Thievery extends JavaPlugin {
     }
 
     public void reload() {
+        handsUpManager.shutdown();
         // Running picks would carry on under the new settings; end them without a penalty, as a shutdown does.
         lockMinigameManager.cancelAll();
         playerManager.unloadAll();
