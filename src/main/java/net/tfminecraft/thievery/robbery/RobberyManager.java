@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -32,6 +33,7 @@ import org.bukkit.inventory.Inventory;
 import net.tfminecraft.thievery.Thievery;
 import net.tfminecraft.thievery.player.PlayerTargetDataManager;
 import net.tfminecraft.thievery.player.PlayerTargetData;
+import net.tfminecraft.thievery.player.TraitChecker;
 import net.tfminecraft.thievery.robbery.RobberySession;
 import net.tfminecraft.thievery.robbery.RobberySession.State;
 import net.tfminecraft.thievery.steal.StealGuiHolder;
@@ -77,6 +79,13 @@ public class RobberyManager implements Listener {
         Player robber = Bukkit.getPlayer(session.getRobberId());
         if (robber == null || !robber.isOnline()) {
             victim.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "The robber has gone."));
+            endSession(session, false);
+            return false;
+        }
+        if (!sameCharacters(session, robber, victim)
+                || !TraitChecker.hasTraits(robber, RobberyLoader.getTraits())) {
+            victim.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "That robbery request has expired."));
+            robber.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "Your robbery request was cancelled."));
             endSession(session, false);
             return false;
         }
@@ -148,6 +157,7 @@ public class RobberyManager implements Listener {
         RobberySession session = new RobberySession(robber.getUniqueId(), victim.getUniqueId(), budget, layout);
         session.setAcceptDeadlineMs(System.currentTimeMillis()
                 + RobberyLoader.getAcceptTimeoutSeconds() * 1000L);
+        session.setCharacters(TraitChecker.currentSession(robber), TraitChecker.currentSession(victim));
         sessionsByRobber.put(robber.getUniqueId(), session);
         EvilRpPlays.record(robber);
 
@@ -254,6 +264,32 @@ public class RobberyManager implements Listener {
         }
     }
 
+    /**
+     * A request belongs to the characters both players were in when it was made. When either session
+     * ends, the robber stops targeting and pending requests expire. Active robberies keep their own rules.
+     */
+    public void characterSessionEnded(Player player) {
+        UUID playerId = player.getUniqueId();
+        awaitingTarget.remove(playerId);
+        for (RobberySession session : new ArrayList<>(sessionsByRobber.values())) {
+            if (session.getState() != State.PENDING_ACCEPT
+                    || (!session.getRobberId().equals(playerId) && !session.getVictimId().equals(playerId))) {
+                continue;
+            }
+            endSession(session, false);
+            UUID otherId = session.getRobberId().equals(playerId) ? session.getVictimId() : session.getRobberId();
+            Player other = Bukkit.getPlayer(otherId);
+            if (other != null && other.isOnline()) {
+                other.sendMessage(ThieveryTexts.msg(ThieveryTexts.MUTED + "The robbery request has expired."));
+            }
+        }
+    }
+
+    private static boolean sameCharacters(RobberySession session, Player robber, Player victim) {
+        return Objects.equals(session.getRobberCharacter(), TraitChecker.currentSession(robber))
+                && Objects.equals(session.getVictimCharacter(), TraitChecker.currentSession(victim));
+    }
+
     private void openActiveRobbery(Player robber, Player victim, RobberySession session) {
         session.setState(State.ACTIVE);
         EvilRpPlays.record(robber);
@@ -324,7 +360,13 @@ public class RobberyManager implements Listener {
         }
     }
 
+    /** Keeps the restraint while another active robbery still holds the victim. */
     private void releaseVictim(UUID victimId) {
+        for (RobberySession other : sessionsByRobber.values()) {
+            if (other.getState() == State.ACTIVE && other.getVictimId().equals(victimId)) {
+                return;
+            }
+        }
         victimRestraintLocations.remove(victimId);
     }
 }

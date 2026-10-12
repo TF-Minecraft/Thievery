@@ -5,6 +5,7 @@ import java.util.UUID;
 import net.tfminecraft.thievery.steal.session.StealSession;
 import net.tfminecraft.thievery.steal.StealBudget;
 import net.tfminecraft.thievery.steal.StealGui;
+import net.tfminecraft.tlibs.character.CharacterSession;
 
 public class RobberySession extends StealSession {
 
@@ -18,6 +19,8 @@ public class RobberySession extends StealSession {
     private State state;
     private long acceptDeadlineMs;
     private long activeEndMs;
+    private CharacterSession robberCharacter;
+    private CharacterSession victimCharacter;
 
     public RobberySession(UUID robberId, UUID victimId, StealBudget budget, StealGui.Layout layout) {
         super(budget, layout);
@@ -56,5 +59,19 @@ public class RobberySession extends StealSession {
 
     public void setActiveEndMs(long activeEndMs) {
         this.activeEndMs = activeEndMs;
+    }
+
+    /** The character sessions both players were in when the request was made; null means none was active. */
+    public void setCharacters(CharacterSession robberCharacter, CharacterSession victimCharacter) {
+        this.robberCharacter = robberCharacter;
+        this.victimCharacter = victimCharacter;
+    }
+
+    public CharacterSession getRobberCharacter() {
+        return robberCharacter;
+    }
+
+    public CharacterSession getVictimCharacter() {
+        return victimCharacter;
     }
 }

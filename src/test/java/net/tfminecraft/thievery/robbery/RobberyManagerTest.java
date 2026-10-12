@@ -13,6 +13,8 @@ import net.tfminecraft.thievery.loader.RobberyLoader;
 import net.tfminecraft.thievery.player.*;
 import net.tfminecraft.thievery.steal.*;
 import net.tfminecraft.thievery.utils.EvilRpPlays;
+import net.tfminecraft.tlibs.character.CharacterRef;
+import net.tfminecraft.tlibs.character.CharacterSession;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
@@ -41,6 +43,9 @@ class RobberyManagerTest {
     private MockedStatic<RobberyUtil> range;
     private MockedStatic<StealManager> stealStatics;
     private MockedStatic<PlayerSlotMap> slots;
+    private MockedStatic<TraitChecker> traits;
+    private final Map<Player, CharacterSession> characters = new HashMap<>();
+    private long nextSessionId;
     private MockedConstruction<PlayerTargetDataManager> targets;
     private MockedConstruction<RobberyStealReference> references;
     private RobberyManager manager;
@@ -108,6 +113,11 @@ class RobberyManagerTest {
         guilds.when(GuildAccessCooldown::today).thenReturn("2026-09-26");
         slots = statics(PlayerSlotMap.class);
         statics(EvilRpPlays.class);
+        traits = statics(TraitChecker.class);
+        traits.when(() -> TraitChecker.hasTraits(any(), any())).thenReturn(true);
+        traits.when(() -> TraitChecker.currentSession(any())).thenAnswer(call -> characters.get(call.getArgument(0)));
+        play(robber, UUID.randomUUID());
+        play(victim, UUID.randomUUID());
         manager = new RobberyManager();
         // Observe the real pending session to advance its public deadline without sleeping.
         Field sessionField = RobberyManager.class.getDeclaredField("sessionsByRobber");
@@ -120,6 +130,13 @@ class RobberyManagerTest {
         for (int i = statics.size() - 1; i >= 0; i--) statics.get(i).close();
         references.close();
         targets.close();
+    }
+
+    /** Starts a fresh session as the given character, as joining or switching does. */
+    private CharacterSession play(Player player, UUID characterId) {
+        CharacterSession session = new CharacterSession(new CharacterRef(player.getUniqueId(), characterId), ++nextSessionId);
+        characters.put(player, session);
+        return session;
     }
 
     private void click(Entity clicked) {
@@ -441,5 +458,120 @@ class RobberyManagerTest {
         quit(victim);
         slots.verifyNoInteractions();
         assertFalse(manager.isVictimRestrained(victim.getUniqueId()));
+    }
+
+    @Test
+    void requestRecordsBothCharacterSessionsAndAcceptsWhileTheyStayCurrent() {
+        RobberySession session = request();
+        assertSame(characters.get(robber), session.getRobberCharacter());
+        assertSame(characters.get(victim), session.getVictimCharacter());
+        assertTrue(manager.acceptRobbery(victim));
+        traits.verify(() -> TraitChecker.hasTraits(robber, RobberyLoader.getTraits()));
+    }
+
+    @Test
+    void robberSwitchingAwayAndBackToTheSameCharacterExpiresTheRequest() {
+        UUID alice = characters.get(robber).ref().characterId();
+        request();
+        play(robber, UUID.randomUUID());
+        play(robber, alice);
+        assertFalse(manager.acceptRobbery(victim));
+        assertTrue(sessions.isEmpty());
+        verify(victim).sendMessage(contains("request has expired"));
+        verify(robber).sendMessage(contains("request was cancelled"));
+        assertFalse(manager.isVictimRestrained(victim.getUniqueId()));
+    }
+
+    @Test
+    void victimSwitchingCharacterOrRobberLosingTheTraitExpiresTheRequest() {
+        request();
+        play(victim, UUID.randomUUID());
+        assertFalse(manager.acceptRobbery(victim));
+        assertTrue(sessions.isEmpty());
+        request();
+        traits.when(() -> TraitChecker.hasTraits(robber, RobberyLoader.getTraits())).thenReturn(false);
+        assertFalse(manager.acceptRobbery(victim));
+        assertTrue(sessions.isEmpty());
+        verify(robber, times(2)).sendMessage(contains("request was cancelled"));
+    }
+
+    @Test
+    void playersWithoutCharactersMustStillHaveNoneWhenAccepting() {
+        characters.clear();
+        RobberySession session = request();
+        assertNull(session.getRobberCharacter());
+        assertNull(session.getVictimCharacter());
+        assertTrue(manager.acceptRobbery(victim));
+        characters.clear();
+        manager.startAwaitingTarget(robber);
+        click(victim);
+        play(robber, UUID.randomUUID());
+        assertFalse(manager.acceptRobbery(victim));
+    }
+
+    @Test
+    void endingEitherCharacterSessionExpiresPendingRequestsAndTargeting() {
+        request();
+        manager.characterSessionEnded(robber);
+        assertTrue(sessions.isEmpty());
+        verify(victim).sendMessage(contains("request has expired"));
+        request();
+        manager.characterSessionEnded(victim);
+        assertTrue(sessions.isEmpty());
+        verify(robber).sendMessage(contains("request has expired"));
+        manager.startAwaitingTarget(robber);
+        manager.characterSessionEnded(robber);
+        assertFalse(manager.isAwaitingTarget(robber.getUniqueId()));
+        request();
+        when(robber.isOnline()).thenReturn(false);
+        manager.characterSessionEnded(victim);
+        bukkit.when(() -> Bukkit.getPlayer(victim.getUniqueId())).thenReturn(null);
+        request();
+        manager.characterSessionEnded(robber);
+        assertTrue(sessions.isEmpty());
+        verify(robber, times(1)).sendMessage(contains("request has expired"));
+        verify(victim, times(1)).sendMessage(contains("request has expired"));
+    }
+
+    @Test
+    void sessionEndsLeaveActiveRobberiesAndUnrelatedRequestsAlone() {
+        RobberySession pending = request();
+        manager.characterSessionEnded(player("Other"));
+        assertSame(pending, sessions.get(robber.getUniqueId()));
+        assertTrue(manager.acceptRobbery(victim));
+        manager.characterSessionEnded(robber);
+        manager.characterSessionEnded(victim);
+        assertTrue(manager.isRobberInActiveSession(robber.getUniqueId()));
+        assertTrue(manager.isVictimRestrained(victim.getUniqueId()));
+    }
+
+    @Test
+    void endingASecondRobbersRequestKeepsTheActiveRobberysRestraint() {
+        activate();
+        Player second = player("Second");
+        sessions.put(second.getUniqueId(), new RobberySession(second.getUniqueId(), victim.getUniqueId(), null, null));
+        manager.characterSessionEnded(victim);
+        assertFalse(sessions.containsKey(second.getUniqueId()));
+        assertTrue(manager.isRobberInActiveSession(robber.getUniqueId()));
+        assertTrue(manager.isVictimRestrained(victim.getUniqueId()));
+        // Robberies of other victims, active or pending, do not hold this one.
+        UUID otherVictim = UUID.randomUUID();
+        RobberySession elsewhere = new RobberySession(UUID.randomUUID(), otherVictim, null, null);
+        elsewhere.setState(RobberySession.State.ACTIVE);
+        sessions.put(elsewhere.getRobberId(), elsewhere);
+        UUID waiting = UUID.randomUUID();
+        sessions.put(waiting, new RobberySession(waiting, otherVictim, null, null));
+        quit(robber);
+        assertFalse(manager.isVictimRestrained(victim.getUniqueId()));
+    }
+
+    @Test
+    void characterListenerForwardsSessionEnds() {
+        RobberyManager robberies = mock(RobberyManager.class);
+        CharacterSession session = characters.get(robber);
+        new RobberyCharacterListener(robberies).onCharacterSessionEnd(
+                new net.tfminecraft.tlibs.character.CharacterSessionEndEvent(robber, session,
+                        net.tfminecraft.tlibs.character.CharacterSessionEndEvent.Reason.SWITCH));
+        verify(robberies).characterSessionEnded(robber);
     }
 }

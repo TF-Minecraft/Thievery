@@ -22,6 +22,9 @@ import net.tfminecraft.thievery.loader.CategoryLoader;
 import net.tfminecraft.thievery.loader.ConfigLoader;
 import net.tfminecraft.thievery.player.PlayerData;
 import net.tfminecraft.thievery.player.PlayerManager;
+import net.tfminecraft.thievery.player.TraitChecker;
+import net.tfminecraft.thievery.robbery.RobberyCharacterListener;
+import net.tfminecraft.thievery.robbery.RobberyManager;
 import net.tfminecraft.thievery.steal.FurnitureDisplayListener;
 import net.tfminecraft.thievery.steal.GraveStealListener;
 import net.tfminecraft.thievery.steal.StealManager;
@@ -116,24 +119,32 @@ class ThieveryTest {
     }
 
     @Test
-    void oldTLibsDisablesBeforeConfigurationOrServices() throws Exception {
-        var startup = mock(Thievery.class);
-        var startupServer = mock(org.bukkit.Server.class);
-        var plugins = mock(org.bukkit.plugin.PluginManager.class);
-        var logger = mock(java.util.logging.Logger.class);
-        when(startup.getServer()).thenReturn(startupServer);
-        when(startupServer.getPluginManager()).thenReturn(plugins);
-        when(startup.getLogger()).thenReturn(logger);
-        doCallRealMethod().when(startup).onEnable();
+    void oldTLibsKeepsProtectionRunningAndWarnsThatTraitActionsAreDenied() {
+        List<String> warnings = new ArrayList<>();
+        java.util.logging.Handler capture = new java.util.logging.Handler() {
+            @Override public void publish(java.util.logging.LogRecord record) {
+                if (record.getLevel() == java.util.logging.Level.WARNING) warnings.add(record.getMessage());
+            }
+            @Override public void flush() {}
+            @Override public void close() {}
+        };
+        java.util.logging.Logger.getLogger("").addHandler(capture);
         try (var unavailable = mockStatic(net.tfminecraft.tlibs.character.Characters.class)) {
             unavailable.when(net.tfminecraft.tlibs.character.Characters::available)
                     .thenThrow(new NoClassDefFoundError("CharacterIdentity"));
-            startup.onEnable();
-            verify(plugins).disablePlugin(startup);
-            verify(logger).severe("Thievery requires TLibs 2.3.0 or newer. Update TLibs and restart the server.");
-            verify(startup, never()).createConfigs();
-            verify(startup, never()).getCommand(anyString());
-            assertTrue(containers.constructed().isEmpty());
+            load();
+            assertTrue(plugin.isEnabled());
+            assertFalse(TraitChecker.characterApiAvailable());
+            assertTrue(warnings.stream().anyMatch(message -> message.contains("older than 2.3.0")));
+            Set<Class<?>> listeners = new HashSet<>();
+            HandlerList.getRegisteredListeners(plugin).forEach(listener -> listeners.add(listener.getListener().getClass()));
+            assertTrue(listeners.contains(DoorManager.class));
+            assertTrue(listeners.contains(RobberyManager.class));
+            assertFalse(listeners.contains(RobberyCharacterListener.class));
+            assertEquals(1, containers.constructed().size());
+        } finally {
+            java.util.logging.Logger.getLogger("").removeHandler(capture);
+            TraitChecker.detectCharacterApi();
         }
     }
 
@@ -177,6 +188,7 @@ class ThieveryTest {
         assertTrue(listeners.contains(GraveStealListener.class));
         assertTrue(listeners.contains(DoorManager.class));
         assertTrue(listeners.contains(PlayerManager.class));
+        assertTrue(listeners.contains(RobberyCharacterListener.class));
         assertFalse(listeners.contains(FurnitureDisplayListener.class));
         assertEquals(2, pluginTasks().size());
         assertTrue(Thievery.getPlayerManager().exists(admin));

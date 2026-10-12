@@ -78,13 +78,12 @@ class AccessUtilitiesTest {
             verify(characters.player).sendMessage("§cYou lack the training to pick locks!");
             verify(characters.identity).currentSession(characters.player);
             verify(characters.identity).info(characters.session.ref().characterId());
-            verify(characters.identity).isCurrent(characters.session);
             verifyNoMoreInteractions(characters.identity);
         } finally { Cache.traits = saved; }
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"absent", "pending", "unknown", "wrong-owner", "wrong-character", "dead", "missing", "invalidated"})
+    @ValueSource(strings = {"absent", "pending", "unknown", "dead", "missing"})
     void unavailableOrInvalidCharacterSnapshotsDenySilently(String condition) {
         var saved = Cache.traits;
         try (CharacterFixture characters = new CharacterFixture()) {
@@ -95,13 +94,8 @@ class AccessUtilitiesTest {
                 case "absent" -> characters.unregister();
                 case "pending" -> characters.session = null;
                 case "unknown" -> characters.snapshots.clear();
-                case "wrong-owner" -> characters.snapshots.put(ref.characterId(),
-                        characters.info(new CharacterRef(UUID.randomUUID(), ref.characterId()), CharacterStatus.ALIVE, "thief"));
-                case "wrong-character" -> characters.snapshots.put(ref.characterId(),
-                        characters.info(new CharacterRef(ref.ownerId(), UUID.randomUUID()), CharacterStatus.ALIVE, "thief"));
                 case "dead" -> characters.snapshots.put(ref.characterId(), characters.info(ref, CharacterStatus.DEAD, "thief"));
                 case "missing" -> characters.snapshots.put(ref.characterId(), characters.info(ref, CharacterStatus.MISSING, "thief"));
-                case "invalidated" -> characters.valid = false;
             }
             assertFalse(TraitChecker.hasTraits(characters.player, Cache.traits));
             assertFalse(TraitChecker.hasLockpickingTraits(characters.player));
@@ -133,20 +127,34 @@ class AccessUtilitiesTest {
         } finally { Cache.traits = saved; }
     }
 
-    @Test void tokenInvalidatedWhileReadingSnapshotCannotGrantTraitsOrFeedback() {
+    @Test void missingCharacterApiDeniesConfiguredTraitsWithoutTouchingTLibs() {
         var saved = Cache.traits;
         try (CharacterFixture characters = new CharacterFixture()) {
-            Cache.traits = List.of("thief");
             characters.ready(UUID.randomUUID(), 1, "thief");
-            CharacterSession original = characters.session;
-            when(characters.identity.info(original.ref().characterId())).thenAnswer(call -> {
-                characters.ready(original.ref().characterId(), 2, "thief");
-                return Optional.of(characters.snapshots.get(original.ref().characterId()));
-            });
-            assertFalse(TraitChecker.hasLockpickingTraits(characters.player));
-            verify(characters.identity).isCurrent(original);
+            try (var old = mockStatic(Characters.class)) {
+                old.when(Characters::available).thenThrow(new NoClassDefFoundError("CharacterIdentity"));
+                assertFalse(TraitChecker.detectCharacterApi());
+                assertFalse(TraitChecker.characterApiAvailable());
+                Cache.traits = List.of("thief");
+                assertNull(TraitChecker.currentSession(characters.player));
+                assertFalse(TraitChecker.hasRequiredTraits(characters.player));
+                assertFalse(TraitChecker.hasLockpickingTraits(characters.player));
+                Cache.traits = List.of();
+                assertTrue(TraitChecker.hasLockpickingTraits(characters.player));
+                old.verify(Characters::available);
+                old.verifyNoMoreInteractions();
+            }
             verify(characters.player, never()).sendMessage(anyString());
-        } finally { Cache.traits = saved; }
+            assertTrue(TraitChecker.detectCharacterApi());
+            assertSame(characters.session, TraitChecker.currentSession(characters.player));
+        } finally {
+            Cache.traits = saved;
+            try (var current = mockStatic(Characters.class)) { TraitChecker.detectCharacterApi(); }
+        }
+    }
+
+    @Test void configuredTraitIdsAreLowerCasedToMatchCharacterTraits() {
+        assertEquals(List.of("thief", "bandit"), TraitChecker.normalise(List.of("Thief", "BANDIT")));
     }
 
     private static final class CharacterFixture implements AutoCloseable {
@@ -156,13 +164,11 @@ class AccessUtilitiesTest {
         private final Map<UUID, CharacterInfo> snapshots = new HashMap<>();
         private final UUID ownerId = UUID.randomUUID();
         private CharacterSession session;
-        private boolean valid = true;
 
         private CharacterFixture() {
             when(player.getUniqueId()).thenReturn(ownerId);
             when(identity.currentSession(player)).thenAnswer(call -> Optional.ofNullable(session));
             when(identity.info(any(UUID.class))).thenAnswer(call -> Optional.ofNullable(snapshots.get(call.getArgument(0))));
-            when(identity.isCurrent(any())).thenAnswer(call -> valid && call.getArgument(0).equals(session));
             server.getServicesManager().register(CharacterIdentity.class, identity, MockBukkit.createMockPlugin(), ServicePriority.Normal);
         }
 

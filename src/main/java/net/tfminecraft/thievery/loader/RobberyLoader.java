@@ -6,6 +6,7 @@ import java.util.List;
 
 import org.bukkit.configuration.file.FileConfiguration;
 
+import net.tfminecraft.thievery.player.TraitChecker;
 import net.tfminecraft.thievery.steal.StealIgnoreRules;
 
 public final class RobberyLoader {
@@ -23,7 +24,7 @@ public final class RobberyLoader {
     private RobberyLoader() {}
 
     public static void load(FileConfiguration config) {
-        traits = config.getStringList("robbery.traits");
+        traits = TraitChecker.normalise(config.getStringList("robbery.traits"));
         budget = config.getDouble("robbery.budget", 300);
         cooldownDays = config.getInt("robbery.cooldown-days",
                 config.getInt("player-steal.cooldown-days", config.getInt("cooldown", 3)));
