@@ -13,6 +13,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 
 import net.tfminecraft.thievery.Thievery;
 import net.tfminecraft.thievery.cache.Cache;
+import net.tfminecraft.thievery.player.TraitChecker;
 import net.tfminecraft.thievery.cache.Parameters;
 import net.tfminecraft.thievery.door.LockState;
 import net.tfminecraft.thievery.door.LockTypeProfile;
@@ -45,7 +46,7 @@ public class ConfigLoader {
                 config.getDouble("default_value", 0.1));
         loadItemValue(config.getConfigurationSection("item_value"));
 
-        if (config.contains("traits")) Cache.traits = config.getStringList("traits");
+        if (config.contains("traits")) Cache.traits = TraitChecker.normalise(config.getStringList("traits"));
 
         Cache.recentClueMax = config.getInt("clues.recent-max", 6);
         Cache.recentClueCooldownHours = config.getInt("clues.recent-cooldown-hours", 72);

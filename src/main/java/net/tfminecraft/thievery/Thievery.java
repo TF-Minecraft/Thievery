@@ -28,6 +28,8 @@ import net.tfminecraft.thievery.door.LockMinigameManager;
 import net.tfminecraft.thievery.player.PickpocketManager;
 import net.tfminecraft.thievery.player.PlayerManager;
 import net.tfminecraft.thievery.player.RiskSetService;
+import net.tfminecraft.thievery.player.TraitChecker;
+import net.tfminecraft.thievery.robbery.RobberyCharacterListener;
 import net.tfminecraft.thievery.robbery.RobberyManager;
 import net.tfminecraft.thievery.steal.DisplayStealManager;
 import net.tfminecraft.thievery.steal.FurnitureDisplayListener;
@@ -53,12 +55,9 @@ public class Thievery extends JavaPlugin {
 
     @Override
     public void onEnable() {
-        try {
-            net.tfminecraft.tlibs.character.Characters.available();
-        } catch (LinkageError error) {
-            getLogger().severe("Thievery requires TLibs 2.3.0 or newer. Update TLibs and restart the server.");
-            getServer().getPluginManager().disablePlugin(this);
-            return;
+        if (!TraitChecker.detectCharacterApi()) {
+            getLogger().warning("TLibs is older than 2.3.0, so lockpicking, robbery and pickpocketing that need"
+                    + " character traits are denied. Locks and doors stay protected. Update TLibs and restart.");
         }
         instance = this;
         createConfigs();
@@ -93,6 +92,9 @@ public class Thievery extends JavaPlugin {
         getServer().getPluginManager().registerEvents(lockMinigameManager, this);
         getServer().getPluginManager().registerEvents(doorManager, this);
         getServer().getPluginManager().registerEvents(robberyManager, this);
+        if (TraitChecker.characterApiAvailable()) {
+            getServer().getPluginManager().registerEvents(new RobberyCharacterListener(robberyManager), this);
+        }
         getServer().getPluginManager().registerEvents(pickpocketManager, this);
         getServer().getPluginManager().registerEvents(playerManager, this);
         getServer().getPluginManager().registerEvents(inventoryManager, this);

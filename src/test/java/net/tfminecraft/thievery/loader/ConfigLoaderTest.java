@@ -116,7 +116,7 @@ class ConfigLoaderTest {
                 point_gain_interval: 12
                 default_item_value: 2.5
                 default_value: 99
-                traits: [thief, rogue]
+                traits: [Thief, ROGUE]
                 clues:
                   recent-max: 9
                   recent-cooldown-hours: 48

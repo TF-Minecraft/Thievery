@@ -6,6 +6,7 @@ import java.util.List;
 
 import org.bukkit.configuration.file.FileConfiguration;
 
+import net.tfminecraft.thievery.player.TraitChecker;
 import net.tfminecraft.thievery.steal.StealIgnoreRules;
 import net.tfminecraft.thievery.utils.ThieveryTexts;
 
@@ -22,7 +23,7 @@ public final class PickpocketLoader {
     private PickpocketLoader() {}
 
     public static void load(FileConfiguration config) {
-        traits = config.getStringList("pickpocket.traits");
+        traits = TraitChecker.normalise(config.getStringList("pickpocket.traits"));
         if (traits.isEmpty()) {
             traits = new ArrayList<>(List.of("thief"));
         }

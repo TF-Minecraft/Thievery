@@ -53,7 +53,7 @@ class ActivityLoadersTest {
     void configuredActivitiesOverrideDefaultsAndExposeReadOnlyLists() throws Exception {
         YamlConfiguration config = yaml("""
                 robbery:
-                  traits: [bandit, outlaw]
+                  traits: [Bandit, OUTLAW]
                   budget: 123.5
                   cooldown-days: 7
                   duration-seconds: 90
@@ -62,7 +62,7 @@ class ActivityLoadersTest {
                   ignore:
                     name-contains: [Protected]
                 pickpocket:
-                  traits: [rogue]
+                  traits: [Rogue]
                   budget: 25.5
                   cooldown-hours: 1000000
                   max-distance: 2.5
