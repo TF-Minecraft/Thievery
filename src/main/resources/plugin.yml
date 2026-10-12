@@ -5,7 +5,7 @@ version: ${project.version}
 author: Drefvelin
 
 depend: [MMOCore, TLibs, RPCharacters]
-softdepend: [AdvancedCrafting, InteractibleFurniture, DenarEconomy, GunsAndGadgets, Magic]
+softdepend: [AdvancedCrafting, InteractibleFurniture, DenarEconomy, GunsAndGadgets, Magic, ItemsAdder]
 
 commands:
   thievery:
@@ -15,3 +15,6 @@ commands:
     description: Robbery commands
   pickpocket:
     description: Pickpocket commands
+  handsup:
+    description: Toggle read-only inventory inspection by other players
+    usage: /handsup
