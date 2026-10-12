@@ -546,6 +546,26 @@ class RobberyManagerTest {
     }
 
     @Test
+    void endingASecondRobbersRequestKeepsTheActiveRobberysRestraint() {
+        activate();
+        Player second = player("Second");
+        sessions.put(second.getUniqueId(), new RobberySession(second.getUniqueId(), victim.getUniqueId(), null, null));
+        manager.characterSessionEnded(victim);
+        assertFalse(sessions.containsKey(second.getUniqueId()));
+        assertTrue(manager.isRobberInActiveSession(robber.getUniqueId()));
+        assertTrue(manager.isVictimRestrained(victim.getUniqueId()));
+        // Robberies of other victims, active or pending, do not hold this one.
+        UUID otherVictim = UUID.randomUUID();
+        RobberySession elsewhere = new RobberySession(UUID.randomUUID(), otherVictim, null, null);
+        elsewhere.setState(RobberySession.State.ACTIVE);
+        sessions.put(elsewhere.getRobberId(), elsewhere);
+        UUID waiting = UUID.randomUUID();
+        sessions.put(waiting, new RobberySession(waiting, otherVictim, null, null));
+        quit(robber);
+        assertFalse(manager.isVictimRestrained(victim.getUniqueId()));
+    }
+
+    @Test
     void characterListenerForwardsSessionEnds() {
         RobberyManager robberies = mock(RobberyManager.class);
         CharacterSession session = characters.get(robber);

@@ -360,7 +360,13 @@ public class RobberyManager implements Listener {
         }
     }
 
+    /** Keeps the restraint while another active robbery still holds the victim. */
     private void releaseVictim(UUID victimId) {
+        for (RobberySession other : sessionsByRobber.values()) {
+            if (other.getState() == State.ACTIVE && other.getVictimId().equals(victimId)) {
+                return;
+            }
+        }
         victimRestraintLocations.remove(victimId);
     }
 }
