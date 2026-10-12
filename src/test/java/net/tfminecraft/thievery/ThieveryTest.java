@@ -17,6 +17,8 @@ import net.tfminecraft.thievery.command.PickpocketCommand;
 import net.tfminecraft.thievery.command.RobberyCommand;
 import net.tfminecraft.thievery.inspection.HandsUpCharacterListener;
 import net.tfminecraft.thievery.inspection.HandsUpManager;
+import net.tfminecraft.thievery.inspection.ItemsAdderHandsUpAnimation;
+import dev.lone.itemsadder.api.CustomPlayer;
 import net.tfminecraft.thievery.database.Database;
 import net.tfminecraft.thievery.door.ContainerManager;
 import net.tfminecraft.thievery.door.DoorManager;
@@ -189,7 +191,7 @@ class ThieveryTest {
         assertInstanceOf(HandsUpManager.class, plugin.getCommand("handsup").getExecutor());
         assertSame(plugin.getCommand("handsup").getExecutor(), plugin.getCommand("handsup").getTabCompleter());
         assertTrue(server.dispatchCommand(ordinary, "handsup"));
-        assertTrue(ordinary.nextMessage().contains("Hands up!"));
+        assertTrue(ordinary.nextMessage().contains("inspection is still off"));
         Set<Class<?>> listeners = new HashSet<>();
         HandlerList.getRegisteredListeners(plugin).forEach(listener -> listeners.add(listener.getListener().getClass()));
         assertTrue(listeners.contains(GraveStealListener.class));
@@ -204,6 +206,25 @@ class ThieveryTest {
         assertTrue(Thievery.getPlayerManager().exists(ordinary));
         verify(plugin.getContainerManager()).enableFeedback(admin);
         verify(plugin.getContainerManager(), never()).enableFeedback(ordinary);
+    }
+
+    @Test
+    void itemsAdderIntegrationStartsAndStopsHandsUpThroughTheCommand() {
+        MockBukkit.createMockPlugin("ItemsAdder");
+        PlayerMock player = server.addPlayer();
+        CustomPlayer animated = mock(CustomPlayer.class);
+        when(animated.isPlayingAnimation(ItemsAdderHandsUpAnimation.EMOTE)).thenReturn(true);
+        try (var api = mockStatic(CustomPlayer.class)) {
+            api.when(() -> CustomPlayer.byAlreadySpawned(player)).thenReturn(animated);
+            load();
+            assertTrue(HandlerList.getRegisteredListeners(plugin).stream()
+                    .anyMatch(listener -> listener.getListener() instanceof ItemsAdderHandsUpAnimation));
+            assertTrue(server.dispatchCommand(player, "handsup"));
+            assertTrue(player.nextMessage().contains("Hands up!"));
+            api.verify(() -> CustomPlayer.playEmote(player, ItemsAdderHandsUpAnimation.EMOTE));
+            assertTrue(server.dispatchCommand(player, "handsup"));
+            api.verify(() -> CustomPlayer.stopEmote(player));
+        }
     }
 
     @Test

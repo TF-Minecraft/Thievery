@@ -16,6 +16,7 @@ import net.tfminecraft.thievery.command.PickpocketCommand;
 import net.tfminecraft.thievery.command.RobberyCommand;
 import net.tfminecraft.thievery.inspection.HandsUpCharacterListener;
 import net.tfminecraft.thievery.inspection.HandsUpManager;
+import net.tfminecraft.thievery.inspection.ItemsAdderHandsUpAnimation;
 import net.tfminecraft.thievery.loader.CategoryLoader;
 import net.tfminecraft.thievery.loader.ConfigLoader;
 import net.tfminecraft.thievery.clue.ClearCluesManager;
@@ -74,6 +75,11 @@ public class Thievery extends JavaPlugin {
         robberyManager = new RobberyManager();
         pickpocketManager = new PickpocketManager(lockMinigameManager);
         handsUpManager = new HandsUpManager();
+        if (getServer().getPluginManager().isPluginEnabled("ItemsAdder")) {
+            ItemsAdderHandsUpAnimation animation = new ItemsAdderHandsUpAnimation(this, handsUpManager);
+            handsUpManager.setAnimation(animation);
+            getServer().getPluginManager().registerEvents(animation, this);
+        }
         Bukkit.getScheduler().runTaskTimer(this, handsUpManager::refresh, 5L, 5L);
         stealGuiUpdater = new StealGuiUpdater(stealManager);
         stealGuiUpdater.start();

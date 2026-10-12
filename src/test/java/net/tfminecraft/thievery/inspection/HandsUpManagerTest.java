@@ -38,6 +38,7 @@ class HandsUpManagerTest {
     private ServerMock server;
     private Plugin plugin;
     private HandsUpManager manager;
+    private HandsUpAnimation animation;
     private PlayerMock target;
     private PlayerMock viewer;
 
@@ -46,6 +47,9 @@ class HandsUpManagerTest {
         server = MockBukkit.mock();
         plugin = MockBukkit.createMockPlugin();
         manager = new HandsUpManager();
+        animation = mock(HandsUpAnimation.class);
+        when(animation.start(any())).thenReturn(true);
+        manager.setAnimation(animation);
         server.getPluginManager().registerEvents(manager, plugin);
         server.getPluginManager().registerEvents(new HandsUpCharacterListener(manager), plugin);
         target = server.addPlayer();
@@ -77,6 +81,47 @@ class HandsUpManagerTest {
         Inventory inventory = viewer.getOpenInventory().getTopInventory();
         assertInstanceOf(InspectionInventory.class, inventory.getHolder());
         return inventory;
+    }
+
+    @Test
+    void unavailableOrFailedAnimationNeverEnablesInspection() {
+        manager.setAnimation(null);
+        toggle(target);
+        assertTrue(target.nextMessage().contains("inspection is still off"));
+        assertFalse(interact(viewer, target, EquipmentSlot.HAND).isCancelled());
+        manager.setAnimation(animation);
+        when(animation.start(target)).thenReturn(false);
+        toggle(target);
+        assertTrue(target.nextMessage().contains("inspection is still off"));
+        assertFalse(interact(viewer, target, EquipmentSlot.HAND).isCancelled());
+        manager.clearPlayer(target);
+        verify(animation, never()).stop(any());
+    }
+
+    @Test
+    void endingAnimationRevokesConsentAndClosesWindowsWithoutStoppingAgain() {
+        toggle(target);
+        Inventory inspection = inspect();
+        manager.animationEnded(target);
+        assertNotSame(inspection, viewer.getOpenInventory().getTopInventory());
+        assertFalse(interact(viewer, target, EquipmentSlot.HAND).isCancelled());
+        verify(animation, never()).stop(any());
+    }
+
+    @Test
+    void togglingAndShutdownStopOwnedAnimationsEvenWithoutViewers() {
+        doAnswer(invocation -> {
+            manager.animationEnded(invocation.getArgument(0));
+            return null;
+        }).when(animation).stop(any());
+        toggle(target);
+        toggle(target);
+        verify(animation).stop(target);
+        toggle(target);
+        manager.shutdown();
+        verify(animation, times(2)).stop(target);
+        verify(animation, never()).stop(viewer);
+        assertFalse(interact(viewer, target, EquipmentSlot.HAND).isCancelled());
     }
 
     @Test

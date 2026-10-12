@@ -31,6 +31,11 @@ public final class HandsUpManager implements Listener, TabExecutor {
     private static final double MAX_DISTANCE_SQUARED = 16;
     private final Set<UUID> raisedHands = new HashSet<>();
     private final Map<Player, InspectionInventory> viewers = new HashMap<>();
+    private HandsUpAnimation animation;
+
+    public void setAnimation(HandsUpAnimation animation) {
+        this.animation = animation;
+    }
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
@@ -46,10 +51,16 @@ public final class HandsUpManager implements Listener, TabExecutor {
             clearPlayer(player);
             player.sendMessage(ThieveryTexts.SUCCESS + "You lowered your hands. Inventory inspection is off.");
         } else if (!player.isDead()) {
+            if (animation == null || !animation.start(player)) {
+                player.sendMessage(ThieveryTexts.ERROR
+                        + "The hands-up pose could not start. Stand on the ground and try again."
+                        + " Inventory inspection is still off.");
+                return true;
+            }
             raisedHands.add(player.getUniqueId());
             player.sendMessage(ThieveryTexts.SUCCESS
                     + "Hands up! Players can right-click you to inspect your inventory, but cannot take items."
-                    + " Use /handsup again to stop.");
+                    + " Use /handsup again or sneak to stop.");
         }
         return true;
     }
@@ -128,6 +139,14 @@ public final class HandsUpManager implements Listener, TabExecutor {
     }
 
     public void clearPlayer(Player player) {
+        boolean wasRaised = raisedHands.contains(player.getUniqueId());
+        animationEnded(player);
+        if (wasRaised) {
+            animation.stop(player);
+        }
+    }
+
+    public void animationEnded(Player player) {
         UUID id = player.getUniqueId();
         raisedHands.remove(id);
         for (var entry : Map.copyOf(viewers).entrySet()) {
@@ -158,6 +177,11 @@ public final class HandsUpManager implements Listener, TabExecutor {
     }
 
     public void shutdown() {
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (raisedHands.contains(player.getUniqueId())) {
+                clearPlayer(player);
+            }
+        }
         raisedHands.clear();
         refresh();
     }

@@ -5,7 +5,7 @@ version: ${project.version}
 author: Drefvelin
 
 depend: [MMOCore, TLibs, RPCharacters]
-softdepend: [AdvancedCrafting, InteractibleFurniture, DenarEconomy, GunsAndGadgets, Magic]
+softdepend: [AdvancedCrafting, InteractibleFurniture, DenarEconomy, GunsAndGadgets, Magic, ItemsAdder]
 
 commands:
   thievery:
