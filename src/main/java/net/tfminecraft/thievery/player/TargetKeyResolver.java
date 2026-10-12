@@ -3,7 +3,8 @@ package net.tfminecraft.thievery.player;
 import java.util.UUID;
 
 import org.bukkit.Bukkit;
-import org.bukkit.OfflinePlayer;
+import net.tfminecraft.thievery.utils.FactionAccess;
+import net.tfminecraft.tlibs.character.Characters;
 
 import net.tfminecraft.simplefactions.guild.Guild;
 import net.tfminecraft.simplefactions.managers.FactionManager;
@@ -18,12 +19,8 @@ public final class TargetKeyResolver {
         if (ownerUUID == null) {
             return NONE;
         }
-        OfflinePlayer owner = Bukkit.getOfflinePlayer(ownerUUID);
-        String ownerName = owner.getName();
-        if (ownerName == null) {
-            return NONE;
-        }
-        Guild guild = FactionManager.getGuildByMember(ownerName);
+        if (!FactionAccess.ready() || FactionAccess.heir(ownerUUID).isEmpty()) return NONE;
+        Guild guild = FactionAccess.ownerGuild(ownerUUID);
         if (guild != null) {
             return "guild:" + guild.getId();
         }

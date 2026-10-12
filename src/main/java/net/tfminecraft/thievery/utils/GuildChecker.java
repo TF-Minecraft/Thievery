@@ -6,7 +6,8 @@ import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 
 import net.tfminecraft.simplefactions.guild.Guild;
-import net.tfminecraft.simplefactions.managers.FactionManager;
+import net.tfminecraft.simplefactions.identity.Members;
+import net.tfminecraft.tlibs.character.Characters;
 import net.tfminecraft.thievery.cache.Cache;
 import net.tfminecraft.thievery.cache.LockpickTargetCache;
 import net.tfminecraft.thievery.player.TargetKeyResolver;
@@ -31,14 +32,16 @@ public final class GuildChecker {
      */
     public static LockpickAccessResult checkLockpickAccess(UUID ownerUUID) {
         if (ownerUUID == null) return new LockpickAccessResult(LockpickAccessResult.Type.ALLOWED, null);
+        if (!FactionAccess.ready() || FactionAccess.heir(ownerUUID).isEmpty())
+            return new LockpickAccessResult(LockpickAccessResult.Type.DENY, "Character guilds are unavailable for this owner.");
         if (!Cache.requireOwnerOnline) {
             return new LockpickAccessResult(LockpickAccessResult.Type.ALLOWED, null);
         }
         OfflinePlayer owner = Bukkit.getOfflinePlayer(ownerUUID);
         String ownerName = owner.getName();
-        if (ownerName == null) return new LockpickAccessResult(LockpickAccessResult.Type.ALLOWED, null);
+        if (ownerName == null) ownerName = "The owner";
 
-        Guild guild = FactionManager.getGuildByMember(ownerName);
+        Guild guild = FactionAccess.ownerGuild(ownerUUID);
         String targetKey = TargetKeyResolver.resolve(ownerUUID);
         String subjectName;
         boolean membersOnline;
@@ -47,11 +50,11 @@ public final class GuildChecker {
             subjectName = guild.getName();
             membersOnline = false;
             for (String m : guild.getMembers()) {
-                if (Bukkit.getPlayerExact(m) != null) { membersOnline = true; break; }
+                if (Members.online(m).isPresent()) { membersOnline = true; break; }
             }
         } else {
             subjectName = ownerName;
-            membersOnline = owner.isOnline();
+            membersOnline = FactionAccess.heir(ownerUUID).filter(ref -> Members.isOnline(ref.characterId().toString())).isPresent();
         }
 
         if (membersOnline) {

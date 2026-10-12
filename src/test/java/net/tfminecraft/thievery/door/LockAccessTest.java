@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 import java.util.UUID;
 
 import net.tfminecraft.simplefactions.guild.Guild;
+import net.tfminecraft.thievery.utils.FactionAccess;
 import net.tfminecraft.simplefactions.managers.FactionManager;
 import net.tfminecraft.simplefactions.objects.Faction;
 import org.bukkit.Bukkit;
@@ -24,6 +25,7 @@ class LockAccessTest {
     private Guild openerGuild;
     private MockedStatic<Bukkit> bukkit;
     private MockedStatic<FactionManager> factions;
+    private MockedStatic<FactionAccess> access;
 
     @BeforeEach
     void setUp() {
@@ -38,13 +40,16 @@ class LockAccessTest {
         when(openerGuild.getId()).thenReturn("opener-guild");
         bukkit = mockStatic(Bukkit.class);
         factions = mockStatic(FactionManager.class);
+        access = mockStatic(FactionAccess.class);
+        access.when(FactionAccess::ready).thenReturn(true);
         bukkit.when(() -> Bukkit.getOfflinePlayer(owner)).thenReturn(ownerPlayer);
-        factions.when(() -> FactionManager.getGuildByMember("owner")).thenReturn(ownerGuild);
-        factions.when(() -> FactionManager.getGuildByMember("opener")).thenReturn(openerGuild);
+        access.when(() -> FactionAccess.ownerGuild(owner)).thenReturn(ownerGuild);
+        factions.when(() -> FactionManager.getGuildByMember(opener)).thenReturn(openerGuild);
     }
 
     @AfterEach
     void tearDown() {
+        access.close();
         factions.close();
         bukkit.close();
     }
@@ -53,7 +58,7 @@ class LockAccessTest {
     void publicUnownedAndPersonallyOwnedLocksAllowAccessWithoutGuildLookups() {
         assertTrue(LockAccess.canAccess(opener, owner, LockState.PUBLIC));
         assertTrue(LockAccess.canAccess(opener, null, LockState.PRIVATE));
-        when(opener.getUniqueId()).thenReturn(owner);
+        access.when(() -> FactionAccess.owns(opener, owner)).thenReturn(true);
         assertTrue(LockAccess.canAccess(opener, owner, LockState.PRIVATE));
         bukkit.verifyNoInteractions();
         factions.verifyNoInteractions();
@@ -68,14 +73,14 @@ class LockAccessTest {
 
     @Test
     void unknownOwnerOrMissingGuildPreventsSharedAccess() {
-        when(ownerPlayer.getName()).thenReturn(null);
+        access.when(FactionAccess::ready).thenReturn(false);
         assertFalse(LockAccess.canAccess(opener, owner, LockState.GUILD));
         factions.verifyNoInteractions();
-        when(ownerPlayer.getName()).thenReturn("owner");
-        factions.when(() -> FactionManager.getGuildByMember("owner")).thenReturn(null);
+        access.when(FactionAccess::ready).thenReturn(true);
+        access.when(() -> FactionAccess.ownerGuild(owner)).thenReturn(null);
         assertFalse(LockAccess.canAccess(opener, owner, LockState.GUILD));
-        factions.when(() -> FactionManager.getGuildByMember("owner")).thenReturn(ownerGuild);
-        factions.when(() -> FactionManager.getGuildByMember("opener")).thenReturn(null);
+        access.when(() -> FactionAccess.ownerGuild(owner)).thenReturn(ownerGuild);
+        factions.when(() -> FactionManager.getGuildByMember(opener)).thenReturn(null);
         assertFalse(LockAccess.canAccess(opener, owner, LockState.FACTION));
     }
 

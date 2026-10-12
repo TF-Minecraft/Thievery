@@ -1,5 +1,6 @@
 package net.tfminecraft.thievery.door;
 
+import net.tfminecraft.thievery.testsupport.FactionFixture;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -51,6 +52,10 @@ import org.mockito.MockedConstruction;
 import org.mockito.MockedStatic;
 
 class DoorManagerTest {
+    private FactionFixture stage5Factions;
+    @BeforeEach void factionReady() { stage5Factions = new FactionFixture(); }
+    @AfterEach void closeFactionFixture() { stage5Factions.close(); }
+
     private ServerMock server;
     private World world;
     private DoorManager manager;

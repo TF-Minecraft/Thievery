@@ -4,6 +4,10 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import java.util.*;
+import java.nio.file.Path;
+import net.tfminecraft.denareconomy.api.*;
+import net.tfminecraft.tlibs.character.*;
+import org.junit.jupiter.api.io.TempDir;
 import net.tfminecraft.thievery.Thievery;
 import net.tfminecraft.thievery.TestInventories;
 import net.tfminecraft.thievery.cache.Cache;
@@ -38,6 +42,7 @@ import org.mockbukkit.mockbukkit.entity.PlayerMock;
 import org.mockito.MockedStatic;
 
 class StealReferencesTest {
+    @TempDir Path payments;
     private ServerMock server;
     private PlayerMock thief, victim;
     private PlayerData data;
@@ -55,7 +60,7 @@ class StealReferencesTest {
     @BeforeEach void setUp() {
         server = MockBukkit.mock(); thief = server.addPlayer("Thief"); victim = server.addPlayer("Victim");
         Thievery plugin = mock(Thievery.class); when(plugin.namespace()).thenReturn("thievery");
-        when(plugin.getName()).thenReturn("Thievery"); when(plugin.isEnabled()).thenReturn(true);
+        when(plugin.getName()).thenReturn("Thievery"); when(plugin.getDataFolder()).thenReturn(payments.toFile()); when(plugin.getLogger()).thenReturn(java.util.logging.Logger.getAnonymousLogger()); when(plugin.isEnabled()).thenReturn(true);
         thievery = mockStatic(Thievery.class, RETURNS_DEEP_STUBS); thievery.when(Thievery::getInstance).thenReturn(plugin);
         data = mock(PlayerData.class); when(Thievery.getPlayerManager().get(thief.getUniqueId())).thenReturn(data);
         when(data.getRisk()).thenReturn(0.25);
@@ -282,21 +287,50 @@ class StealReferencesTest {
         }
     }
 
-    @Test void robberyPouchClicksRespectClickSizeBalanceAndBudgetAndChargeOnlyTransferredValue() {
+    @Test void robberyPouchClicksRespectLimitsAndRetryTheSameTransferWithoutChargingTwice() throws Exception {
         var session = robberySession(); Runnable end = mock(Runnable.class); var ref = new RobberyStealReference(session, end); Inventory inv = inventory(ref);
-        session.getBudget().addUsed(80);
-        try (var money = mockStatic(DenarMoney.class)) {
+        var a = new CharacterSession(new CharacterRef(thief.getUniqueId(),UUID.randomUUID()),1);
+        var b = new CharacterSession(new CharacterRef(victim.getUniqueId(),UUID.randomUUID()),2);
+        session.setCharacters(a,b); session.getBudget().addUsed(80);
+        try (var money = mockStatic(DenarMoney.class); var denars = mockStatic(Denars.class)) {
+            money.when(DenarMoney::present).thenReturn(true); denars.when(Denars::ready).thenReturn(true);
             money.when(() -> DenarMoney.getPouchBalance(victim)).thenReturn(50.0);
             money.when(() -> DenarMoney.maxStealableDenars(anyDouble())).thenAnswer(call -> (int)Math.floor((double)call.getArgument(0) / 0.5));
             money.when(DenarMoney::amountPerMoney).thenReturn(0.5);
-            ref.handleClick(click(inv, StealGui.ROBBERY_POUCH_GUI_SLOT, pouch, ClickType.LEFT), thief);
-            money.verify(() -> DenarMoney.transferPouch(victim, thief, 10)); assertEquals(85, session.getBudget().getUsed());
+            money.when(() -> DenarMoney.transferPouch(anyString(),eq(b),eq(a),anyLong())).thenReturn(Result.UNAVAILABLE,Result.APPLIED);
+            var click=click(inv, StealGui.ROBBERY_POUCH_GUI_SLOT, pouch, ClickType.LEFT);
+            ref.handleClick(click,thief); assertEquals(80,session.getBudget().getUsed());
+            ref.handleClick(click,thief); assertEquals(85,session.getBudget().getUsed());
+            ref.handleClick(click,thief); assertEquals(85,session.getBudget().getUsed());
+            var ids=org.mockito.ArgumentCaptor.forClass(String.class);
+            money.verify(() -> DenarMoney.transferPouch(ids.capture(),eq(b),eq(a),eq(1000L)),times(2));
+            assertEquals(ids.getAllValues().get(0),ids.getAllValues().get(1));
             ref.handleClick(click(inv, StealGui.ROBBERY_POUCH_GUI_SLOT, pouch, ClickType.SHIFT_LEFT), thief);
-            money.verify(() -> DenarMoney.transferPouch(victim, thief, 30)); assertEquals(100, session.getBudget().getUsed());
+            money.verify(() -> DenarMoney.transferPouch(anyString(),eq(b),eq(a),eq(3000L))); assertEquals(100, session.getBudget().getUsed());
             money.when(() -> DenarMoney.getPouchBalance(victim)).thenReturn(0.0);
             ref.handleClick(click(inv, StealGui.ROBBERY_POUCH_GUI_SLOT, pouch, ClickType.LEFT), thief); assertEquals(100, session.getBudget().getUsed());
             victim.disconnect(); ref.handleClick(click(inv, StealGui.ROBBERY_POUCH_GUI_SLOT, pouch, ClickType.LEFT), thief);
-            assertTrue(thief.nextMessage().contains("slipped away")); verify(end).run();
+            assertTrue(thief.nextMessage().contains("could not")); assertTrue(thief.nextMessage().contains("slipped away")); verify(end).run();
+        }
+    }
+
+    @Test void invalidCharacterAndUnsavablePouchIntentNeverSpendBudgetOrPostMoney() throws Exception {
+        var session=robberySession(); var ref=new RobberyStealReference(session,()->{}); var inv=inventory(ref);
+        try(var money=mockStatic(DenarMoney.class); var denars=mockStatic(Denars.class)) {
+            money.when(DenarMoney::present).thenReturn(true); denars.when(Denars::ready).thenReturn(true);
+            money.when(()->DenarMoney.maxStealableDenars(anyDouble())).thenReturn(100);
+            money.when(()->DenarMoney.getPouchBalance(victim)).thenReturn(Double.NaN);
+            ref.handleClick(click(inv,StealGui.ROBBERY_POUCH_GUI_SLOT,pouch,ClickType.LEFT),thief);
+            money.when(()->DenarMoney.getPouchBalance(victim)).thenReturn(50.0);
+            ref.handleClick(click(inv,StealGui.ROBBERY_POUCH_GUI_SLOT,pouch,ClickType.LEFT),thief);
+            assertTrue(thief.nextMessage().contains("could not")); assertEquals(0,session.getBudget().getUsed());
+            session.setCharacters(new CharacterSession(new CharacterRef(thief.getUniqueId(),UUID.randomUUID()),1),
+                    new CharacterSession(new CharacterRef(victim.getUniqueId(),UUID.randomUUID()),2));
+            java.nio.file.Files.writeString(payments.resolve("pouch-payments"),"cannot create a directory here");
+            ref.handleClick(click(inv,StealGui.ROBBERY_POUCH_GUI_SLOT,pouch,ClickType.LEFT),thief);
+            ref.handleClick(click(inv,StealGui.ROBBERY_POUCH_GUI_SLOT,pouch,ClickType.SHIFT_LEFT),thief);
+            assertEquals(0,session.getBudget().getUsed());
+            money.verify(()->DenarMoney.transferPouch(anyString(),any(),any(),anyLong()),never());
         }
     }
 

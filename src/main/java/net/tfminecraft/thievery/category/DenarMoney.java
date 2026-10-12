@@ -7,7 +7,10 @@ import org.bukkit.plugin.Plugin;
 
 import net.tfminecraft.denareconomy.DenarEconomy;
 import net.tfminecraft.denareconomy.item.Coin;
-import net.tfminecraft.denareconomy.managers.MoneyManager;
+import net.tfminecraft.denareconomy.api.Denars;
+import net.tfminecraft.denareconomy.api.Result;
+import net.tfminecraft.tlibs.character.CharacterSession;
+import net.tfminecraft.tlibs.character.Characters;
 import net.tfminecraft.thievery.loader.CategoryLoader;
 import net.tfminecraft.thievery.player.PlayerData;
 
@@ -56,7 +59,7 @@ public final class DenarMoney {
         if (!present() || player == null) {
             return 0.0;
         }
-        return DenarEconomy.getPlayerManager().get(player).getPouch().getBal();
+        return Denars.active(player).map(ref -> Denars.balance(Denars.pouch(ref)) / 100.0).orElse(0.0);
     }
 
     public static int maxStealableDenars(double budgetRemaining) {
@@ -67,11 +70,10 @@ public final class DenarMoney {
         return (int) Math.floor(budgetRemaining / per);
     }
 
-    public static void transferPouch(Player from, Player to, double amount) {
-        if (!present() || from == null || to == null || amount <= 0.0) {
-            return;
-        }
-        var playerManager = DenarEconomy.getPlayerManager();
-        MoneyManager.transfer(playerManager.get(from).getPouch(), playerManager.get(to).getPouch(), amount);
+    public static Result transferPouch(String opId, CharacterSession from, CharacterSession to, long cents) {
+        if (!present() || !Denars.ready()) return Result.UNAVAILABLE;
+        if (from == null || to == null || cents <= 0
+                || !Characters.isCurrent(from) || !Characters.isCurrent(to)) return Result.REFUSED;
+        return Denars.transfer(opId, "thievery:robbery", Denars.pouch(from.ref()), Denars.pouch(to.ref()), cents);
     }
 }

@@ -8,6 +8,7 @@ import net.tfminecraft.thievery.cache.*;
 import net.tfminecraft.thievery.player.*;
 import net.tfminecraft.tlibs.character.*;
 import net.tfminecraft.simplefactions.guild.Guild;
+import net.tfminecraft.simplefactions.identity.Members;
 import net.tfminecraft.simplefactions.managers.FactionManager;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
@@ -20,28 +21,42 @@ import org.mockbukkit.mockbukkit.MockBukkit;
 import org.mockbukkit.mockbukkit.ServerMock;
 
 class AccessUtilitiesTest {
-    @Test void targetKeysUseGuildThenPlayerIdentityAndHandleUnknownOwners() {
-        UUID id=UUID.randomUUID(); var owner=mock(OfflinePlayer.class); var guild=mock(Guild.class);
-        try(var bukkit=mockStatic(Bukkit.class); var factions=mockStatic(FactionManager.class)) {
-            assertEquals("none",TargetKeyResolver.resolve(null)); bukkit.when(()->Bukkit.getOfflinePlayer(id)).thenReturn(owner); assertEquals("none",TargetKeyResolver.resolve(id));
-            when(owner.getName()).thenReturn("owner"); assertEquals("player:"+id,TargetKeyResolver.resolve(id));
-            when(guild.getId()).thenReturn("guild-id"); factions.when(()->FactionManager.getGuildByMember("owner")).thenReturn(guild); assertEquals("guild:guild-id",TargetKeyResolver.resolve(id));
+    @Test void targetKeysUseHeirsGuildThenPlayerIdentityAndFailClosedWhileWaiting() {
+        UUID id=UUID.randomUUID(); var guild=mock(Guild.class);
+        try(var access=mockStatic(FactionAccess.class); var chars=mockStatic(Characters.class)) {
+            assertEquals("none",TargetKeyResolver.resolve(null)); assertEquals("none",TargetKeyResolver.resolve(id));
+            access.when(FactionAccess::ready).thenReturn(true); assertEquals("none",TargetKeyResolver.resolve(id));
+            access.when(()->FactionAccess.heir(id)).thenReturn(Optional.of(new CharacterRef(id,UUID.randomUUID())));
+            assertEquals("player:"+id,TargetKeyResolver.resolve(id));
+            when(guild.getId()).thenReturn("guild-id"); access.when(()->FactionAccess.ownerGuild(id)).thenReturn(guild);
+            assertEquals("guild:guild-id",TargetKeyResolver.resolve(id));
         }
     }
-    @Test void onlineRequirementsAllowRefreshWarnWithinWindowAndDenyAfterwards() {
-        boolean saved=Cache.requireOwnerOnline; UUID id=UUID.randomUUID(); var owner=mock(OfflinePlayer.class); var guild=mock(Guild.class);
-        try(var bukkit=mockStatic(Bukkit.class); var factions=mockStatic(FactionManager.class); var targets=mockStatic(LockpickTargetCache.class)) {
-            Cache.requireOwnerOnline=true; assertEquals(GuildChecker.LockpickAccessResult.Type.ALLOWED,GuildChecker.checkLockpickAccess(null).type);
+    @Test void onlineRequirementsUseTheActualOnlineCharacterAndPreserveTheLockpickWindow() {
+        boolean saved=Cache.requireOwnerOnline; UUID id=UUID.randomUUID(); var heir=new CharacterRef(id,UUID.randomUUID()); var owner=mock(OfflinePlayer.class); var guild=mock(Guild.class);
+        try(var bukkit=mockStatic(Bukkit.class); var access=mockStatic(FactionAccess.class); var chars=mockStatic(Characters.class);
+                var members=mockStatic(Members.class); var targets=mockStatic(LockpickTargetCache.class)) {
+            assertEquals(GuildChecker.LockpickAccessResult.Type.ALLOWED,GuildChecker.checkLockpickAccess(null).type);
+            assertEquals(GuildChecker.LockpickAccessResult.Type.DENY,GuildChecker.checkLockpickAccess(id).type);
+            access.when(FactionAccess::ready).thenReturn(true);
+            assertEquals(GuildChecker.LockpickAccessResult.Type.DENY,GuildChecker.checkLockpickAccess(id).type);
+            access.when(()->FactionAccess.heir(id)).thenReturn(Optional.of(heir));
             Cache.requireOwnerOnline=false; assertEquals(GuildChecker.LockpickAccessResult.Type.ALLOWED,GuildChecker.checkLockpickAccess(id).type);
-            Cache.requireOwnerOnline=true; bukkit.when(()->Bukkit.getOfflinePlayer(id)).thenReturn(owner); assertEquals(GuildChecker.LockpickAccessResult.Type.ALLOWED,GuildChecker.checkLockpickAccess(id).type);
-            when(owner.getName()).thenReturn("owner"); when(owner.isOnline()).thenReturn(true); assertEquals(GuildChecker.LockpickAccessResult.Type.ALLOWED,GuildChecker.checkLockpickAccess(id).type); targets.verify(()->LockpickTargetCache.refresh("player:"+id));
-            when(owner.isOnline()).thenReturn(false); var denied=GuildChecker.checkLockpickAccess(id); assertEquals(GuildChecker.LockpickAccessResult.Type.DENY,denied.type); assertEquals("Cannot lockpick - owner is not online.",denied.message);
+            Cache.requireOwnerOnline=true; bukkit.when(()->Bukkit.getOfflinePlayer(id)).thenReturn(owner);
+            assertEquals(GuildChecker.LockpickAccessResult.Type.DENY,GuildChecker.checkLockpickAccess(id).type);
+            when(owner.getName()).thenReturn("owner"); when(owner.isOnline()).thenReturn(true);
+            assertEquals(GuildChecker.LockpickAccessResult.Type.DENY,GuildChecker.checkLockpickAccess(id).type);
+            members.when(()->Members.isOnline(heir.characterId().toString())).thenReturn(true);
+            assertEquals(GuildChecker.LockpickAccessResult.Type.ALLOWED,GuildChecker.checkLockpickAccess(id).type);
+            targets.verify(()->LockpickTargetCache.refresh("player:"+id));
+            members.when(()->Members.isOnline(heir.characterId().toString())).thenReturn(false);
             targets.when(()->LockpickTargetCache.isActive("player:"+id)).thenReturn(true); targets.when(()->LockpickTargetCache.getRemainingMs("player:"+id)).thenReturn(125_000L);
-            var warning=GuildChecker.checkLockpickAccess(id); assertEquals(GuildChecker.LockpickAccessResult.Type.WARN,warning.type); assertTrue(warning.message.contains("2m 5s"));
-            when(guild.getId()).thenReturn("id"); when(guild.getName()).thenReturn("Guild"); when(guild.getMembers()).thenReturn(List.of("offline","online")); factions.when(()->FactionManager.getGuildByMember("owner")).thenReturn(guild);
-            denied=GuildChecker.checkLockpickAccess(id); assertEquals("Cannot lockpick - Guild has no members online.",denied.message);
-            var member=mock(Player.class); bukkit.when(()->Bukkit.getPlayerExact("online")).thenReturn(member);
-            assertEquals(GuildChecker.LockpickAccessResult.Type.ALLOWED,GuildChecker.checkLockpickAccess(id).type); targets.verify(()->LockpickTargetCache.refresh("guild:id"));
+            assertTrue(GuildChecker.checkLockpickAccess(id).message.contains("2m 5s"));
+            when(guild.getId()).thenReturn("id"); when(guild.getName()).thenReturn("Guild"); when(guild.getMembers()).thenReturn(List.of("offline","online")); access.when(()->FactionAccess.ownerGuild(id)).thenReturn(guild);
+            assertEquals("Cannot lockpick - Guild has no members online.",GuildChecker.checkLockpickAccess(id).message);
+            members.when(()->Members.online("online")).thenReturn(Optional.of(mock(Player.class)));
+            assertEquals(GuildChecker.LockpickAccessResult.Type.ALLOWED,GuildChecker.checkLockpickAccess(id).type);
+            targets.verify(()->LockpickTargetCache.refresh("guild:id"));
         } finally { Cache.requireOwnerOnline=saved; }
     }
     @Test void traitRestrictionsRequireAReadyCharacterWithAnyExactlyConfiguredTrait() {

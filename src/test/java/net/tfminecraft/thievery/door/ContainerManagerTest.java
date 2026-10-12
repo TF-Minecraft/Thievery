@@ -1,5 +1,6 @@
 package net.tfminecraft.thievery.door;
 
+import net.tfminecraft.thievery.testsupport.FactionFixture;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import java.util.*;
@@ -20,6 +21,10 @@ import org.mockbukkit.mockbukkit.MockBukkit;
 import org.mockito.*;
 
 class ContainerManagerTest {
+    private FactionFixture stage5Factions;
+    @BeforeEach void factionReady() { stage5Factions = new FactionFixture(); }
+    @AfterEach void closeFactionFixture() { stage5Factions.close(); }
+
     World world; Player player; ContainerManager manager; ContainerDataManager storage; Map<Location,ContainerData> data; LockMinigameManager minigames;
     MockedStatic<net.tfminecraft.thievery.Thievery> plugin;
     MockedConstruction<ContainerDataManager> construction; MockedStatic<GraveManager> graves; MockedStatic<ToolResolver> tools; MockedStatic<FactionLockTutorial> tutorial;
@@ -635,7 +640,7 @@ class ContainerManagerTest {
         tools.when(()->ToolResolver.isLockpick(any())).thenReturn(true);
         var owner=mock(OfflinePlayer.class);when(owner.getName()).thenReturn("owner");var guild=mock(net.tfminecraft.simplefactions.guild.Guild.class);when(guild.getName()).thenReturn("Night Watch");when(guild.getMembers()).thenReturn(List.of("OfflineMember"));
         try(var bukkit=mockStatic(Bukkit.class,CALLS_REAL_METHODS);var factions=mockStatic(net.tfminecraft.simplefactions.managers.FactionManager.class);var targets=mockStatic(net.tfminecraft.thievery.player.TargetKeyResolver.class);var window=mockStatic(net.tfminecraft.thievery.cache.LockpickTargetCache.class);var clues=mockStatic(net.tfminecraft.thievery.clue.ClueChecker.class)) {
-            bukkit.when(()->Bukkit.getOfflinePlayer(ownerId)).thenReturn(owner);factions.when(()->net.tfminecraft.simplefactions.managers.FactionManager.getGuildByMember("owner")).thenReturn(guild);
+            bukkit.when(()->Bukkit.getOfflinePlayer(ownerId)).thenReturn(owner);stage5Factions.guild(ownerId,guild);
             targets.when(()->net.tfminecraft.thievery.player.TargetKeyResolver.resolve(ownerId)).thenReturn("guild:night-watch");
             manager.onRightClickChest(event);verify(player).sendMessage("§cCannot lockpick - Night Watch has no members online.");clues.verifyNoInteractions();
             window.when(()->net.tfminecraft.thievery.cache.LockpickTargetCache.isActive("guild:night-watch")).thenReturn(true);

@@ -1,6 +1,11 @@
 package net.tfminecraft.thievery.steal;
 
 import java.util.Map;
+import java.util.WeakHashMap;
+import java.math.BigDecimal;
+import java.io.IOException;
+import net.tfminecraft.denareconomy.api.Result;
+import net.tfminecraft.thievery.robbery.PouchPayment;
 
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -23,6 +28,8 @@ public class RobberyStealReference extends StealReference {
 
     private final RobberySession session;
     private final Runnable onEnd;
+    private final Map<InventoryClickEvent, PouchPayment> pouchClicks = new WeakHashMap<>();
+    private PouchPayment pendingPouch;
 
     public RobberyStealReference(RobberySession session, Runnable onEnd) {
         super(session.getRobberId(), StealGuiHolder.Kind.ROBBERY);
@@ -85,17 +92,32 @@ public class RobberyStealReference extends StealReference {
                 onEnd.run();
                 return;
             }
-            int requested = click == ClickType.SHIFT_LEFT
-                    ? RobberyLoader.getPouchShiftAmount()
-                    : RobberyLoader.getPouchClickAmount();
-            double take = Math.min(requested,
-                    Math.min(DenarMoney.getPouchBalance(victim),
-                            DenarMoney.maxStealableDenars(session.getBudget().getRemaining())));
-            if (take <= 0) {
+            PouchPayment payment = pouchClicks.get(event);
+            if (payment == null) payment = pendingPouch;
+            if (payment == null) {
+                int requested = click == ClickType.SHIFT_LEFT
+                        ? RobberyLoader.getPouchShiftAmount() : RobberyLoader.getPouchClickAmount();
+                double take = Math.min(requested, Math.min(DenarMoney.getPouchBalance(victim),
+                        DenarMoney.maxStealableDenars(session.getBudget().getRemaining())));
+                if (!Double.isFinite(take) || take <= 0) return;
+                long cents = BigDecimal.valueOf(take).movePointRight(2).longValue();
+                payment = new PouchPayment(Thievery.getInstance().getDataFolder().toPath().resolve("pouch-payments"),
+                        session.getVictimCharacter(), session.getRobberCharacter(), cents,
+                        cents / 100.0 * DenarMoney.amountPerMoney());
+                pendingPouch = payment;
+            }
+            pouchClicks.put(event, payment);
+            try {
+                Result result = payment.settle(session.getBudget());
+                if (result == Result.APPLIED || result == Result.REFUSED) pendingPouch = null;
+                if (result != Result.APPLIED) {
+                    robber.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "The pouch transfer could not be completed."));
+                    return;
+                }
+            } catch (IOException failure) {
+                Thievery.getInstance().getLogger().severe("Cannot save robbery payment: " + failure.getMessage());
                 return;
             }
-            DenarMoney.transferPouch(victim, robber, take);
-            session.getBudget().addUsed(take * DenarMoney.amountPerMoney());
             refreshGui(robber, victim, guiInv);
             return;
         }

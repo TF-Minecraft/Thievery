@@ -6,7 +6,7 @@ import java.util.UUID;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
-import org.bukkit.OfflinePlayer;
+import net.tfminecraft.thievery.utils.FactionAccess;
 import org.bukkit.Tag;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
@@ -123,19 +123,16 @@ public final class ClearCluesResolver {
         if (ownerUuid == null) {
             return true;
         }
-        if (ownerUuid.equals(player.getUniqueId())) {
+        if (FactionAccess.owns(player, ownerUuid)) {
             return true;
         }
         return sharesGuildWithOwner(player, ownerUuid);
     }
 
     private static boolean sharesGuildWithOwner(Player player, UUID ownerUuid) {
-        OfflinePlayer owner = Bukkit.getOfflinePlayer(ownerUuid);
-        if (owner.getName() == null || player.getName() == null) {
-            return false;
-        }
-        Guild ownerGuild = FactionManager.getGuildByMember(owner.getName());
-        Guild playerGuild = FactionManager.getGuildByMember(player.getName());
+        if (!FactionAccess.ready()) return false;
+        Guild ownerGuild = FactionAccess.ownerGuild(ownerUuid);
+        Guild playerGuild = FactionManager.getGuildByMember(player);
         if (ownerGuild == null || playerGuild == null) {
             return false;
         }

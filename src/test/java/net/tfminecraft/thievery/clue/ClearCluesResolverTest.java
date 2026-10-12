@@ -3,6 +3,7 @@ package net.tfminecraft.thievery.clue;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import java.util.*;
+import net.tfminecraft.thievery.utils.FactionAccess;
 import net.tfminecraft.thievery.door.*;
 import net.tfminecraft.simplefactions.guild.Guild;
 import net.tfminecraft.simplefactions.managers.FactionManager;
@@ -38,13 +39,22 @@ class ClearCluesResolverTest {
         try(var access=mockStatic(LockAccess.class)) { assertFalse(ClearCluesResolver.canClear(player,guildTarget,false)); access.when(()->LockAccess.canAccess(player,owner,LockState.GUILD)).thenReturn(true); assertTrue(ClearCluesResolver.canClear(player,guildTarget,false)); }
     }
     @Test void doorOwnerAndGuildMembersMayClearButUnknownOrOtherGuildsCannot() {
-        UUID ownerId=UUID.randomUUID(); var target=new ClearCluesResolver.ClearCluesTarget(ClearCluesResolver.Kind.DOOR,location,ownerId,null); var player=mock(Player.class); when(player.getUniqueId()).thenReturn(ownerId); assertTrue(ClearCluesResolver.canClear(player,target,false));
-        assertTrue(ClearCluesResolver.canClear(player,new ClearCluesResolver.ClearCluesTarget(ClearCluesResolver.Kind.DOOR,location,null,null),false));
-        when(player.getUniqueId()).thenReturn(UUID.randomUUID()); var owner=mock(OfflinePlayer.class); var a=mock(Guild.class); var b=mock(Guild.class);
-        try(var bukkit=mockStatic(Bukkit.class); var factions=mockStatic(FactionManager.class)) {
-            bukkit.when(()->Bukkit.getOfflinePlayer(ownerId)).thenReturn(owner); assertFalse(ClearCluesResolver.canClear(player,target,false)); when(owner.getName()).thenReturn("owner"); assertFalse(ClearCluesResolver.canClear(player,target,false)); when(player.getName()).thenReturn("player"); assertFalse(ClearCluesResolver.canClear(player,target,false));
-            factions.when(()->FactionManager.getGuildByMember("owner")).thenReturn(a); assertFalse(ClearCluesResolver.canClear(player,target,false)); factions.when(()->FactionManager.getGuildByMember("player")).thenReturn(b);
-            when(a.getId()).thenReturn("a"); when(b.getId()).thenReturn("b"); assertFalse(ClearCluesResolver.canClear(player,target,false)); when(b.getId()).thenReturn("a"); assertTrue(ClearCluesResolver.canClear(player,target,false));
+        UUID owner=UUID.randomUUID(); var target=new ClearCluesResolver.ClearCluesTarget(ClearCluesResolver.Kind.DOOR,location,owner,null); var player=mock(Player.class);
+        try(var access=mockStatic(FactionAccess.class); var factions=mockStatic(FactionManager.class)) {
+            assertTrue(ClearCluesResolver.canClear(player,new ClearCluesResolver.ClearCluesTarget(ClearCluesResolver.Kind.DOOR,location,null,null),false));
+            assertFalse(ClearCluesResolver.canClear(player,target,false));
+            access.when(()->FactionAccess.owns(player,owner)).thenReturn(true);
+            assertTrue(ClearCluesResolver.canClear(player,target,false));
+            access.when(()->FactionAccess.owns(player,owner)).thenReturn(false);
+            access.when(FactionAccess::ready).thenReturn(true);
+            assertFalse(ClearCluesResolver.canClear(player,target,false));
+            Guild a=mock(Guild.class), b=mock(Guild.class);
+            access.when(()->FactionAccess.ownerGuild(owner)).thenReturn(a);
+            assertFalse(ClearCluesResolver.canClear(player,target,false));
+            factions.when(()->FactionManager.getGuildByMember(player)).thenReturn(b);
+            when(a.getId()).thenReturn("a"); when(b.getId()).thenReturn("b");
+            assertFalse(ClearCluesResolver.canClear(player,target,false));
+            when(b.getId()).thenReturn("a"); assertTrue(ClearCluesResolver.canClear(player,target,false));
         }
     }
     @Test void clearingRemovesLinkedHologramsAndOnlyClueItemsFromContainers() {
