@@ -1,6 +1,7 @@
 package net.tfminecraft.thievery.steal;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import java.util.*;
@@ -8,11 +9,14 @@ import net.tfminecraft.interactiblefurniture.InteractibleFurniture;
 import net.tfminecraft.interactiblefurniture.furniture.Furniture;
 import net.tfminecraft.thievery.cache.Parameters;
 import net.tfminecraft.thievery.door.*;
+import net.tfminecraft.thievery.estate.EstateBridge;
+import net.tfminecraft.thievery.estate.LockEstates;
 import net.tfminecraft.thievery.owner.LockGuard;
 import net.tfminecraft.thievery.owner.LockOwner;
 import net.tfminecraft.thievery.owner.LockQuarantine;
 import net.tfminecraft.thievery.owner.OwnerIdentity;
 import net.tfminecraft.thievery.testsupport.FactionFixture;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.junit.jupiter.api.*;
@@ -117,6 +121,59 @@ class FurnitureLockHelperTest {
         clearInvocations(plugin.getFurnitureManager());
         FurnitureLockHelper.upgrade(furniture);
         verifyNoInteractions(plugin.getFurnitureManager());
+    }
+
+    @Test void aDeadOwnersPieceGoesToTheRecipientOfItsPartOnFirstInteraction() {
+        UUID dead = UUID.randomUUID(), heir = UUID.randomUUID(), leader = UUID.randomUUID(), living = UUID.randomUUID();
+        LockEstates estates = mock(LockEstates.class);
+        when(estates.ofOwner(any())).thenReturn(Optional.empty());
+        when(estates.ofOwner(dead)).thenReturn(Optional.of(new LockEstates.Estate(UUID.randomUUID(), dead, 1, heir, leader)));
+        EstateBridge.set(estates);
+        java.util.logging.Logger log = mock(java.util.logging.Logger.class);
+        try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
+            bukkit.when(Bukkit::getLogger).thenReturn(log);
+            put(FurnitureLockHelper.OWNER_KEY, dead.toString()); put(FurnitureLockHelper.OWNER_KIND_KEY, "CHARACTER");
+            put(FurnitureLockHelper.LOCK_STATE_KEY, "PRIVATE");
+            FurnitureLockHelper.inherit(furniture);
+            assertEquals(LockOwner.character(heir), FurnitureLockHelper.getOwner(furniture));
+            assertEquals(LockState.PRIVATE, FurnitureLockHelper.getLockState(furniture), "state kept");
+            verify(log).info(contains("passed from " + dead + " to " + heir));
+
+            put(FurnitureLockHelper.OWNER_KEY, dead.toString()); put(FurnitureLockHelper.LOCK_STATE_KEY, "faction");
+            FurnitureLockHelper.inherit(furniture);
+            assertEquals(LockOwner.character(leader), FurnitureLockHelper.getOwner(furniture));
+
+            // A waiting part, a living owner, guard mode, server and bare owners and unreadable variables stay.
+            when(estates.ofOwner(dead)).thenReturn(Optional.of(new LockEstates.Estate(UUID.randomUUID(), dead, 1, heir, null)));
+            put(FurnitureLockHelper.OWNER_KEY, dead.toString()); put(FurnitureLockHelper.LOCK_STATE_KEY, "GUILD");
+            FurnitureLockHelper.inherit(furniture);
+            assertEquals(LockOwner.character(dead), FurnitureLockHelper.getOwner(furniture));
+            put(FurnitureLockHelper.OWNER_KEY, living.toString());
+            FurnitureLockHelper.inherit(furniture);
+            assertEquals(LockOwner.character(living), FurnitureLockHelper.getOwner(furniture));
+            put(FurnitureLockHelper.OWNER_KEY, dead.toString()); put(FurnitureLockHelper.LOCK_STATE_KEY, "PRIVATE");
+            LockGuard.enter("test");
+            FurnitureLockHelper.inherit(furniture);
+            LockGuard.forceFull();
+            assertEquals(LockOwner.character(dead), FurnitureLockHelper.getOwner(furniture));
+            put(FurnitureLockHelper.OWNER_KEY, LockOwner.NIL.toString()); put(FurnitureLockHelper.OWNER_KIND_KEY, "SERVER");
+            FurnitureLockHelper.inherit(furniture);
+            put(FurnitureLockHelper.OWNER_KEY, dead.toString()); put(FurnitureLockHelper.OWNER_KIND_KEY, null);
+            FurnitureLockHelper.inherit(furniture);
+            put(FurnitureLockHelper.OWNER_KIND_KEY, "CHARACTER"); put(FurnitureLockHelper.LOCK_STATE_KEY, null);
+            FurnitureLockHelper.inherit(furniture);
+            put(FurnitureLockHelper.OWNER_KEY, "garbage"); put(FurnitureLockHelper.LOCK_STATE_KEY, "PRIVATE");
+            FurnitureLockHelper.inherit(furniture);
+            verify(estates, times(1)).ofOwner(living);
+            verify(estates, times(3)).ofOwner(dead);
+
+            // A failed estate lookup leaves the piece alone.
+            put(FurnitureLockHelper.OWNER_KEY, dead.toString());
+            when(estates.ofOwner(dead)).thenThrow(new NoSuchMethodError("Estates.stateOf"));
+            FurnitureLockHelper.inherit(furniture);
+            assertEquals(LockOwner.character(dead), FurnitureLockHelper.getOwner(furniture));
+            verify(log).log(eq(java.util.logging.Level.WARNING), contains("Could not check the estate"), any(NoSuchMethodError.class));
+        }
     }
 
     @Test void configuredFurnitureIsLockable() {

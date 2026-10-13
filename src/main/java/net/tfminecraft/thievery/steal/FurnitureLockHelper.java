@@ -2,13 +2,17 @@ package net.tfminecraft.thievery.steal;
 
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
+import java.util.logging.Level;
 
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 
 import net.tfminecraft.interactiblefurniture.InteractibleFurniture;
 import net.tfminecraft.interactiblefurniture.furniture.Furniture;
 import net.tfminecraft.thievery.cache.Parameters;
 import net.tfminecraft.thievery.door.LockState;
+import net.tfminecraft.thievery.estate.EstateBridge;
 import net.tfminecraft.thievery.owner.LockGuard;
 import net.tfminecraft.thievery.owner.LockOwner;
 import net.tfminecraft.thievery.owner.LockQuarantine;
@@ -110,6 +114,41 @@ public final class FurnitureLockHelper {
             case CHARACTER, SERVER -> setOwner(furniture, classification.owner());
             case LEGACY -> setOwner(furniture, LockOwner.character(classification.heir()));
             case UNRESOLVED -> { }
+        }
+    }
+
+    /**
+     * An estate's lazy move: a piece whose owner is a dead character with a decided estate whose guard holds goes
+     * to the recipient of its part, state kept (design R10). Waiting or frozen parts, guard mode, unreadable
+     * variables and any estate lookup failure leave it alone.
+     */
+    public static void inherit(Furniture furniture) {
+        if (LockGuard.guarded()) {
+            return;
+        }
+        Map<String, Object> variables = furniture.getVariables();
+        OwnerCodec.Stored stored;
+        LockState state;
+        try {
+            stored = OwnerCodec.parse(text(variables.get(OWNER_KEY)), text(variables.get(OWNER_KIND_KEY)));
+            state = LockState.valueOf(String.valueOf(variables.get(LOCK_STATE_KEY)).toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            return;
+        }
+        if (stored.marker() != LockOwner.Kind.CHARACTER) {
+            return;
+        }
+        UUID recipient;
+        try {
+            recipient = EstateBridge.get().ofOwner(stored.id()).map(estate -> estate.recipient(state)).orElse(null);
+        } catch (RuntimeException | LinkageError e) {
+            Bukkit.getLogger().log(Level.WARNING, "Could not check the estate of a furniture lock's owner.", e);
+            return;
+        }
+        if (recipient != null) {
+            setOwner(furniture, LockOwner.character(recipient));
+            Bukkit.getLogger().info("Estate: furniture lock at " + describe(furniture.getLoc()) + " passed from "
+                    + stored.id() + " to " + recipient + ".");
         }
     }
 

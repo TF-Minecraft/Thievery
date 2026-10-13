@@ -63,9 +63,10 @@ public class FurnitureDisplayListener implements Listener {
         DisplayStealManager.notifyLockStateChange(player, LockWriters.initialState(owner));
     }
 
-    // Upgrades a bare owner on first interaction, then reads the lock afresh.
+    // Upgrades a bare owner and applies a decided estate on first interaction, then reads the lock afresh.
     private static FurnitureLockHelper.FurnitureLock lockOf(Furniture furniture) {
         FurnitureLockHelper.upgrade(furniture);
+        FurnitureLockHelper.inherit(furniture);
         return FurnitureLockHelper.read(furniture);
     }
 
