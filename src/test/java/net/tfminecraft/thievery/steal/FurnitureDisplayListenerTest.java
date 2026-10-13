@@ -117,6 +117,21 @@ class FurnitureDisplayListenerTest {
     }
 
     @Test
+    void aDeadOwnersPieceIsInheritedOnFirstInteractionSoTheRecipientCanRotateIt() {
+        when(player.isSneaking()).thenReturn(true);
+        // The first interaction applies the estate before the lock is read.
+        locks.when(() -> FurnitureLockHelper.inherit(furniture)).thenAnswer(i -> {
+            owner.set(LockOwner.character(player.getUniqueId()));
+            return null;
+        });
+        FurnitureBreakEvent event = new FurnitureBreakEvent(furniture, player);
+        listener.onFurnitureBreak(event);
+        assertTrue(event.isCancelled());
+        assertEquals(LockState.GUILD, state.get(), "the recipient rotated the inherited lock");
+        locks.verify(() -> FurnitureLockHelper.inherit(furniture));
+    }
+
+    @Test
     void sneakingBreakClaimsUnownedFurnitureRotatesOwnersLockAndRejectsOtherPlayers() {
         when(player.isSneaking()).thenReturn(true);
         FurnitureBreakEvent event = new FurnitureBreakEvent(furniture, player);

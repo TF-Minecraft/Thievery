@@ -18,7 +18,7 @@
         <interactiblefurniture.version>0.2.0</interactiblefurniture.version>
         <rpcharacters.version>2.16.0</rpcharacters.version>
         <simplefactions.version>4.1.0</simplefactions.version>
-        <tlibs.version>2.4.0</tlibs.version>
+        <tlibs.version>2.6.0</tlibs.version>
     </properties>
 
     <dependencyManagement>

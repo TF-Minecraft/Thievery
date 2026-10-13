@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -25,6 +26,9 @@ import java.util.zip.ZipOutputStream;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+
+import net.tfminecraft.thievery.door.LockState;
+import net.tfminecraft.thievery.estate.LockEstates;
 
 /**
  * The lock migration (rule 7). It runs synchronously on the main thread in {@code onEnable}, before any player can
@@ -38,6 +42,10 @@ import com.google.gson.GsonBuilder;
  * <p>An incomplete journal is replayed at the next boot: files at their new hash are done, files at their original
  * hash are redone, missing files are listed for staff and never restored, and any other hash is torn, so the file
  * is taken from the archive and redone. A journal, completed or not, is never re-archived.
+ *
+ * <p>The same pass moves the locks of decided estates (design R10, M6): {@link EstatePlanner} works on the same
+ * scan and its entries join the same journal, marked {@code kind: estate} with their {@code deathId}. A pass with
+ * estate entries only archives just the files it journals.
  */
 public final class LockMigration {
 
@@ -47,7 +55,13 @@ public final class LockMigration {
     private static final Pattern JOURNAL = Pattern.compile("journal-(\\d{4,})\\.json");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
-    /** One rewritten file. {@code newHash} is the hash of the bytes actually written. */
+    static final String MIGRATE = "migrate";
+    static final String ESTATE = "estate";
+
+    /**
+     * One rewritten file. {@code newHash} is the hash of the bytes actually written. {@code kind} and
+     * {@code deathId} are absent from journals written before estates, and from any an older jar completed.
+     */
     static final class JournalEntry {
         String path;
         String originalHash;
@@ -55,6 +69,14 @@ public final class LockMigration {
         String previousOwner;
         String owner;
         String ownerKind;
+        String kind;
+        String deathId;
+        /** An estate entry whose estate no longer applied at replay: the file kept its original bytes. */
+        Boolean skipped;
+
+        boolean estate() {
+            return ESTATE.equals(kind);
+        }
     }
 
     static final class Journal {
@@ -65,20 +87,33 @@ public final class LockMigration {
         List<JournalEntry> entries = new ArrayList<>();
     }
 
-    /** What a boot's migration did, for the log and the rehearsal counts. */
+    /**
+     * What a boot's migration did, for the log and the rehearsal counts. {@code estateMoved} counts this pass's
+     * estate entries; {@code estates} holds one report per decided estate whose guard held.
+     */
     public record Outcome(int migrated, int quarantined, int unreadable, int replayed, int missing, int files,
-            long millis) {}
+            long millis, int estateMoved, List<LockEstates.Report> estates) {}
 
-    private record Scanned(LockStores.StoreFile file, byte[] bytes, OwnerCodec.Stored owner) {}
+    /** A scanned record. {@code owner} is null when unreadable; {@code state} is null for doors. */
+    record Scanned(LockStores.StoreFile file, byte[] bytes, OwnerCodec.Stored owner, LockState state) {}
 
-    private record Planned(Scanned scanned, LockOwner owner) {}
+    /** A planned owner rewrite; {@code deathId} is set for estate moves. */
+    record Planned(Scanned scanned, LockOwner owner, UUID deathId) {}
+
+    private record Decoded(OwnerCodec.Stored owner, LockState state) {}
 
     private final LockStores stores;
     private final Logger log;
+    private final LockEstates estates;
 
     public LockMigration(LockStores stores, Logger log) {
+        this(stores, log, LockEstates.NONE);
+    }
+
+    public LockMigration(LockStores stores, Logger log, LockEstates estates) {
         this.stores = stores;
         this.log = log;
+        this.estates = estates;
     }
 
     /** Whether any store was written by a newer jar, or has a {@code data-version} this jar cannot read. */
@@ -113,12 +148,14 @@ public final class LockMigration {
 
         TreeMap<Integer, Path> journals = journals();
         int replayed = 0;
+        List<JournalEntry> estateMoves = new ArrayList<>();
         for (Path path : journals.values()) {
             Journal journal = readJournal(path);
             if (!journal.completed) {
                 replay(path, journal, missing);
                 replayed++;
             }
+            estateMoves(journal.entries, estateMoves);
         }
         if (!journals.isEmpty()) {
             writeDataVersion();
@@ -131,13 +168,13 @@ public final class LockMigration {
         for (LockStores.StoreFile file : files) {
             byte[] bytes = Files.readAllBytes(file.path());
             try {
-                OwnerCodec.Stored owner = decode(file.store(), bytes);
-                scanned.add(new Scanned(file, bytes, owner));
-                if (owner.markerless()) {
-                    markerless.add(owner.id());
+                Decoded decoded = decode(file.store(), bytes);
+                scanned.add(new Scanned(file, bytes, decoded.owner(), decoded.state()));
+                if (decoded.owner().markerless()) {
+                    markerless.add(decoded.owner().id());
                 }
             } catch (IllegalArgumentException e) {
-                scanned.add(new Scanned(file, bytes, null));
+                scanned.add(new Scanned(file, bytes, null, null));
                 unreadable.add(new LockQuarantine.Entry(file.name(), null, "unreadable: " + e.getMessage()));
             }
         }
@@ -159,12 +196,15 @@ public final class LockMigration {
                 quarantined.add(new LockQuarantine.Entry(file.file().name(), file.owner().id().toString(),
                         classification.definitive() ? "no reviewed heir" : "identity unknown"));
             } else {
-                plan.add(new Planned(file, target));
+                plan.add(new Planned(file, target, null));
             }
         }
 
-        if (!plan.isEmpty()) {
-            runPass(journals.isEmpty() ? 1 : journals.lastKey() + 1, scanned, plan);
+        EstatePlanner.Result estatePlan = EstatePlanner.plan(estates, scanned, plan, log);
+        if (!plan.isEmpty() || !estatePlan.moves().isEmpty()) {
+            List<JournalEntry> written = runPass(journals.isEmpty() ? 1 : journals.lastKey() + 1, scanned, plan,
+                    estatePlan.moves());
+            estateMoves(written, estateMoves);
         } else if (journals.isEmpty()) {
             writeDataVersion();
         }
@@ -175,11 +215,13 @@ public final class LockMigration {
         next.missing = missing;
         LockQuarantine.replace(migrations.resolve(QUARANTINE_FILE), next);
 
+        List<LockEstates.Report> reports = estatePlan.reports(stores, scanned, plan, estateMoves);
         Outcome outcome = new Outcome(plan.size(), quarantined.size(), unreadable.size(), replayed, missing.size(),
-                files.size(), (System.nanoTime() - start) / 1_000_000L);
+                files.size(), (System.nanoTime() - start) / 1_000_000L, estatePlan.moves().size(), reports);
         log.info("Lock migration: " + outcome.files() + " lock files scanned, " + outcome.migrated() + " migrated, "
                 + outcome.quarantined() + " quarantined, " + outcome.unreadable() + " unreadable, "
-                + outcome.replayed() + " journals replayed, " + outcome.missing() + " missing after replay, in "
+                + outcome.replayed() + " journals replayed, " + outcome.missing() + " missing after replay, "
+                + outcome.estateMoved() + " moved for " + reports.size() + " decided estates, in "
                 + outcome.millis() + " ms.");
         return outcome;
     }
@@ -196,17 +238,31 @@ public final class LockMigration {
         };
     }
 
-    private void runPass(int number, List<Scanned> scanned, List<Planned> plan) throws IOException {
+    // The estate entries a journal applied; skipped ones moved nothing.
+    private static void estateMoves(List<JournalEntry> entries, List<JournalEntry> into) {
+        for (JournalEntry entry : entries) {
+            if (entry.estate() && entry.skipped == null) {
+                into.add(entry);
+            }
+        }
+    }
+
+    private List<JournalEntry> runPass(int number, List<Scanned> scanned, List<Planned> plan,
+            List<Planned> estateMoves) throws IOException {
         Path migrations = stores.migrations();
         String archiveName = String.format("backup/locks-%04d.zip", number);
-        writeArchive(migrations.resolve(archiveName), scanned);
+        // A pass with 6a entries keeps the whole store as before; an estate-only pass archives what it journals.
+        writeArchive(migrations.resolve(archiveName),
+                plan.isEmpty() ? estateMoves.stream().map(Planned::scanned).toList() : scanned);
 
         Journal journal = new Journal();
         journal.number = number;
         journal.createdAt = Instant.now().toString();
         journal.archive = archiveName;
         Map<JournalEntry, byte[]> rewrites = new LinkedHashMap<>();
-        for (Planned planned : plan) {
+        List<Planned> all = new ArrayList<>(plan);
+        all.addAll(estateMoves);
+        for (Planned planned : all) {
             Scanned file = planned.scanned();
             byte[] next = LockRecords.rewriteOwner(file.bytes(), file.file().store().ownerField(), planned.owner());
             JournalEntry entry = new JournalEntry();
@@ -216,6 +272,8 @@ public final class LockMigration {
             entry.previousOwner = file.owner().id().toString();
             entry.owner = planned.owner().id().toString();
             entry.ownerKind = planned.owner().kind().name();
+            entry.kind = planned.deathId() == null ? MIGRATE : ESTATE;
+            entry.deathId = planned.deathId() == null ? null : planned.deathId().toString();
             journal.entries.add(entry);
             rewrites.put(entry, next);
         }
@@ -229,6 +287,7 @@ public final class LockMigration {
             dirs.add(path.toAbsolutePath().getParent());
         }
         complete(journalPath, journal, dirs);
+        return journal.entries;
     }
 
     private void replay(Path journalPath, Journal journal, List<LockQuarantine.Entry> missing) throws IOException {
@@ -246,9 +305,22 @@ public final class LockMigration {
                 if (hash.equals(entry.newHash)) {
                     continue;
                 }
-                if (!hash.equals(entry.originalHash)) {
+                boolean torn = !hash.equals(entry.originalHash);
+                if (torn) {
                     // Torn: start again from the archived original.
                     current = archived(archive, entry);
+                }
+                if (entry.estate() && !stillDue(entry)) {
+                    // Revived, reverted or replaced since the crash: the testator keeps this lock.
+                    log.warning("Estate lock move for " + entry.path + " skipped at replay: its estate no longer"
+                            + " applies.");
+                    if (torn) {
+                        DurableFiles.write(file.path(), current, false);
+                        dirs.add(file.path().toAbsolutePath().getParent());
+                    }
+                    entry.skipped = true;
+                    entry.newHash = entry.originalHash;
+                    continue;
                 }
                 byte[] next = LockRecords.rewriteOwner(current, file.store().ownerField(),
                         new LockOwner(LockOwner.Kind.valueOf(entry.ownerKind), UUID.fromString(entry.owner)));
@@ -258,6 +330,16 @@ public final class LockMigration {
             }
         }
         complete(journalPath, journal, dirs);
+    }
+
+    // Whether an estate entry's estate is still decided with its guard holding; any failure leaves the lock alone.
+    private boolean stillDue(JournalEntry entry) {
+        try {
+            return estates.current(UUID.fromString(entry.deathId)).isPresent();
+        } catch (RuntimeException | LinkageError e) {
+            log.log(Level.WARNING, "Could not check the estate of " + entry.path + " at replay.", e);
+            return false;
+        }
     }
 
     private static byte[] archived(ZipFile archive, JournalEntry entry) throws IOException {
@@ -330,11 +412,17 @@ public final class LockMigration {
         return journals;
     }
 
-    private static OwnerCodec.Stored decode(LockStores.Store store, byte[] bytes) {
+    private static Decoded decode(LockStores.Store store, byte[] bytes) {
         return switch (store) {
-            case CONTAINERS -> LockRecords.decodeContainer(bytes).owner();
-            case DOORS -> LockRecords.decodeDoor(bytes).owner();
-            case ENTITIES -> LockRecords.decodeEntity(bytes).owner();
+            case CONTAINERS -> {
+                LockRecords.Container container = LockRecords.decodeContainer(bytes);
+                yield new Decoded(container.owner(), container.state());
+            }
+            case DOORS -> new Decoded(LockRecords.decodeDoor(bytes).owner(), null);
+            case ENTITIES -> {
+                LockRecords.Entity entity = LockRecords.decodeEntity(bytes);
+                yield new Decoded(entity.owner(), entity.state());
+            }
         };
     }
 }

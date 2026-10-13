@@ -40,6 +40,7 @@ import net.tfminecraft.thievery.steal.FurnitureDisplayListener;
 import net.tfminecraft.thievery.steal.GraveStealListener;
 import net.tfminecraft.thievery.steal.StealGuiUpdater;
 import net.tfminecraft.thievery.steal.StealManager;
+import net.tfminecraft.thievery.estate.EstateBridge;
 import net.tfminecraft.thievery.owner.LockGuard;
 import net.tfminecraft.thievery.owner.LockStartup;
 import net.tfminecraft.thievery.owner.LockStores;
@@ -134,6 +135,8 @@ public class Thievery extends JavaPlugin {
         // Every lock listener is registered by now, in guard mode. The gates and the migration run here, on the
         // main thread before anyone can join; a failed gate keeps the guard on until a restart.
         LockStartup.start(LockStores.defaults(getDataFolder()), getLogger());
+        // Only now, with the locks loaded, can the estate service ask Thievery to settle.
+        EstateBridge.register(this, getLogger());
 
         Bukkit.getOnlinePlayers().forEach(player -> {
             if (player.hasPermission("thievery.admin")) {

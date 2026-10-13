@@ -7,19 +7,35 @@ import static org.mockito.Mockito.*;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.PluginManager;
+import org.bukkit.plugin.ServicesManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.MockedStatic;
 
+import net.tfminecraft.thievery.estate.EstateBridge;
+import net.tfminecraft.thievery.estate.LockEstates;
 import net.tfminecraft.thievery.testsupport.FactionFixture;
+import net.tfminecraft.tlibs.character.CharacterIdentity;
+import net.tfminecraft.tlibs.character.CharacterRef;
+import net.tfminecraft.tlibs.character.CharacterStatus;
+import net.tfminecraft.tlibs.character.estate.EstateDecision;
+import net.tfminecraft.tlibs.character.estate.EstateParticipant;
+import net.tfminecraft.tlibs.character.estate.EstateService;
+import net.tfminecraft.tlibs.character.estate.EstateState;
+import net.tfminecraft.tlibs.character.estate.Outcome;
+import net.tfminecraft.tlibs.character.estate.Recipient;
 
 class LockStartupTest {
     @TempDir Path temp;
@@ -130,5 +146,83 @@ class LockStartupTest {
         assertFalse(LockGuildBridge.degraded());
         assertInstanceOf(SimpleFactionsLockGuilds.class, LockGuildBridge.get());
         verify(log, never()).warning(contains("lockGuild"));
+    }
+
+    @Test
+    void decidedEstatesMoveInTheBootPassAndAreReportedOnceLocksAreFull() throws IOException {
+        java.util.UUID account = java.util.UUID.randomUUID(), dead = java.util.UUID.randomUUID();
+        java.util.UUID heir = java.util.UUID.randomUUID(), deathId = java.util.UUID.randomUUID();
+        Path chest = temp.resolve("data/0_0/5_64_5.json");
+        Files.writeString(chest, "{\"owner\":\"" + dead + "\",\"ownerKind\":\"CHARACTER\",\"lockState\":\"PRIVATE\"}");
+        EstateDecision decision = new EstateDecision(deathId, new CharacterRef(account, dead), Optional.empty(),
+                Instant.EPOCH, Optional.of(new CharacterRef(account, heir)), Optional.empty(), Optional.empty(),
+                Recipient.FROZEN, Recipient.character(new CharacterRef(account, heir)), Recipient.FROZEN,
+                Recipient.SENDER, 2);
+        EstateService service = mock(EstateService.class);
+        when(service.decided()).thenReturn(List.of(decision));
+        when(service.decision(deathId)).thenReturn(Optional.of(decision));
+        when(service.stateOf(dead)).thenReturn(Optional.of(EstateState.DECIDED));
+        doAnswer(call -> {
+            assertEquals(LockGuard.Mode.FULL, LockGuard.mode(), "reported once locks are full");
+            return null;
+        }).when(service).report(any(), any(), anyLong(), any());
+        CharacterIdentity characters = mock(CharacterIdentity.class);
+        when(characters.info(dead)).thenReturn(Optional.of(FactionFixture.info(dead, account, CharacterStatus.DEAD)));
+        when(characters.deathId(dead)).thenReturn(Optional.of(deathId));
+        ServicesManager services = mock(ServicesManager.class);
+        when(services.load(EstateService.class)).thenReturn(service);
+        when(services.load(CharacterIdentity.class)).thenReturn(characters);
+        bukkit.when(Bukkit::getServicesManager).thenReturn(services);
+        bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
+
+        assertTrue(LockStartup.start(stores, log));
+
+        assertTrue(Files.readString(chest).contains(heir.toString()));
+        verify(service).report(deathId, "thievery", 2L,
+                Outcome.done(Map.of("locks", 1), List.of("data/0_0/5_64_5.json")));
+        verify(log).info(contains("Estate " + deathId + " (revision 2): locks DONE, 1 moved in all, 0 still with the testator."));
+        assertEquals(Outcome.done(Map.of("locks", 1), List.of("data/0_0/5_64_5.json")),
+                ((EstateParticipant) EstateBridge.get()).settle(decision));
+    }
+
+    @Test
+    void aFailingEstateServiceNeverKeepsTheGuard() throws IOException {
+        // Off the main thread the estate facade throws: the planner contains it and the pass still completes.
+        assertTrue(LockStartup.start(stores, log));
+        assertEquals(LockGuard.Mode.FULL, LockGuard.mode());
+        assertTrue(Files.readString(legacy).contains("CHARACTER"));
+        verify(log).log(eq(Level.WARNING), contains("estate lock planner failed"), any(IllegalStateException.class));
+    }
+
+    @Test
+    void aFailedReportNeitherDropsTheOthersNorTouchesTheLockMode() {
+        LockEstates.Estate first = new LockEstates.Estate(java.util.UUID.randomUUID(), java.util.UUID.randomUUID(), 0, null, null);
+        LockEstates.Estate second = new LockEstates.Estate(java.util.UUID.randomUUID(), java.util.UUID.randomUUID(), 1, null, null);
+        LockEstates estates = mock(LockEstates.class);
+        when(estates.decided()).thenReturn(List.of(first, second));
+        when(estates.report(argThat(report -> report != null && report.estate() == first)))
+                .thenThrow(new IllegalStateException("estate service gone"));
+        when(estates.report(argThat(report -> report != null && report.estate() == second))).thenReturn(false);
+        try (MockedStatic<EstateBridge> bridge = mockStatic(EstateBridge.class)) {
+            bridge.when(EstateBridge::probe).thenReturn(true);
+            bridge.when(EstateBridge::get).thenReturn(estates);
+            assertTrue(LockStartup.start(stores, log));
+        }
+        assertEquals(LockGuard.Mode.FULL, LockGuard.mode());
+        verify(estates, times(2)).report(any());
+        verify(log).log(eq(Level.WARNING), contains("Estate " + first.deathId() + " (revision 0): could not report"),
+                any(IllegalStateException.class));
+        verify(log).info(contains("Estate " + second.deathId() + " (revision 1): locks DONE, 0 moved in all, 0 still"
+                + " with the testator. No estate service received it"));
+    }
+
+    @Test
+    void anOlderTLibsLeavesLocksOutOfEstates() {
+        try (MockedStatic<EstateBridge> bridge = mockStatic(EstateBridge.class)) {
+            bridge.when(EstateBridge::probe).thenReturn(false);
+            bridge.when(EstateBridge::get).thenReturn(LockEstates.NONE);
+            assertTrue(LockStartup.start(stores, log));
+        }
+        verify(log).warning(contains("TLibs is older than 2.6.0, so locks take no part in estates"));
     }
 }

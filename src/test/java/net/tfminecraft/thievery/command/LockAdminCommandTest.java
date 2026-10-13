@@ -177,6 +177,16 @@ class LockAdminCommandTest {
         identity.identity().when(() -> OwnerIdentity.info(stranger)).thenReturn(Optional.empty());
         command.handle(staff, new String[] { "setowner", stranger.toString() });
         assertEquals("§cNo character has the ID " + stranger + ".", last());
+        UUID dead = UUID.randomUUID();
+        var deadInfo = FactionFixture.info(dead, UUID.randomUUID(), CharacterStatus.DEAD);
+        identity.identity().when(() -> OwnerIdentity.info(dead)).thenReturn(Optional.of(deadInfo));
+        command.handle(staff, new String[] { "setowner", dead.toString() });
+        assertEquals("§c" + deadInfo.name() + " is dead. Give the lock to a living character.", last());
+        UUID missing = UUID.randomUUID();
+        var missingInfo = FactionFixture.info(missing, UUID.randomUUID(), CharacterStatus.MISSING);
+        identity.identity().when(() -> OwnerIdentity.info(missing)).thenReturn(Optional.of(missingInfo));
+        command.handle(staff, new String[] { "setowner", missing.toString() });
+        assertEquals("§c" + missingInfo.name() + " is missing. Give the lock to a living character.", last());
         try (var names = mockStatic(CharacterNames.class)) {
             command.handle(staff, new String[] { "setowner", "Kira" });
             assertEquals("§cCharacter names need TLibs 2.5.0. Use the character's UUID instead.", last());

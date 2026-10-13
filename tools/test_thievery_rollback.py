@@ -28,8 +28,9 @@ class Fixture:
         path.write_bytes(text.encode())
         return path
 
-    def journal(self, number, changes, completed=True):
-        """changes: {store name: (original text, new text)}; files end up at the new text."""
+    def journal(self, number, changes, completed=True, extra=None):
+        """changes: {store name: (original text, new text)}; files end up at the new text.
+        extra: {store name: fields added to that entry, such as kind and deathId}."""
         archive = f"backup/locks-{number:04d}.zip"
         with zipfile.ZipFile(self.root / "migrations" / archive, "w") as zipped:
             for name, (original, _) in changes.items():
@@ -37,8 +38,10 @@ class Fixture:
         entries = []
         for name, (original, new) in changes.items():
             self.write(name, new)
-            entries.append({"path": name, "originalHash": sha(original.encode()), "newHash": sha(new.encode()),
-                            "previousOwner": "a", "owner": "b", "ownerKind": "CHARACTER"})
+            entry = {"path": name, "originalHash": sha(original.encode()), "newHash": sha(new.encode()),
+                     "previousOwner": "a", "owner": "b", "ownerKind": "CHARACTER"}
+            entry.update((extra or {}).get(name, {}))
+            entries.append(entry)
         (self.root / "migrations" / f"journal-{number:04d}.json").write_text(
             json.dumps({"number": number, "archive": archive, "completed": completed, "entries": entries}))
 
@@ -165,6 +168,75 @@ class RollbackTest(unittest.TestCase):
         empty = Path(self.temp.name) / "empty"
         empty.mkdir()
         self.assertEqual(0, thievery_rollback.main([str(empty), "--apply"], out=io.StringIO()))
+
+
+    def build_estates(self):
+        """Pass 1 migrates; pass 2 mixes a migration with estate moves; pass 3 moves an estate only."""
+        fx = self.fx
+        estate = {"kind": "estate", "deathId": "d1"}
+        fx.journal(1, {"data/0_0/1_64_1.json": ('{"owner":"acct"}', '{"owner":"dead","ownerKind":"CHARACTER"}')},
+                   extra={"data/0_0/1_64_1.json": {"kind": "migrate"}})
+        fx.journal(2, {
+            "data/0_0/2_64_1.json": ('{"owner":"acct2"}', '{"owner":"heir2","ownerKind":"CHARACTER"}'),
+            "data/0_0/3_64_1.json": ('{"owner":"dead","ownerKind":"CHARACTER","lockState":"GUILD"}',
+                                     '{"owner":"leader","ownerKind":"CHARACTER","lockState":"GUILD"}'),
+            "door-data/0_0/4_64_1.json": ('{"key":"k","ownerUUID":"dead"}', '{"key":"k","ownerUUID":"dead"}'),
+        }, extra={"data/0_0/2_64_1.json": {"kind": "migrate"}, "data/0_0/3_64_1.json": estate,
+                  "door-data/0_0/4_64_1.json": dict(estate, skipped=True)})
+        fx.journal(3, {"entities/e.json": ('{"owner":"dead","ownerKind":"CHARACTER"}',
+                                           '{"owner":"heir","ownerKind":"CHARACTER"}')},
+                   extra={"entities/e.json": estate})
+        fx.markers()
+
+    def test_estate_only_undoes_estate_moves_and_keeps_the_migration_markers(self):
+        self.build_estates()
+        report = Path(self.temp.name) / "report.json"
+        code, out = self.run_tool("--estate-only")
+        self.assertEqual(0, code)
+        self.assertIn("journal-0003.json: 1 entries, would restore 1", out)
+        self.assertIn("journal-0002.json: 1 entries, would restore 1", out)
+        self.assertIn("journal-0001.json: 0 entries, would restore 0", out)
+        self.assertEqual('{"owner":"heir","ownerKind":"CHARACTER"}', self.fx.text("entities/e.json"))
+
+        code, out = self.run_tool("--estate-only", "--apply", "--report", str(report))
+        self.assertEqual(0, code)
+        self.assertEqual('{"owner":"dead","ownerKind":"CHARACTER"}', self.fx.text("entities/e.json"))
+        self.assertEqual('{"owner":"dead","ownerKind":"CHARACTER","lockState":"GUILD"}', self.fx.text("data/0_0/3_64_1.json"))
+        self.assertEqual('{"owner":"heir2","ownerKind":"CHARACTER"}', self.fx.text("data/0_0/2_64_1.json"),
+                         "6a moves stay")
+        self.assertEqual('{"owner":"dead","ownerKind":"CHARACTER"}', self.fx.text("data/0_0/1_64_1.json"))
+        self.assertEqual(3, len(list((self.fx.root / "migrations").glob("journal-*.json"))))
+        for store in thievery_rollback.STORES:
+            self.assertTrue((self.fx.root / store / "data-version").exists())
+        self.assertTrue((self.fx.root / "migrations/quarantine.json").exists())
+        self.assertIn("Estate moves undone; migration markers and archives kept.", out)
+        written = json.loads(report.read_text())
+        self.assertTrue(written["estate_only"])
+        self.assertEqual([], written["removed"])
+
+        # A second run finds the files at their originals and leaves them alone.
+        code, out = self.run_tool("--estate-only", "--apply")
+        self.assertIn("journal-0003.json: 1 entries, restored 0, changed 1", out)
+
+    def test_entries_skipped_at_replay_are_never_restored(self):
+        self.build_estates()
+        door = "door-data/0_0/4_64_1.json"
+        self.fx.write(door, '{"key":"k","ownerUUID":"dead","x":1}')
+        code, out = self.run_tool("--apply")
+        self.assertEqual(0, code)
+        self.assertIn("journal-0002.json: 2 entries, restored 2", out)
+        self.assertEqual('{"key":"k","ownerUUID":"dead","x":1}', self.fx.text(door))
+        self.assertEqual('{"owner":"acct"}', self.fx.text("data/0_0/1_64_1.json"), "a full rollback undoes both stages")
+
+    def test_estate_entries_an_old_jar_rewrote_without_their_kind_need_a_full_rollback(self):
+        fx = self.fx
+        fx.journal(1, {"data/0_0/5_64_1.json": ('{"owner":"dead","ownerKind":"CHARACTER"}',
+                                               '{"owner":"heir","ownerKind":"CHARACTER"}')})
+        code, out = self.run_tool("--estate-only", "--apply")
+        self.assertIn("journal-0001.json: 0 entries, restored 0", out)
+        self.assertEqual('{"owner":"heir","ownerKind":"CHARACTER"}', fx.text("data/0_0/5_64_1.json"))
+        self.run_tool("--apply")
+        self.assertEqual('{"owner":"dead","ownerKind":"CHARACTER"}', fx.text("data/0_0/5_64_1.json"))
 
 
 if __name__ == "__main__":
