@@ -90,7 +90,8 @@ public final class LockGuard {
     public static void failClosed(Cancellable event, String where, Runnable body) {
         try {
             body.run();
-        } catch (RuntimeException e) {
+        } catch (RuntimeException | LinkageError e) {
+            // A LinkageError means a changed SimpleFactions or TLibs API; deny rather than let the event through.
             event.setCancelled(true);
             logger().log(Level.SEVERE, "Thievery cancelled " + where + " after an error", e);
         }

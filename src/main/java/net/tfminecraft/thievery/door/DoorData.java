@@ -19,9 +19,12 @@ public class DoorData {
         this.owner = owner;
     }
 
-    /** A record that could not be read: still locked, owner unresolved; the key survives when it can be read. */
-    public static DoorData unreadable(Location location, String key) {
-        DoorData data = new DoorData(location, key, 0.0, LockOwner.unreadable());
+    /**
+     * A record that could not be read: still locked, owner unresolved. The key and strength survive when they can be
+     * read; a lost strength is NaN, so staff cannot rewrite the record with a weaker lock.
+     */
+    public static DoorData unreadable(Location location, String key, Double strength) {
+        DoorData data = new DoorData(location, key, strength == null ? Double.NaN : strength, LockOwner.unreadable());
         data.unreadable = true;
         return data;
     }

@@ -493,7 +493,8 @@ public class ContainerManager implements Listener {
      */
     private void syncDoubleChest(Player player, ContainerData left, ContainerData right) {
         ChestOwners owners = ChestOwners.of(left, right);
-        if (owners.diverged()) {
+        // An unreadable half is never copied onto its partner; staff settle it with setowner.
+        if (owners.diverged() || (owners.owner() != null && owners.owner().id() == null)) {
             LockQuarantine.noteDiverged(describe(left.getLocation()) + " / " + describe(right.getLocation()));
             return;
         }
@@ -561,7 +562,9 @@ public class ContainerManager implements Listener {
             return;
         }
         if (owner == null) {
-            // Without a current character the container is left unowned and no file is written.
+            // Without a current character the container is left unowned. A record left behind by a container that
+            // was blown up or otherwise lost without a break event must not hand this one to its old owner.
+            containerDataManager.deleteContainerData(block.getLocation());
             return;
         }
 

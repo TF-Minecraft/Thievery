@@ -34,7 +34,10 @@ import net.tfminecraft.thievery.owner.LockOwner;
 import net.tfminecraft.thievery.owner.LockOwnerNames;
 import net.tfminecraft.thievery.owner.LockQuarantine;
 import net.tfminecraft.thievery.owner.OwnerIdentity;
+import net.tfminecraft.interactiblefurniture.furniture.Furniture;
+import net.tfminecraft.thievery.cache.Cache;
 import net.tfminecraft.thievery.steal.DisplayStealManager;
+import net.tfminecraft.thievery.steal.FurnitureLockHelper;
 import net.tfminecraft.thievery.utils.ThieveryTexts;
 import net.tfminecraft.tlibs.character.CharacterInfo;
 
@@ -157,6 +160,11 @@ public final class LockAdminCommand {
             setEntityOwner(player, entity, owner);
             return;
         }
+        Furniture furniture = entity == null || !Cache.interactibleFurniture ? null : FurnitureLockHelper.find(entity);
+        if (furniture != null) {
+            setFurnitureOwner(player, furniture, owner);
+            return;
+        }
         msg(player, ThieveryTexts.ERROR + "Look at a container, locked door or lockable display within 5 blocks.");
     }
 
@@ -221,14 +229,15 @@ public final class LockAdminCommand {
             msg(player, ThieveryTexts.ERROR + "That door is not locked.");
             return;
         }
-        if (data.getKey() == null) {
-            msg(player, ThieveryTexts.ERROR + "This door's record has no readable key. Break the door in Creative to"
-                    + " remove the lock.");
+        if (data.getKey() == null || Double.isNaN(data.getStrength())) {
+            msg(player, ThieveryTexts.ERROR + "This door's record has lost its key or strength. Break the door in"
+                    + " Creative to remove the lock.");
             return;
         }
         String before = LockOwnerNames.staffLabel(data.getOwner());
         data.setOwner(owner);
         doors.saveDoorData(data);
+        LockQuarantine.resolved(where(canonical), doors.getFileForLocation(canonical).toPath());
         done(player, "door at " + where(canonical), before, owner);
     }
 
@@ -238,7 +247,18 @@ public final class LockAdminCommand {
         String before = LockOwnerNames.staffLabel(data.getOwner());
         data.setOwner(owner);
         entities.save(data);
+        LockQuarantine.resolved(where(entity.getLocation()), entities.getFile(entity.getUniqueId()).toPath());
         done(player, "display " + entity.getUniqueId(), before, owner);
+    }
+
+    // Unreadable furniture variables become a PRIVATE lock for the new owner; readable ones keep their state.
+    private void setFurnitureOwner(Player player, Furniture furniture, LockOwner owner) {
+        FurnitureLockHelper.FurnitureLock lock = FurnitureLockHelper.read(furniture);
+        String before = LockOwnerNames.staffLabel(lock.owner());
+        FurnitureLockHelper.setOwner(furniture, owner);
+        FurnitureLockHelper.setLockState(furniture, lock.state());
+        LockQuarantine.resolved(where(furniture.getLoc()), FurnitureLockHelper.quarantinePath(furniture));
+        done(player, "furniture at " + where(furniture.getLoc()), before, owner);
     }
 
     private void done(Player player, String what, String before, LockOwner owner) {

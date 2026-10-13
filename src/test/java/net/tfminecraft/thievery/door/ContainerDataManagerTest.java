@@ -192,6 +192,11 @@ class ContainerDataManagerTest {
             assertEquals(json, Files.readString(file), json);
         }
         assertFalse(LockQuarantine.snapshot().unreadable().isEmpty());
+        UUID thief = UUID.randomUUID();
+        write("{\"owner\":\"nope\",\"lockState\":\"PUBLIC\",\"accessMap\":{\"" + thief + "\":\"2026-10-01\"}}");
+        assertEquals(Map.of(thief, "2026-10-01"), manager.loadContainerData(location).getAccessMap(), "cooldowns are salvaged");
+        write("{\"owner\":\"nope\",\"accessMap\":[1]}");
+        assertTrue(manager.loadContainerData(location).getAccessMap().isEmpty());
     }
 
     @Test

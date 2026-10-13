@@ -89,7 +89,7 @@ public class EntityLockDataManager {
         }
     }
 
-    private File getFile(UUID entityId) {
+    public File getFile(UUID entityId) {
         return new File(dataFolder, entityId.toString() + ".json");
     }
 }

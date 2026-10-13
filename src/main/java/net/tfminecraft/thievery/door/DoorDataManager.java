@@ -37,7 +37,7 @@ public class DoorDataManager {
         } catch (IOException e) {
             Bukkit.getLogger().warning("Unreadable door lock " + file + ": " + e.getMessage());
             LockQuarantine.noteUnreadable(file.toPath());
-            return DoorData.unreadable(location, null);
+            return DoorData.unreadable(location, null, null);
         }
         try {
             LockRecords.Door record = LockRecords.decodeDoor(bytes);
@@ -48,7 +48,8 @@ public class DoorDataManager {
         } catch (IllegalArgumentException e) {
             Bukkit.getLogger().warning("Unreadable door lock " + file + ": " + e.getMessage());
             LockQuarantine.noteUnreadable(file.toPath());
-            return DoorData.unreadable(location, LockRecords.salvageDoorKey(bytes));
+            return DoorData.unreadable(location, LockRecords.salvageDoorKey(bytes),
+                    LockRecords.salvageDoorStrength(bytes));
         }
     }
 
@@ -98,7 +99,7 @@ public class DoorDataManager {
         }
     }
 
-    private File getFileForLocation(Location loc) {
+    public File getFileForLocation(Location loc) {
         String chunkFolder = (loc.getBlockX() >> 4) + "_" + (loc.getBlockZ() >> 4);
         String fileName = loc.getBlockX() + "_" + loc.getBlockY() + "_" + loc.getBlockZ() + ".json";
         return new File(new File(dataFolder, chunkFolder), fileName);

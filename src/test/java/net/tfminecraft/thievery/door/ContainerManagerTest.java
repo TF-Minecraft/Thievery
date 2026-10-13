@@ -844,6 +844,7 @@ class ContainerManagerTest {
         stage5Factions.plays(player,null);
         var barrel=block(0,Material.BARREL); var place=mock(BlockPlaceEvent.class); when(place.getPlayer()).thenReturn(player); when(place.getBlockPlaced()).thenReturn(barrel);
         manager.onBlockPlace(place); verify(place,never()).setCancelled(true); assertFalse(data.containsKey(barrel.getLocation())); verify(storage,never()).saveContainerData(any());
+        verify(storage).deleteContainerData(barrel.getLocation());
         var chest=block(3,Material.CHEST); lock(block(4,Material.CHEST),UUID.randomUUID()); when(place.getBlockPlaced()).thenReturn(chest);
         manager.onBlockPlace(place); verify(place).setCancelled(true);
         when(player.hasPermission("thievery.admin")).thenReturn(true); when(place.getBlockPlaced()).thenReturn(barrel);
@@ -863,6 +864,13 @@ class ContainerManagerTest {
         var chest=doubleChest(); var left=lock(chest.block(),player.getUniqueId()); var right=lock(chest.right().getBlock(),player.getUniqueId()); right.setLockState(LockState.GUILD);
         manager.onInventoryOpen(open(chest.inventory()));
         assertEquals(LockState.PRIVATE,left.getLockState()); assertEquals(LockState.GUILD,right.getLockState()); assertEquals(left.getOwner(),right.getOwner());
+    }
+    @Test void anUnreadableHalfIsNeverCopiedOntoItsUnownedPartner() {
+        when(player.hasPermission("thievery.admin")).thenReturn(true);
+        var chest=doubleChest(); var left=new ContainerData(chest.left().getLocation()); data.put(left.getLocation(),left); data.put(chest.right().getLocation(),ContainerData.unreadable(chest.right().getLocation()));
+        var event=open(chest.inventory()); manager.onInventoryOpen(event);
+        verify(event,never()).setCancelled(true); assertNull(left.getOwner()); verify(storage,never()).saveContainerData(any());
+        assertEquals(1,net.tfminecraft.thievery.owner.LockQuarantine.snapshot().diverged().size());
     }
     @Test void staffCannotRotateAChestWithAnUnreadableHalf() {
         when(player.hasPermission("thievery.admin")).thenReturn(true); when(player.isSneaking()).thenReturn(true);

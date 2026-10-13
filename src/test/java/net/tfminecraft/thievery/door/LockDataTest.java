@@ -31,7 +31,9 @@ class LockDataTest {
         assertEquals(123456L, door.getUnlockExpiryMs());
         door.setUnlockExpiryMs(null);
         assertNull(door.getUnlockExpiryMs());
-        DoorData unreadable = DoorData.unreadable(location, "kept");
+        DoorData unreadable = DoorData.unreadable(location, "kept", 0.6);
+        assertEquals(0.6, unreadable.getStrength());
+        assertTrue(Double.isNaN(DoorData.unreadable(location, null, null).getStrength()));
         assertTrue(unreadable.isUnreadable());
         assertEquals(LockOwner.unreadable(), unreadable.getOwner());
         assertEquals("kept", unreadable.getKey());

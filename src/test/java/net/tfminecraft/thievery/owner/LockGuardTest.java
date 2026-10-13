@@ -60,6 +60,9 @@ class LockGuardTest {
             LockGuard.failClosed(event, "a test", () -> { throw new IllegalStateException("boom"); });
             verify(event).setCancelled(true);
             verify(logger).log(eq(Level.SEVERE), contains("cancelled a test"), any(IllegalStateException.class));
+            Cancellable linked = mock(Cancellable.class);
+            LockGuard.failClosed(linked, "a bridge call", () -> { throw new NoSuchMethodError("Guild.getIncarnation"); });
+            verify(linked).setCancelled(true);
         }
     }
 }

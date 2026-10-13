@@ -90,19 +90,32 @@ public class ContainerDataManager {
         if (!file.exists()) {
             return new ContainerData(location); // fresh
         }
+        byte[] bytes;
+        try {
+            bytes = Files.readAllBytes(file.toPath());
+        } catch (IOException e) {
+            return unreadable(location, file, e, new byte[0]);
+        }
         LockRecords.Container record;
         try {
-            record = LockRecords.decodeContainer(Files.readAllBytes(file.toPath()));
-        } catch (IOException | IllegalArgumentException e) {
-            Bukkit.getLogger().warning("Unreadable container lock " + file + ": " + e.getMessage());
-            LockQuarantine.noteUnreadable(file.toPath());
-            return ContainerData.unreadable(location);
+            record = LockRecords.decodeContainer(bytes);
+        } catch (IllegalArgumentException e) {
+            return unreadable(location, file, e, bytes);
         }
         OwnerCodec.Resolved owner = OwnerCodec.resolve(record.owner());
         ContainerData data = new ContainerData(location, owner.owner());
         data.setProvisional(!owner.definitive());
         data.setAccessMap(record.accessMap());
         data.setLockState(record.state());
+        return data;
+    }
+
+    // Locked with an unresolved owner; thief cooldowns are kept when they can be read, so staff fixes keep them.
+    private static ContainerData unreadable(Location location, File file, Exception e, byte[] bytes) {
+        Bukkit.getLogger().warning("Unreadable container lock " + file + ": " + e.getMessage());
+        LockQuarantine.noteUnreadable(file.toPath());
+        ContainerData data = ContainerData.unreadable(location);
+        data.setAccessMap(LockRecords.salvageAccessMap(bytes));
         return data;
     }
 

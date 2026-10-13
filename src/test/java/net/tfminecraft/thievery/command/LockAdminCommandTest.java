@@ -203,7 +203,8 @@ class LockAdminCommandTest {
         barrel.setType(Material.BARREL);
         Path file = containers.getFileForLocation(at).toPath();
         Files.createDirectories(file.getParent());
-        Files.writeString(file, "{broken");
+        UUID thief = UUID.randomUUID();
+        Files.writeString(file, "{\"owner\":\"nope\",\"lockState\":\"PUBLIC\",\"accessMap\":{\"" + thief + "\":\"2026-10-01\"}}");
         assertTrue(containers.loadContainerData(at).isUnreadable());
         when(staff.getTargetBlockExact(5)).thenReturn(barrel);
         UUID kira = UUID.randomUUID();
@@ -213,6 +214,7 @@ class LockAdminCommandTest {
         ContainerData data = containers.loadContainerData(at);
         assertEquals(LockOwner.character(kira), data.getOwner());
         assertEquals(LockState.PRIVATE, data.getLockState());
+        assertEquals(java.util.Map.of(thief, "2026-10-01"), data.getAccessMap(), "account cooldowns survive the fix");
         assertTrue(last().contains("now belongs to"));
         assertTrue(last().contains("(was an unreadable record)"));
         assertTrue(LockQuarantine.snapshot().unreadable().isEmpty());
@@ -261,7 +263,7 @@ class LockAdminCommandTest {
     }
 
     @Test
-    void setOwnerOnDoorsNeedsALockWithAReadableKey() throws Exception {
+    void setOwnerOnDoorsNeedsALockWithAReadableKeyAndStrength() throws Exception {
         Block door = at.getBlock();
         door.setType(Material.OAK_DOOR);
         when(staff.getTargetBlockExact(5)).thenReturn(door);
@@ -270,19 +272,27 @@ class LockAdminCommandTest {
         Path file = Path.of("plugins/Thievery/door-data").resolve((at.getBlockX() >> 4) + "_" + (at.getBlockZ() >> 4))
                 .resolve(at.getBlockX() + "_70_3.json");
         Files.createDirectories(file.getParent());
-        Files.writeString(file, "{\"ownerUUID\":\"nope\"}");
-        command.handle(staff, new String[] { "setowner", "server" });
-        assertTrue(last().startsWith("§cThis door's record has no readable key."));
-        Files.writeString(file, "{\"key\":\"brass\",\"ownerUUID\":\"nope\"}");
+        for (String lost : new String[] { "{\"ownerUUID\":\"nope\",\"strength\":0.8}", "{\"key\":\"brass\",\"ownerUUID\":\"nope\"}",
+                "{\"key\":\"brass\",\"strength\":\"high\",\"ownerUUID\":\"nope\"}" }) {
+            Files.writeString(file, lost);
+            command.handle(staff, new String[] { "setowner", "server" });
+            assertTrue(last().startsWith("§cThis door's record has lost its key or strength."), lost);
+            assertEquals(lost, Files.readString(file), "a weaker lock is never written");
+        }
+        Files.writeString(file, "{\"key\":\"brass\",\"strength\":0.8,\"ownerUUID\":\"nope\"}");
+        doors.loadDoorData(at);
+        assertFalse(LockQuarantine.snapshot().unreadable().isEmpty());
         command.handle(staff, new String[] { "setowner", "server" });
         DoorData data = doors.loadDoorData(at);
         assertEquals("brass", data.getKey());
+        assertEquals(0.8, data.getStrength());
         assertEquals(LockOwner.server(), data.getOwner());
         assertTrue(last().contains("door at locks"));
+        assertTrue(LockQuarantine.snapshot().unreadable().isEmpty());
     }
 
     @Test
-    void setOwnerOnALockableDisplay() {
+    void setOwnerOnALockableDisplay() throws Exception {
         var saved = Parameters.lockableEntityTypes;
         Parameters.lockableEntityTypes = java.util.EnumSet.of(EntityType.ARMOR_STAND);
         try {
@@ -291,13 +301,66 @@ class LockAdminCommandTest {
             when(stand.getType()).thenReturn(EntityType.ARMOR_STAND);
             when(stand.getUniqueId()).thenReturn(id);
             when(staff.getTargetEntity(5)).thenReturn(stand);
+            when(stand.getLocation()).thenReturn(at);
             UUID kira = UUID.randomUUID();
+            Files.createDirectories(temp.resolve("entities"));
+            Files.writeString(temp.resolve("entities/" + id + ".json"), "null");
+            new EntityLockDataManager().load(id);
+            assertEquals(1, LockQuarantine.snapshot().unreadable().size());
             command.handle(staff, new String[] { "setowner", kira.toString() });
             EntityLockData data = new EntityLockDataManager().load(id);
             assertEquals(LockOwner.character(kira), data.getOwner());
+            assertTrue(LockQuarantine.snapshot().unreadable().isEmpty());
             assertTrue(last().contains("display " + id));
         } finally {
             Parameters.lockableEntityTypes = saved;
+        }
+    }
+
+    @Test
+    void setOwnerRepairsUnreadableFurnitureFoundThroughItsInteractionEntity() {
+        boolean saved = net.tfminecraft.thievery.cache.Cache.interactibleFurniture;
+        var savedIds = Parameters.lockableFurnitureIds;
+        var furniture = mock(net.tfminecraft.interactiblefurniture.furniture.Furniture.class);
+        var other = mock(net.tfminecraft.interactiblefurniture.furniture.Furniture.class);
+        java.util.Map<String, Object> variables = new java.util.HashMap<>(java.util.Map.of(
+                "thievery.owner", "garbage", "thievery.lockState", "PUBLIC"));
+        UUID display = UUID.randomUUID(), box = UUID.randomUUID();
+        when(furniture.getId()).thenReturn("pedestal"); when(other.getId()).thenReturn("chair");
+        when(furniture.getVariables()).thenReturn(variables);
+        when(furniture.getEntityId()).thenReturn(display); when(furniture.getInteractionEntityId()).thenReturn(box);
+        when(furniture.getLoc()).thenReturn(at);
+        var entity = mock(org.bukkit.entity.Interaction.class);
+        when(entity.getUniqueId()).thenReturn(box);
+        when(staff.getTargetEntity(5)).thenReturn(entity);
+        var plugin = mock(net.tfminecraft.interactiblefurniture.InteractibleFurniture.class, RETURNS_DEEP_STUBS);
+        when(plugin.getFurnitureManager().getPlacedFurniture()).thenReturn(new java.util.LinkedHashMap<>(java.util.Map.of(UUID.randomUUID(), other, display, furniture)));
+        try (var api = mockStatic(net.tfminecraft.interactiblefurniture.InteractibleFurniture.class)) {
+            api.when(net.tfminecraft.interactiblefurniture.InteractibleFurniture::getInstance).thenReturn(plugin);
+            Parameters.lockableFurnitureIds = java.util.Set.of("pedestal");
+            net.tfminecraft.thievery.cache.Cache.interactibleFurniture = false;
+            command.handle(staff, new String[] { "setowner", "server" });
+            assertTrue(last().startsWith("§cLook at a container"));
+            net.tfminecraft.thievery.cache.Cache.interactibleFurniture = true;
+            assertTrue(net.tfminecraft.thievery.steal.FurnitureLockHelper.read(furniture).unreadable());
+            command.handle(staff, new String[] { "setowner", "server" });
+            assertEquals("SERVER", variables.get("thievery.ownerKind"));
+            assertEquals("PRIVATE", variables.get("thievery.lockState"));
+            assertTrue(last().contains("furniture at locks"));
+            assertTrue(LockQuarantine.snapshot().unreadable().isEmpty());
+            UUID kira = UUID.randomUUID();
+            command.handle(staff, new String[] { "setowner", kira.toString() });
+            assertEquals(kira.toString(), variables.get("thievery.owner"));
+            assertEquals("PRIVATE", variables.get("thievery.lockState"));
+            when(entity.getUniqueId()).thenReturn(display);
+            command.handle(staff, new String[] { "setowner", "server" });
+            assertEquals("SERVER", variables.get("thievery.ownerKind"));
+            when(entity.getUniqueId()).thenReturn(UUID.randomUUID());
+            command.handle(staff, new String[] { "setowner", "server" });
+            assertTrue(last().startsWith("§cLook at a container"));
+        } finally {
+            net.tfminecraft.thievery.cache.Cache.interactibleFurniture = saved;
+            Parameters.lockableFurnitureIds = savedIds;
         }
     }
 }

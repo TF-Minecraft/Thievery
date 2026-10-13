@@ -150,6 +150,9 @@ class DoorDataManagerTest {
         }
         write("{\"key\":\"kept\",\"ownerUUID\":\"nope\"}");
         assertEquals("kept", manager.loadDoorData(location).getKey());
+        assertTrue(Double.isNaN(manager.loadDoorData(location).getStrength()), "a lost strength is never guessed");
+        write("{\"key\":\"kept\",\"strength\":0.4,\"ownerUUID\":\"nope\"}");
+        assertEquals(0.4, manager.loadDoorData(location).getStrength());
         write("{\"key\":7,\"ownerUUID\":\"nope\"}");
         assertNull(manager.loadDoorData(location).getKey());
         DoorData fixed = manager.loadDoorData(location);

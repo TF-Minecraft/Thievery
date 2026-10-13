@@ -46,9 +46,25 @@ public final class FurnitureLockHelper {
             LockState state = rawState == null ? LockState.DEFAULT : LockState.valueOf(rawState.toUpperCase(Locale.ROOT));
             return new FurnitureLock(OwnerCodec.resolve(stored).owner(), state, false);
         } catch (IllegalArgumentException e) {
-            LockQuarantine.noteUnreadable(java.nio.file.Path.of("furniture", describe(furniture.getLoc())));
+            LockQuarantine.noteUnreadable(quarantinePath(furniture));
             return new FurnitureLock(LockOwner.unreadable(), LockState.PRIVATE, true);
         }
+    }
+
+    /** How unreadable furniture is named in the staff quarantine list. */
+    public static java.nio.file.Path quarantinePath(Furniture furniture) {
+        return java.nio.file.Path.of("furniture", describe(furniture.getLoc()));
+    }
+
+    /** The lockable furniture piece an entity belongs to (its display or its interaction box), or null. */
+    public static Furniture find(org.bukkit.entity.Entity entity) {
+        for (Furniture furniture : InteractibleFurniture.getInstance().getFurnitureManager().getPlacedFurniture().values()) {
+            if (isLockable(furniture) && (entity.getUniqueId().equals(furniture.getEntityId())
+                    || entity.getUniqueId().equals(furniture.getInteractionEntityId()))) {
+                return furniture;
+            }
+        }
+        return null;
     }
 
     private static String text(Object raw) {

@@ -69,6 +69,24 @@ public final class LockRecords {
         }
     }
 
+    /** The lock strength of an unreadable door record, or null when it is lost. */
+    public static Double salvageDoorStrength(byte[] bytes) {
+        try {
+            return number(object(bytes).get("strength")).doubleValue();
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    /** The thief cooldowns of an unreadable container record, or none when they are lost too. */
+    public static Map<UUID, String> salvageAccessMap(byte[] bytes) {
+        try {
+            return accessMap(object(bytes).get("accessMap"));
+        } catch (RuntimeException e) {
+            return new HashMap<>();
+        }
+    }
+
     public static byte[] encodeContainer(Container record) {
         JsonObject json = new JsonObject();
         putOwner(json, CONTAINER_OWNER, record.owner());
@@ -164,7 +182,7 @@ public final class LockRecords {
     }
 
     private static Number number(JsonElement element) {
-        if (!element.isJsonPrimitive() || !element.getAsJsonPrimitive().isNumber()) {
+        if (element == null || !element.isJsonPrimitive() || !element.getAsJsonPrimitive().isNumber()) {
             throw new IllegalArgumentException("expected a number: " + element);
         }
         return element.getAsNumber();
