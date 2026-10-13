@@ -181,9 +181,11 @@ public final class LockAdminCommand {
                 msg(player, ThieveryTexts.ERROR + "No character has the ID " + spec + ".");
                 return null;
             }
-            if (info.get().status() == CharacterStatus.DEAD) {
-                // A dead character's locks pass through their estate; staff give a lock to a living character.
-                msg(player, ThieveryTexts.ERROR + info.get().name() + " is dead. Give the lock to a living character.");
+            CharacterStatus status = info.get().status();
+            if (status != CharacterStatus.ALIVE) {
+                // Nobody can play a dead or missing owner, and a dead one's locks pass through their estate.
+                msg(player, ThieveryTexts.ERROR + info.get().name() + (status == CharacterStatus.DEAD ? " is dead."
+                        : " is missing.") + " Give the lock to a living character.");
                 return null;
             }
             return LockOwner.character(id);
