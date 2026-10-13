@@ -360,20 +360,13 @@ public class ContainerManager implements Listener {
         return List.of();
     }
 
-    // The owner a pick or clue is keyed to: both halves of a double chest, diverged halves as unresolved.
-    private ChestOwners ownersOf(Inventory inv) {
-        InventoryHolder holder = inv.getHolder(false);
-        if (holder instanceof DoubleChest doubleChest) {
-            if (!(doubleChest.getLeftSide(false) instanceof Chest leftChest)
-                    || !(doubleChest.getRightSide(false) instanceof Chest rightChest)) {
-                return new ChestOwners(null, true);
-            }
-            return ChestOwners.of(containerDataManager.loadContainerData(leftChest.getLocation()),
-                    containerDataManager.loadContainerData(rightChest.getLocation()));
+    // The owner a pick or clue is keyed to, read from both halves of a double chest.
+    private LockOwner pickOwner(Inventory inv) {
+        List<ContainerDataManager.CachedLock> locks = locksOf(inv.getHolder(false));
+        if (locks.size() == 2) {
+            return ChestOwners.of(locks.get(0).owner(), locks.get(1).owner()).effective();
         }
-        // Callers only pass container inventories, whose holder is either a DoubleChest or the Container itself.
-        Location location = ((Container) holder).getLocation();
-        return new ChestOwners(containerDataManager.loadContainerData(location).getOwner(), false);
+        return locks.getFirst().owner();
     }
 
 
@@ -919,10 +912,7 @@ public class ContainerManager implements Listener {
             }
         }
 
-        ChestOwners owners = ownersOf(blockInv);
-        GuildChecker.LockpickAccessResult access = owners.diverged()
-                ? GuildChecker.checkLockpickAccess(LockOwner.unreadable())
-                : GuildChecker.checkLockpickAccess(owners.owner());
+        GuildChecker.LockpickAccessResult access = GuildChecker.checkLockpickAccess(pickOwner(blockInv));
         if (access.type == GuildChecker.LockpickAccessResult.Type.DENY) {
             player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + access.message));
             return;
@@ -1047,8 +1037,7 @@ public class ContainerManager implements Listener {
         Inventory chestInv = container.getInventory();
 
         int dexterity = RiskCalculator.getDexterity(p);
-        ChestOwners owners = ownersOf(chestInv);
-        String targetKey = TargetKeyResolver.forLockOwner(owners.diverged() ? LockOwner.unreadable() : owners.owner());
+        String targetKey = TargetKeyResolver.forLockOwner(pickOwner(chestInv));
         LockTypeProfile lockType = Parameters.lockTypeProfile(data.getLockState());
         int seizedCount = ChestLockpickSession.computeSeizedCount(dexterity, lockpickDef.getStrength(), lockType,
                 chestInv.getSize(), slips);

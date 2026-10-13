@@ -80,13 +80,14 @@ public final class LockQuarantine {
     /** Staff set a new owner on a listed lock. */
     public static void resolved(String where, Path path) {
         diverged.remove(where);
-        runtimeUnreadable.remove(path.toString());
-        contents.quarantined.removeIf(entry -> matches(entry, path));
-        contents.unreadable.removeIf(entry -> matches(entry, path));
+        runtimeUnreadable.removeIf(listed -> matches(listed, path));
+        contents.quarantined.removeIf(entry -> matches(entry.path(), path));
+        contents.unreadable.removeIf(entry -> matches(entry.path(), path));
     }
 
-    private static boolean matches(Entry entry, Path path) {
-        return path.toString().replace('\\', '/').endsWith(entry.path());
+    // Listings name store files relative to their store; the server sees them under plugins/Thievery.
+    private static boolean matches(String listed, Path path) {
+        return path.toString().replace('\\', '/').endsWith(listed);
     }
 
     /** Replaces the listed records after a boot scan and writes the file durably. */

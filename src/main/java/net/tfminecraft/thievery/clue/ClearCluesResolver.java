@@ -151,8 +151,7 @@ public final class ClearCluesResolver {
             ChestOwners owners = ChestOwners.of(left, right);
             LockState state = left.getLockState().ordinal() < right.getLockState().ordinal()
                     ? left.getLockState() : right.getLockState();
-            return new ClearCluesTarget(Kind.CONTAINER, left.getLocation(),
-                    owners.diverged() ? LockOwner.unreadable() : owners.owner(), state);
+            return new ClearCluesTarget(Kind.CONTAINER, left.getLocation(), owners.effective(), state);
         }
         ContainerData data = containerDataManager.loadContainerData(container.getLocation());
         return new ClearCluesTarget(Kind.CONTAINER, data.getLocation(), data.getOwner(), data.getLockState());

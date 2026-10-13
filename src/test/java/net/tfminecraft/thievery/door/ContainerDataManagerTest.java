@@ -118,6 +118,14 @@ class ContainerDataManagerTest {
     }
 
     @Test
+    void aNullAccessMapIsAnEmptyLedger() throws Exception {
+        write("{\"owner\":\"" + UUID.randomUUID() + "\",\"lockState\":\"PRIVATE\",\"accessMap\":null}");
+        ContainerData loaded = manager.loadContainerData(location);
+        assertFalse(loaded.isUnreadable());
+        assertTrue(loaded.getAccessMap().isEmpty());
+    }
+
+    @Test
     void markerlessOwnersAreClassifiedOnLoad() throws Exception {
         UUID character = UUID.randomUUID();
         write("{\"owner\":\"" + character + "\",\"lockState\":\"PRIVATE\"}");
@@ -166,7 +174,7 @@ class ContainerDataManagerTest {
             "{\"owner\":\"" + owner + "\",\"ownerKind\":\"ALIEN\",\"lockState\":\"PUBLIC\"}",
             "{\"owner\":\"" + owner + "\",\"ownerKind\":\"SERVER\",\"lockState\":\"PUBLIC\"}",
             "{\"owner\":\"00000000-0000-0000-0000-000000000000\",\"ownerKind\":\"CHARACTER\",\"lockState\":\"PUBLIC\"}",
-            "{\"ownerKind\":\"CHARACTER\",\"lockState\":\"PUBLIC\"}", "{\"owner\":7,\"lockState\":\"PUBLIC\"}",
+            "{\"ownerKind\":\"CHARACTER\",\"lockState\":\"PUBLIC\"}", "{\"owner\":7,\"lockState\":\"PUBLIC\"}", "{\"owner\":{},\"lockState\":\"PUBLIC\"}",
             "{\"owner\":\"" + owner + "\",\"lockState\":\"PUBLIC\",\"accessMap\":[]}",
             "{\"owner\":\"" + owner + "\",\"lockState\":\"PUBLIC\",\"accessMap\":{\"x\":\"today\"}}",
             "{\"owner\":\"" + owner + "\",\"lockState\":\"PUBLIC\",\"accessMap\":{\"" + owner + "\":3}}",

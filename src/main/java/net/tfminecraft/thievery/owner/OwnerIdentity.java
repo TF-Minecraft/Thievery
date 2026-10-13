@@ -21,14 +21,14 @@ public final class OwnerIdentity {
     /** Whether TLibs offers {@code legacyHeir} and {@code legacyHeirsReady}. Probed once and cached. */
     public static boolean heirApiPresent() {
         if (heirApi == null) {
-            heirApi = probeHeirApi();
+            heirApi = probeHeirApi("net.tfminecraft.tlibs.character.Characters");
         }
         return heirApi;
     }
 
-    static boolean probeHeirApi() {
+    static boolean probeHeirApi(String className) {
         try {
-            Class<?> characters = Class.forName("net.tfminecraft.tlibs.character.Characters");
+            Class<?> characters = Class.forName(className);
             characters.getMethod("legacyHeir", UUID.class);
             characters.getMethod("legacyHeirsReady");
             return true;

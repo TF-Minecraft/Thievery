@@ -117,6 +117,21 @@ class CommandManagerTest {
         verify(cooldowns).resetForPlayer(target.getUniqueId()); verify(console).sendMessage(contains("Alice"));
     }
 
+    @Test void cooldownResetsAreRefusedWhileLocksAreStartingUp() {
+        when(console.hasPermission("thievery.admin")).thenReturn(true);
+        net.tfminecraft.thievery.owner.LockGuard.enter("test");
+        assertTrue(run(console, "resetcooldowns", "all"));
+        verifyNoInteractions(cooldowns);
+        verify(console).sendMessage("§cLocks are starting up. Try again shortly.");
+    }
+
+    @Test void lockSubcommandsGoToTheStaffLockCommandFromConsoleOrPlayers() {
+        assertTrue(run(console, "locks", "quarantine"));
+        verify(locks).handle(console, new String[] {"quarantine"});
+        assertTrue(run(player, "LOCKS"));
+        verify(locks).handle(player, new String[0]);
+    }
+
     @Test void riskRejectsInvalidNumbersAndDispatchesValidatedBoundaryAndNamedValues() {
         when(console.hasPermission("thievery.admin")).thenReturn(true);
         assertTrue(run(console, "setrisk", "all", "invalid"));

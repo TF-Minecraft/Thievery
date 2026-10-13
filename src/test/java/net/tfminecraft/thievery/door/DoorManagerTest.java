@@ -699,6 +699,72 @@ class DoorManagerTest {
         }
     }
 
+    @Test
+    void lockingADoorNeedsACharacterAndSessionlessStaffLockForTheServer() {
+        when(player.isSneaking()).thenReturn(true);
+        tools.when(() -> ToolResolver.isLockingKey(held)).thenReturn(true);
+        tools.when(() -> ToolResolver.isMasterKey(held)).thenReturn(true);
+        stage5Factions.plays(player, null);
+        manager.onPlayerInteract(interaction(door));
+        verify(store, never()).saveDoorData(any());
+        verify(player).sendTitle("§cPlay a character to claim or change locks.", "", 5, 30, 10);
+        when(player.hasPermission("thievery.admin")).thenReturn(true);
+        // Skip the 200 ms double-click guard rather than waiting it out.
+        try {
+            var last = DoorManager.class.getDeclaredField("lastInteract");
+            last.setAccessible(true);
+            ((java.util.Map<?, ?>) last.get(manager)).clear();
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError(e);
+        }
+        manager.onPlayerInteract(interaction(door));
+        ArgumentCaptor<DoorData> saved = ArgumentCaptor.forClass(DoorData.class);
+        verify(store).saveDoorData(saved.capture());
+        assertEquals(LockOwner.server(), saved.getValue().getOwner());
+    }
+
+    @Test
+    void guardModeLetsKeyHoldersThroughButRefusesLockTogglesPicksAndBreaks() {
+        net.tfminecraft.thievery.owner.LockGuard.enter("test");
+        locked();
+        when(player.isSneaking()).thenReturn(true);
+        tools.when(() -> ToolResolver.isLockingKey(held)).thenReturn(true);
+        PlayerInteractEvent toggle = interaction(door);
+        manager.onPlayerInteract(toggle);
+        verify(toggle).setCancelled(true);
+        verify(player).sendTitle("§cLocks are starting up. Try again shortly.", "", 5, 30, 10);
+        keychains.verify(() -> KeychainHandler.matchesDoor(any(), any(), any()), never());
+        verify(store, never()).deleteDoorData(any());
+        when(player.isSneaking()).thenReturn(false);
+        tools.when(() -> ToolResolver.isLockingKey(held)).thenReturn(false);
+        tools.when(() -> ToolResolver.isLockpick(held)).thenReturn(true);
+        PlayerInteractEvent pick = interaction(door);
+        manager.onPlayerInteract(pick);
+        verify(pick).setCancelled(true);
+        verify(player).sendMessage("§cLocks are starting up. Try again shortly.");
+        verifyNoInteractions(picks);
+        tools.when(() -> ToolResolver.isLockpick(held)).thenReturn(false);
+        keychains.when(() -> KeychainHandler.resolveDoorMatch(held, "door-id", DoorKeyPurpose.OPEN)).thenReturn(mock(DoorKeyMatch.class));
+        PlayerInteractEvent open = interaction(door);
+        manager.onPlayerInteract(open);
+        verify(open, never()).setCancelled(true);
+        BlockBreakEvent breaking = new BlockBreakEvent(door, player);
+        manager.onBlockBreak(breaking);
+        assertTrue(breaking.isCancelled());
+        verify(store, never()).saveDoorData(any());
+    }
+
+    @Test
+    void anErrorWhileReadingADoorCancelsTheInteraction() {
+        when(store.loadDoorData(any())).thenThrow(new IllegalStateException("broken"));
+        PlayerInteractEvent event = interaction(door);
+        manager.onPlayerInteract(event);
+        verify(event).setCancelled(true);
+        BlockBreakEvent breaking = new BlockBreakEvent(door, player);
+        manager.onBlockBreak(breaking);
+        assertTrue(breaking.isCancelled());
+    }
+
     private void locked() {
         when(store.loadDoorData(door.getLocation())).thenReturn(lock);
     }

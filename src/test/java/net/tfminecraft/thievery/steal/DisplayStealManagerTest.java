@@ -699,4 +699,140 @@ class DisplayStealManagerTest {
         when(event.getDamager()).thenReturn(damager);
         return event;
     }
+
+    static final String STARTING = "§cLocks are starting up. Try again shortly.";
+
+    @Test
+    void placingWithoutACharacterLeavesDisplaysUnownedAndSessionlessStaffStampTheServer() {
+        EntityPlaceEvent placed = mock(EntityPlaceEvent.class);
+        when(placed.getEntity()).thenReturn(stand);
+        when(placed.getPlayer()).thenReturn(player);
+        lock.setOwner(null);
+        stage5Factions.plays(player, null);
+        manager.onEntityPlace(placed);
+        assertNull(lock.getOwner());
+        verify(store, never()).save(any());
+        when(player.hasPermission("thievery.admin")).thenReturn(true);
+        manager.onEntityPlace(placed);
+        assertEquals(LockOwner.server(), lock.getOwner());
+        assertEquals(LockState.PRIVATE, lock.getLockState());
+        tutorial.verify(() -> FactionLockTutorial.onLockState(player, LockState.PRIVATE));
+    }
+
+    @Test
+    void anAltCannotRotateItsMainsDisplayAndClaimsNeedACharacter() {
+        EntityDamageByEntityEvent event = damage(stand, player);
+        when(player.isSneaking()).thenReturn(true);
+        lock.setOwner(co(player.getUniqueId()));
+        stage5Factions.plays(player, UUID.randomUUID());
+        manager.onEntityDamage(event);
+        assertEquals(LockState.PRIVATE, lock.getLockState());
+        verify(player).sendMessage(contains("Only the owner can change this lock"));
+        lock.setOwner(null);
+        stage5Factions.plays(player, null);
+        manager.onEntityDamage(event);
+        assertNull(lock.getOwner());
+        verify(player).sendMessage("§cPlay a character to claim or change locks.");
+        verify(store, never()).save(any());
+    }
+
+    @Test
+    void guardModeCancelsPlacementBreaksAndPicksAndRefusesRotations() {
+        net.tfminecraft.thievery.owner.LockGuard.enter("test");
+        EntityPlaceEvent placed = mock(EntityPlaceEvent.class);
+        when(placed.getEntity()).thenReturn(stand);
+        when(placed.getPlayer()).thenReturn(player);
+        lock.setOwner(null);
+        manager.onEntityPlace(placed);
+        verify(placed).setCancelled(true);
+        assertNull(lock.getOwner());
+        lock.setOwner(co(player.getUniqueId()));
+
+        EntityDamageByEntityEvent hit = damage(stand, player);
+        manager.onEntityDamage(hit);
+        verify(hit).setCancelled(true);
+        when(player.isSneaking()).thenReturn(true);
+        EntityDamageByEntityEvent rotate = damage(stand, player);
+        manager.onEntityDamage(rotate);
+        verify(rotate).setCancelled(true);
+        assertEquals(LockState.PRIVATE, lock.getLockState());
+        when(player.isSneaking()).thenReturn(false);
+
+        HangingBreakByEntityEvent hanging = mock(HangingBreakByEntityEvent.class);
+        when(hanging.getEntity()).thenReturn(frame);
+        when(hanging.getRemover()).thenReturn(player);
+        manager.onHangingBreak(hanging);
+        verify(hanging).setCancelled(true);
+
+        tools.when(() -> ToolResolver.isLockpick(held)).thenReturn(true);
+        manager.handleLockpick(player, stand, lock.getOwner(), lock.getLockState(), lootSlots);
+        verifyNoInteractions(picks);
+        verify(store, never()).save(any());
+        verify(player, atLeast(4)).sendMessage(STARTING);
+    }
+
+    @Test
+    void guardModeKeepsNonStaffOffLockedDisplaysButLeavesPublicAndUnownedOnesUsable() {
+        net.tfminecraft.thievery.owner.LockGuard.enter("test");
+        PlayerArmorStandManipulateEvent manipulate = mock(PlayerArmorStandManipulateEvent.class);
+        when(manipulate.getRightClicked()).thenReturn(stand);
+        when(manipulate.getPlayer()).thenReturn(player);
+        manager.onArmorStandManipulate(manipulate);
+        verify(manipulate).setCancelled(true);
+        PlayerInteractEntityEvent use = mock(PlayerInteractEntityEvent.class);
+        when(use.getRightClicked()).thenReturn(frame);
+        when(use.getPlayer()).thenReturn(player);
+        manager.onInteractEntity(use);
+        verify(use).setCancelled(true);
+        verify(player, times(2)).sendMessage(STARTING);
+
+        access.when(() -> LockAccess.canAccess(any(), any(), any())).thenReturn(true);
+        lock.setLockState(LockState.PUBLIC);
+        PlayerInteractEntityEvent open = mock(PlayerInteractEntityEvent.class);
+        when(open.getRightClicked()).thenReturn(frame);
+        when(open.getPlayer()).thenReturn(player);
+        manager.onInteractEntity(open);
+        verify(open, never()).setCancelled(true);
+        lock.setOwner(null);
+        lock.setLockState(LockState.PRIVATE);
+        manager.onInteractEntity(open);
+        verify(open, never()).setCancelled(true);
+        lock.setOwner(co(UUID.randomUUID()));
+        when(player.hasPermission("thievery.admin")).thenReturn(true);
+        PlayerArmorStandManipulateEvent staff = mock(PlayerArmorStandManipulateEvent.class);
+        when(staff.getRightClicked()).thenReturn(stand);
+        when(staff.getPlayer()).thenReturn(player);
+        manager.onArmorStandManipulate(staff);
+        verify(staff, never()).setCancelled(true);
+    }
+
+    @Test
+    void guardModeProtectsTheSupportBlockOfAnyLockableHangingDisplayEvenForStaff() {
+        net.tfminecraft.thievery.owner.LockGuard.enter("test");
+        Block support = mock(Block.class);
+        World world = mock(World.class);
+        when(support.getWorld()).thenReturn(world);
+        when(support.getLocation()).thenReturn(new Location(world, 0, 64, 0));
+        when(world.getNearbyEntities(any(Location.class), eq(1.6), eq(1.6), eq(1.6))).thenReturn(List.of(frame));
+        Location frameLocation = mock(Location.class);
+        Block frameBlock = mock(Block.class);
+        when(frame.getLocation()).thenReturn(frameLocation);
+        when(frameLocation.getBlock()).thenReturn(frameBlock);
+        when(frame.getAttachedFace()).thenReturn(BlockFace.NORTH);
+        when(frameBlock.getRelative(BlockFace.NORTH)).thenReturn(support);
+        when(player.hasPermission("thievery.admin")).thenReturn(true);
+        BlockBreakEvent breaking = new BlockBreakEvent(support, player);
+        manager.onSupportBlockBreak(breaking);
+        assertTrue(breaking.isCancelled());
+        verify(player).sendMessage(STARTING);
+        verifyNoInteractions(store);
+    }
+
+    @Test
+    void anErrorOnADisplayCancelsTheEvent() {
+        when(store.load(any())).thenThrow(new IllegalStateException("broken"));
+        EntityDamageByEntityEvent hit = damage(stand, player);
+        manager.onEntityDamage(hit);
+        verify(hit).setCancelled(true);
+    }
 }

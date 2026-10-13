@@ -28,8 +28,12 @@ public final class LockGuildBridge {
 
     /** Probes SimpleFactions and installs the matching source. Returns whether {@code lockGuild} is available. */
     public static boolean probe() {
-        return install(Bukkit.getPluginManager().getPlugin("SimpleFactions") != null && probeLockGuild(),
-                SimpleFactionsLockGuilds::new);
+        return probe("net.tfminecraft.simplefactions.api.SimpleFactionsApi");
+    }
+
+    static boolean probe(String apiClass) {
+        boolean installed = Bukkit.getPluginManager().getPlugin("SimpleFactions") != null;
+        return install(installed && probeLockGuild(apiClass), SimpleFactionsLockGuilds::new);
     }
 
     static boolean install(boolean available, Supplier<LockGuilds> source) {
@@ -38,9 +42,9 @@ public final class LockGuildBridge {
         return available;
     }
 
-    static boolean probeLockGuild() {
+    static boolean probeLockGuild(String className) {
         try {
-            Class.forName("net.tfminecraft.simplefactions.api.SimpleFactionsApi").getMethod("lockGuild", UUID.class);
+            Class.forName(className).getMethod("lockGuild", UUID.class);
             return true;
         } catch (ReflectiveOperationException | LinkageError e) {
             return false;

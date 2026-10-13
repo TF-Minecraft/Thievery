@@ -72,11 +72,14 @@ class ClearCluesResolverTest {
                 var target=ClearCluesResolver.resolve(half).orElseThrow();
                 assertEquals(chest.leftLocation(),target.getCanonicalLocation()); assertEquals(co(rightOwner),target.getOwner()); assertEquals(LockState.PRIVATE,target.getLockState());
             }
-            var left=new ContainerData(chest.leftLocation(),co(leftOwner)); left.setLockState(LockState.GUILD); containers.saveContainerData(left);
+            var left=new ContainerData(chest.leftLocation(),co(rightOwner)); left.setLockState(LockState.PRIVATE); containers.saveContainerData(left);
+            right.setLockState(LockState.PUBLIC); containers.saveContainerData(right);
+            assertEquals(LockState.PRIVATE,ClearCluesResolver.resolve(chest.rightBlock()).orElseThrow().getLockState());
+            left=new ContainerData(chest.leftLocation(),co(leftOwner)); left.setLockState(LockState.GUILD); containers.saveContainerData(left);
             var player=mock(Player.class); when(player.getUniqueId()).thenReturn(leftOwner);
             for (Block half:List.of(chest.leftBlock(),chest.rightBlock())) {
                 var target=ClearCluesResolver.resolve(half).orElseThrow();
-                assertEquals(LockOwner.unreadable(),target.getOwner()); assertEquals(LockState.PRIVATE,target.getLockState());
+                assertEquals(LockOwner.unreadable(),target.getOwner()); assertEquals(LockState.GUILD,target.getLockState());
                 assertFalse(ClearCluesResolver.canClear(player,target,false)); assertTrue(ClearCluesResolver.canClear(player,target,true));
             }
         } finally { containers.deleteContainerData(chest.leftLocation()); containers.deleteContainerData(chest.rightLocation()); }

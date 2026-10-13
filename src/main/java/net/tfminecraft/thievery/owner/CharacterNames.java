@@ -19,23 +19,24 @@ public final class CharacterNames {
 
     public static boolean available() {
         if (!probed) {
-            findByName = probe();
+            findByName = probe("net.tfminecraft.tlibs.character.Characters");
             probed = true;
         }
         return findByName != null;
     }
 
-    static Method probe() {
+    static Method probe(String className) {
         try {
-            return Class.forName("net.tfminecraft.tlibs.character.Characters").getMethod("findByName", String.class);
+            return Class.forName(className).getMethod("findByName", String.class);
         } catch (ReflectiveOperationException | LinkageError e) {
             return null;
         }
     }
 
-    static void reset() {
-        probed = false;
-        findByName = null;
+    /** For tests: use this lookup instead of probing. */
+    static void use(Method lookup) {
+        probed = true;
+        findByName = lookup;
     }
 
     /** Living characters with this real name; empty when the lookup is unavailable. */

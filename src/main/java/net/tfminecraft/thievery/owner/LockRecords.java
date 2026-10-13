@@ -109,11 +109,6 @@ public final class LockRecords {
         return bytes(json);
     }
 
-    /** The stored owner of any lock record, for the migration's scan. */
-    public static OwnerCodec.Stored storedOwner(byte[] bytes, String ownerField) {
-        return owner(object(bytes), ownerField);
-    }
-
     static JsonObject object(byte[] bytes) {
         JsonElement element;
         try {

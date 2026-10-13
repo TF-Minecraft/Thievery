@@ -154,6 +154,26 @@ class ThieveryTest {
     }
 
     @Test
+    void locksStayInGuardModeWithTheirListenersRegisteredWhenHeirsAreNotReadyAtEnable() {
+        // MockBukkit has no RPCharacters provider, so heirs are never ready here.
+        load();
+        assertTrue(net.tfminecraft.thievery.owner.LockGuard.guarded());
+        assertEquals("restart required", net.tfminecraft.thievery.owner.LockGuard.reason());
+        assertTrue(HandlerList.getRegisteredListeners(plugin).stream()
+                .anyMatch(listener -> listener.getListener() instanceof DoorManager));
+        assertFalse(new File(plugin.getDataFolder(), "migrations").exists());
+    }
+
+    @Test
+    void locksMigrateAndLeaveGuardModeWhenHeirsAreReadyAtEnable() {
+        try (var identity = new net.tfminecraft.thievery.testsupport.FactionFixture()) {
+            load();
+            assertFalse(net.tfminecraft.thievery.owner.LockGuard.guarded());
+            assertTrue(new File(plugin.getDataFolder(), "migrations/quarantine.json").exists());
+        }
+    }
+
+    @Test
     void configurationFailureCanDisableBeforeServicesAreCreated() throws Exception {
         configs.close();
         configs = mockConstruction(ConfigLoader.class, (loader, context) ->
