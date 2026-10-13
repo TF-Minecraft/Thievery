@@ -1,5 +1,8 @@
 package net.tfminecraft.thievery.door;
 
+import static net.tfminecraft.thievery.testsupport.FactionFixture.co;
+import net.tfminecraft.thievery.owner.LockOwner;
+
 import net.tfminecraft.thievery.testsupport.FactionFixture;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -116,7 +119,7 @@ class DoorManagerTest {
         when(player.getLocation()).thenReturn(door.getLocation().clone().add(0.5, 0.5, 0.5));
         held = new ItemStack(Material.GOLD_NUGGET);
         when(inventory.getItemInMainHand()).thenReturn(held);
-        lock = new DoorData(door.getLocation(), "door-id", 0.8, UUID.randomUUID());
+        lock = new DoorData(door.getLocation(), "door-id", 0.8,co( UUID.randomUUID()));
         requireOwner = Cache.requireOwnerOnline;
         Cache.requireOwnerOnline = false;
         clues.when(() -> ClueChecker.hasEnoughClues(player)).thenReturn(true);
@@ -195,7 +198,7 @@ class DoorManagerTest {
         ArgumentCaptor<DoorData> saved = ArgumentCaptor.forClass(DoorData.class);
         verify(store).saveDoorData(saved.capture());
         assertEquals(key, saved.getValue().getKey());
-        assertEquals(player.getUniqueId(), saved.getValue().getOwnerUUID());
+        assertEquals(co(player.getUniqueId()), saved.getValue().getOwner());
         assertEquals(door.getLocation(), saved.getValue().getLocation());
         assertEquals(0.75, saved.getValue().getStrength());
     }
@@ -211,7 +214,7 @@ class DoorManagerTest {
         ArgumentCaptor<DoorData> saved = ArgumentCaptor.forClass(DoorData.class);
         verify(store).saveDoorData(saved.capture());
         assertEquals(door.getLocation(), saved.getValue().getLocation());
-        assertEquals(player.getUniqueId(), saved.getValue().getOwnerUUID());
+        assertEquals(co(player.getUniqueId()), saved.getValue().getOwner());
         assertEquals(0.75, saved.getValue().getStrength());
         String uuid = held.getItemMeta().getPersistentDataContainer().get(Keys.keyUUIDKey, PersistentDataType.STRING);
         assertNotNull(UUID.fromString(uuid));
@@ -367,28 +370,22 @@ class DoorManagerTest {
         locked();
         tools.when(() -> ToolResolver.isLockpick(held)).thenReturn(true);
         Cache.requireOwnerOnline = true;
-        UUID ownerId = lock.getOwnerUUID();
-        OfflinePlayer owner = mock(OfflinePlayer.class);
-        when(owner.getName()).thenReturn("Owner");
-        when(owner.isOnline()).thenReturn(false);
+        UUID ownerId = lock.getOwner().id();
         String targetKey = "player:" + ownerId;
-        try (var bukkit = mockStatic(Bukkit.class, CALLS_REAL_METHODS);
-                var factions = mockStatic(FactionManager.class);
-                var windows = mockStatic(LockpickTargetCache.class)) {
-            bukkit.when(() -> Bukkit.getOfflinePlayer(ownerId)).thenReturn(owner);
+        try (var windows = mockStatic(LockpickTargetCache.class)) {
             windows.when(() -> LockpickTargetCache.isActive(targetKey)).thenReturn(cachedWindow);
             windows.when(() -> LockpickTargetCache.getRemainingMs(targetKey)).thenReturn(125_000L);
 
             manager.onPlayerInteract(interaction(door));
 
             if (cachedWindow) {
-                verify(player).sendMessage(contains("Owner has no members online - 2m 5s remaining"));
+                verify(player).sendMessage(contains("owners are away - 2m 5s remaining"));
                 verify(playerData).addRiskGain(12, 0.6, RiskSource.DOOR);
                 database.verify(() -> Database.savePlayerData(playerData));
                 verify(picks).startDoorSession(player, door.getLocation(),
                         0.8 * (1 - 0.6 * Parameters.lockpickMaxReduction), 12, 0.6);
             } else {
-                verify(player).sendMessage(contains("Cannot lockpick - Owner is not online."));
+                verify(player).sendMessage(contains("Cannot lockpick - this lock's owners are away."));
                 verify(picks, never()).startDoorSession(any(), any(), anyDouble(), anyInt(), anyDouble());
                 verifyNoInteractions(playerData);
                 database.verifyNoInteractions();
@@ -429,7 +426,7 @@ class DoorManagerTest {
         } else assertFalse(((Openable) door.getBlockData()).isOpen());
         assertEquals(outcome == LockPickManager.SelectResult.BREAK ? 1 : 2, held.getAmount());
         if (outcome != LockPickManager.SelectResult.NOT_IN_SESSION)
-            drops.verify(() -> ClueDropper.tryDropDoorClue(player, door.getLocation(), lock.getOwnerUUID(), 12, 0.6));
+            drops.verify(() -> ClueDropper.tryDropDoorClue(player, door.getLocation(), lock.getOwner(), 12, 0.6));
         else drops.verifyNoInteractions();
     }
 
@@ -464,7 +461,7 @@ class DoorManagerTest {
         assertEquals(Material.STONE, above.getType());
         assertTrue(lock.getUnlockExpiryMs() > System.currentTimeMillis());
         verify(store).saveDoorData(lock);
-        drops.verify(() -> ClueDropper.tryDropDoorClue(player, door.getLocation(), lock.getOwnerUUID(), 12, 0.6));
+        drops.verify(() -> ClueDropper.tryDropDoorClue(player, door.getLocation(), lock.getOwner(), 12, 0.6));
     }
 
     @Test
@@ -514,7 +511,7 @@ class DoorManagerTest {
         }
         assertTrue(lock.getUnlockExpiryMs() > System.currentTimeMillis());
         verify(store).saveDoorData(lock);
-        drops.verify(() -> ClueDropper.tryDropDoorClue(player, door.getLocation(), lock.getOwnerUUID(), 12, 0.6));
+        drops.verify(() -> ClueDropper.tryDropDoorClue(player, door.getLocation(), lock.getOwner(), 12, 0.6));
     }
 
     @Test
@@ -660,13 +657,14 @@ class DoorManagerTest {
         verify(event).setCancelled(true);
         verify(player).sendMessage(contains("not locked"));
         locked();
+        when(player.hasPermission("thievery.admin")).thenReturn(true);
         manager.onPlayerInteract(interaction(door));
         verify(player).sendMessage(contains("Door was locked by"));
     }
 
     @Test
     void debugToolHandlesLegacyLockWithoutOwnerWithoutChangingIt() {
-        lock = new DoorData(door.getLocation(), "legacy-key", 0.8, null);
+        lock = new DoorData(door.getLocation(), "legacy-key", 0.8,co( null));
         locked();
         tools.when(() -> ToolResolver.isDebugTool(held)).thenReturn(true);
         PlayerInteractEvent event = interaction(door);
@@ -679,27 +677,92 @@ class DoorManagerTest {
         verify(store, never()).deleteDoorData(any());
         verifyNoInteractions(picks);
         assertEquals("legacy-key", lock.getKey());
-        assertNull(lock.getOwnerUUID());
+        assertNull(lock.getOwner());
     }
 
     @Test
-    void debugToolUsesOwnerUuidWhenTheirOfflineNameIsUnavailable() {
+    void debugToolNamesTheOwnerOnlyToStaff() {
         locked();
         tools.when(() -> ToolResolver.isDebugTool(held)).thenReturn(true);
-        UUID ownerId = lock.getOwnerUUID();
-        OfflinePlayer owner = mock(OfflinePlayer.class);
-        when(owner.getName()).thenReturn(null);
-        try (var bukkit = mockStatic(Bukkit.class, CALLS_REAL_METHODS)) {
-            bukkit.when(() -> Bukkit.getOfflinePlayer(ownerId)).thenReturn(owner);
+        try (var names = mockStatic(net.tfminecraft.thievery.owner.LockOwnerNames.class)) {
+            names.when(() -> net.tfminecraft.thievery.owner.LockOwnerNames.staffLabel(lock.getOwner())).thenReturn("Kira (Steve)");
             PlayerInteractEvent event = interaction(door);
-
             manager.onPlayerInteract(event);
-
             verify(event).setCancelled(true);
-            verify(player).sendMessage(contains(ownerId.toString()));
+            verify(player).sendMessage(contains("This door is locked."));
+            verify(player, never()).sendMessage(contains("Kira"));
+            when(player.hasPermission("thievery.admin")).thenReturn(true);
+            manager.onPlayerInteract(interaction(door));
+            verify(player).sendMessage(contains("Door was locked by §bKira (Steve)"));
             verify(store, never()).saveDoorData(any());
             verifyNoInteractions(picks);
         }
+    }
+
+    @Test
+    void lockingADoorNeedsACharacterAndSessionlessStaffLockForTheServer() {
+        when(player.isSneaking()).thenReturn(true);
+        tools.when(() -> ToolResolver.isLockingKey(held)).thenReturn(true);
+        tools.when(() -> ToolResolver.isMasterKey(held)).thenReturn(true);
+        stage5Factions.plays(player, null);
+        manager.onPlayerInteract(interaction(door));
+        verify(store, never()).saveDoorData(any());
+        verify(player).sendTitle("§cPlay a character to claim or change locks.", "", 5, 30, 10);
+        when(player.hasPermission("thievery.admin")).thenReturn(true);
+        // Skip the 200 ms double-click guard rather than waiting it out.
+        try {
+            var last = DoorManager.class.getDeclaredField("lastInteract");
+            last.setAccessible(true);
+            ((java.util.Map<?, ?>) last.get(manager)).clear();
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError(e);
+        }
+        manager.onPlayerInteract(interaction(door));
+        ArgumentCaptor<DoorData> saved = ArgumentCaptor.forClass(DoorData.class);
+        verify(store).saveDoorData(saved.capture());
+        assertEquals(LockOwner.server(), saved.getValue().getOwner());
+    }
+
+    @Test
+    void guardModeLetsKeyHoldersThroughButRefusesLockTogglesPicksAndBreaks() {
+        net.tfminecraft.thievery.owner.LockGuard.enter("test");
+        locked();
+        when(player.isSneaking()).thenReturn(true);
+        tools.when(() -> ToolResolver.isLockingKey(held)).thenReturn(true);
+        PlayerInteractEvent toggle = interaction(door);
+        manager.onPlayerInteract(toggle);
+        verify(toggle).setCancelled(true);
+        verify(player).sendTitle("§cLocks are starting up. Try again shortly.", "", 5, 30, 10);
+        keychains.verify(() -> KeychainHandler.matchesDoor(any(), any(), any()), never());
+        verify(store, never()).deleteDoorData(any());
+        when(player.isSneaking()).thenReturn(false);
+        tools.when(() -> ToolResolver.isLockingKey(held)).thenReturn(false);
+        tools.when(() -> ToolResolver.isLockpick(held)).thenReturn(true);
+        PlayerInteractEvent pick = interaction(door);
+        manager.onPlayerInteract(pick);
+        verify(pick).setCancelled(true);
+        verify(player).sendMessage("§cLocks are starting up. Try again shortly.");
+        verifyNoInteractions(picks);
+        tools.when(() -> ToolResolver.isLockpick(held)).thenReturn(false);
+        keychains.when(() -> KeychainHandler.resolveDoorMatch(held, "door-id", DoorKeyPurpose.OPEN)).thenReturn(mock(DoorKeyMatch.class));
+        PlayerInteractEvent open = interaction(door);
+        manager.onPlayerInteract(open);
+        verify(open, never()).setCancelled(true);
+        BlockBreakEvent breaking = new BlockBreakEvent(door, player);
+        manager.onBlockBreak(breaking);
+        assertTrue(breaking.isCancelled());
+        verify(store, never()).saveDoorData(any());
+    }
+
+    @Test
+    void anErrorWhileReadingADoorCancelsTheInteraction() {
+        when(store.loadDoorData(any())).thenThrow(new IllegalStateException("broken"));
+        PlayerInteractEvent event = interaction(door);
+        manager.onPlayerInteract(event);
+        verify(event).setCancelled(true);
+        BlockBreakEvent breaking = new BlockBreakEvent(door, player);
+        manager.onBlockBreak(breaking);
+        assertTrue(breaking.isCancelled());
     }
 
     private void locked() {

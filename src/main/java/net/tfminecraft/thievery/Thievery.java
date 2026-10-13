@@ -12,6 +12,7 @@ import net.tfminecraft.coreprotect.CoreProtect;
 import net.tfminecraft.coreprotect.CoreProtectAPI;
 import net.tfminecraft.thievery.cache.Cache;
 import net.tfminecraft.thievery.command.CommandManager;
+import net.tfminecraft.thievery.command.LockAdminCommand;
 import net.tfminecraft.thievery.command.PickpocketCommand;
 import net.tfminecraft.thievery.command.RobberyCommand;
 import net.tfminecraft.thievery.inspection.HandsUpCharacterListener;
@@ -39,6 +40,9 @@ import net.tfminecraft.thievery.steal.FurnitureDisplayListener;
 import net.tfminecraft.thievery.steal.GraveStealListener;
 import net.tfminecraft.thievery.steal.StealGuiUpdater;
 import net.tfminecraft.thievery.steal.StealManager;
+import net.tfminecraft.thievery.owner.LockGuard;
+import net.tfminecraft.thievery.owner.LockStartup;
+import net.tfminecraft.thievery.owner.LockStores;
 
 public class Thievery extends JavaPlugin {
 
@@ -59,6 +63,8 @@ public class Thievery extends JavaPlugin {
 
     @Override
     public void onEnable() {
+        // Listeners below check this flag on every event; locks stay frozen until the gates at the end pass.
+        LockGuard.enter("starting up");
         if (!TraitChecker.detectCharacterApi()) {
             getLogger().warning("TLibs is older than 2.3.0, so lockpicking, robbery and pickpocketing that need"
                     + " character traits are denied. Locks and doors stay protected. Update TLibs and restart.");
@@ -87,8 +93,10 @@ public class Thievery extends JavaPlugin {
         RiskSetService riskSetService = new RiskSetService();
         ClearCluesManager clearCluesManager = new ClearCluesManager();
 
+        LockAdminCommand lockAdminCommand = new LockAdminCommand(
+                getDataFolder().toPath().resolve("logs").resolve("locks-audit.log"), getLogger());
         CommandManager commandManager = new CommandManager(containerManager, inventoryManager, cooldownResetService,
-                riskSetService, clearCluesManager);
+                riskSetService, clearCluesManager, lockAdminCommand);
         getCommand("thievery").setExecutor(commandManager);
         getCommand("thievery").setTabCompleter(commandManager);
         getCommand("robbery").setExecutor(new RobberyCommand(robberyManager));
@@ -122,6 +130,10 @@ public class Thievery extends JavaPlugin {
         }
 
         playerManager.start();
+
+        // Every lock listener is registered by now, in guard mode. The gates and the migration run here, on the
+        // main thread before anyone can join; a failed gate keeps the guard on until a restart.
+        LockStartup.start(LockStores.defaults(getDataFolder()), getLogger());
 
         Bukkit.getOnlinePlayers().forEach(player -> {
             if (player.hasPermission("thievery.admin")) {

@@ -545,7 +545,7 @@ class StealReferencesTest {
         Block block = mock(Block.class); Container state = mock(Container.class); when(state.getInventory()).thenReturn(chest);
         when(block.getState()).thenReturn(state); when(block.getLocation()).thenReturn(thief.getLocation()); return block;
     }
-    private PickpocketSession pickSession() { return new PickpocketSession(thief.getUniqueId(), victim.getUniqueId(), new StealBudget(50), StealGui.Layout.create(36)); }
+    private PickpocketSession pickSession() { return new PickpocketSession(thief.getUniqueId(), victim.getUniqueId(), "player:victim", new StealBudget(50), StealGui.Layout.create(36)); }
     private RobberySession robberySession() {
         var session = new RobberySession(thief.getUniqueId(), victim.getUniqueId(), new StealBudget(100), StealGui.Layout.createRobbery(36));
         session.setState(RobberySession.State.ACTIVE); session.setActiveEndMs(System.currentTimeMillis() + 60000); return session;

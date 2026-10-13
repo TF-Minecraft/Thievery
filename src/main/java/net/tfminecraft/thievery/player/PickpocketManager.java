@@ -110,7 +110,8 @@ public class PickpocketManager implements Listener {
 
         StealGui.Layout layout = StealGui.Layout.create(PlayerSlotMap.MAIN_INV_SLOT_COUNT);
         StealBudget budget = new StealBudget(PickpocketLoader.getBudget());
-        PickpocketSession session = new PickpocketSession(pickpocketId, victim.getUniqueId(), budget, layout);
+        PickpocketSession session = new PickpocketSession(pickpocketId, victim.getUniqueId(),
+                TargetKeyResolver.forVictim(victim), budget, layout);
         sessionsByPickpocket.put(pickpocketId, session);
         EvilRpPlays.record(pickpocket);
 

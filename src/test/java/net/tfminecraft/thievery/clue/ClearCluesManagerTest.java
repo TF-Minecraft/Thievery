@@ -36,6 +36,11 @@ class ClearCluesManagerTest {
         when(player.hasPermission("thievery.admin")).thenReturn(true); resolver.when(()->ClearCluesResolver.canClear(player,target,true)).thenReturn(true); resolver.when(()->ClearCluesResolver.clearLinkedClues(target)).thenReturn(3);
         manager.startAwaiting(player); manager.onPlayerInteract(event(Action.RIGHT_CLICK_BLOCK,block)); verify(player).sendMessage("§a[Thievery] Removed §e3§a clue(s).");
     }
+    @Test void cluesCannotBeClearedWhileLocksAreStartingUp() {
+        var block=mock(Block.class); net.tfminecraft.thievery.owner.LockGuard.enter("test");
+        manager.startAwaiting(player); var selected=event(Action.RIGHT_CLICK_BLOCK,block); manager.onPlayerInteract(selected);
+        verify(selected).setCancelled(true); verify(player).sendMessage("§cLocks are starting up. Try again shortly."); resolver.verifyNoInteractions();
+    }
     @Test void restartCancelsOldTimerAndQuittingCancelsCurrentMode() {
         manager.startAwaiting(player); manager.startAwaiting(player); verify(tasks.getFirst()).cancel();
         manager.onPlayerQuit(new PlayerQuitEvent(player,(String)null)); verify(tasks.get(1)).cancel(); clearInvocations(player);

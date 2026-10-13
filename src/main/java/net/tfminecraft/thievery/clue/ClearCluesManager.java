@@ -19,6 +19,7 @@ import org.bukkit.scheduler.BukkitTask;
 import net.tfminecraft.thievery.Thievery;
 import net.tfminecraft.thievery.clue.ClearCluesResolver;
 import net.tfminecraft.thievery.clue.ClearCluesResolver.ClearCluesTarget;
+import net.tfminecraft.thievery.owner.LockGuard;
 import net.tfminecraft.thievery.utils.ThieveryTexts;
 
 public class ClearCluesManager implements Listener {
@@ -52,6 +53,10 @@ public class ClearCluesManager implements Listener {
 
         event.setCancelled(true);
         endAwaiting(playerId);
+        if (LockGuard.guarded()) {
+            player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + LockGuard.STARTING));
+            return;
+        }
 
         Optional<ClearCluesTarget> target = ClearCluesResolver.resolve(event.getClickedBlock());
         if (target.isEmpty()) {

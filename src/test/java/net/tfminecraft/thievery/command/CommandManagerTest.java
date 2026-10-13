@@ -33,6 +33,7 @@ class CommandManagerTest {
     private RiskSetService risks;
     private ClearCluesManager clues;
     private CommandManager commands;
+    private LockAdminCommand locks;
     private Player player;
     private CommandSender console;
 
@@ -40,7 +41,8 @@ class CommandManagerTest {
         server = MockBukkit.mock();
         containers = mock(ContainerManager.class); inventories = mock(InventoryManager.class);
         cooldowns = mock(CooldownResetService.class); risks = mock(RiskSetService.class); clues = mock(ClearCluesManager.class);
-        commands = new CommandManager(containers, inventories, cooldowns, risks, clues);
+        locks = mock(LockAdminCommand.class);
+        commands = new CommandManager(containers, inventories, cooldowns, risks, clues, locks);
         player = mock(Player.class, RETURNS_DEEP_STUBS); when(player.getUniqueId()).thenReturn(UUID.randomUUID());
         console = mock(CommandSender.class);
     }
@@ -115,6 +117,21 @@ class CommandManagerTest {
         verify(cooldowns).resetForPlayer(target.getUniqueId()); verify(console).sendMessage(contains("Alice"));
     }
 
+    @Test void cooldownResetsAreRefusedWhileLocksAreStartingUp() {
+        when(console.hasPermission("thievery.admin")).thenReturn(true);
+        net.tfminecraft.thievery.owner.LockGuard.enter("test");
+        assertTrue(run(console, "resetcooldowns", "all"));
+        verifyNoInteractions(cooldowns);
+        verify(console).sendMessage("§cLocks are starting up. Try again shortly.");
+    }
+
+    @Test void lockSubcommandsGoToTheStaffLockCommandFromConsoleOrPlayers() {
+        assertTrue(run(console, "locks", "quarantine"));
+        verify(locks).handle(console, new String[] {"quarantine"});
+        assertTrue(run(player, "LOCKS"));
+        verify(locks).handle(player, new String[0]);
+    }
+
     @Test void riskRejectsInvalidNumbersAndDispatchesValidatedBoundaryAndNamedValues() {
         when(console.hasPermission("thievery.admin")).thenReturn(true);
         assertTrue(run(console, "setrisk", "all", "invalid"));
@@ -151,7 +168,7 @@ class CommandManagerTest {
         PlayerManager manager = mock(PlayerManager.class);
         when(manager.exists(id)).thenReturn(true);
         when(manager.get(id)).thenReturn(data);
-        commands = new CommandManager(containers, inventories, cooldowns, new RiskSetService(), clues);
+        commands = new CommandManager(containers, inventories, cooldowns, new RiskSetService(), clues, locks);
         try (var thievery = mockStatic(Thievery.class)) {
             thievery.when(Thievery::getPlayerManager).thenReturn(manager);
             assertTrue(run(console, "setrisk", "Alice", "NaN"));
@@ -207,8 +224,11 @@ class CommandManagerTest {
         assertTrue(complete(player, "resetcooldowns", "").isEmpty());
         assertTrue(complete(player, "setrisk", "all", "").isEmpty());
         assertTrue(complete(player, "testpick", "").isEmpty());
+        assertTrue(complete(player, "locks", "").isEmpty());
         when(player.hasPermission("thievery.admin")).thenReturn(true);
-        assertEquals(List.of("loadout", "clearclues", "feedback", "reload", "resetcooldowns", "setrisk", "itemvalue", "keychain", "testpick"), complete(player, ""));
+        assertEquals(List.of("loadout", "clearclues", "feedback", "reload", "resetcooldowns", "setrisk", "itemvalue", "keychain", "testpick", "locks"), complete(player, ""));
+        assertEquals(List.of("quarantine", "setowner"), complete(player, "locks", ""));
+        assertEquals(List.of("server"), complete(player, "locks", "setowner", "S"));
         assertEquals(List.of("pocket"), complete(player, "testpick", ""));
         assertEquals(List.of("pocket"), complete(player, "TESTPICK", "P"));
         assertTrue(complete(player, "testpick", "d").isEmpty());

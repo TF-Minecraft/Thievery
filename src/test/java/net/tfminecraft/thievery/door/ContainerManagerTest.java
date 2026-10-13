@@ -1,5 +1,8 @@
 package net.tfminecraft.thievery.door;
 
+import static net.tfminecraft.thievery.testsupport.FactionFixture.co;
+import net.tfminecraft.thievery.owner.LockOwner;
+
 import net.tfminecraft.thievery.testsupport.FactionFixture;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -17,6 +20,7 @@ import org.bukkit.event.inventory.*;
 import org.bukkit.event.player.*;
 import org.bukkit.inventory.*;
 import org.junit.jupiter.api.*;
+import org.mockito.ArgumentCaptor;
 import org.mockbukkit.mockbukkit.MockBukkit;
 import org.mockito.*;
 
@@ -38,6 +42,7 @@ class ContainerManagerTest {
         construction=mockConstruction(ContainerDataManager.class,(mock,context)-> {
             when(mock.loadContainerData(any())).thenAnswer(call->data.computeIfAbsent(call.getArgument(0),ContainerData::new));
             when(mock.getOwner(any())).thenAnswer(call->data.computeIfAbsent(call.getArgument(0),ContainerData::new).getOwner());
+            when(mock.getLock(any())).thenAnswer(call->{var lock=data.computeIfAbsent(call.getArgument(0),ContainerData::new); return new ContainerDataManager.CachedLock(lock.getOwner(),lock.getLockState());});
             doAnswer(call->{ContainerData saved=call.getArgument(0); data.put(saved.getLocation(),saved); return null;}).when(mock).saveContainerData(any());
         }); manager=new ContainerManager(); storage=construction.constructed().getFirst();
         player=mock(Player.class,RETURNS_DEEP_STUBS); when(player.getUniqueId()).thenReturn(UUID.randomUUID()); when(player.getName()).thenReturn("thief"); when(player.getLocation()).thenReturn(new Location(world,0,64,0)); when(player.getInventory().getItemInMainHand()).thenReturn(new ItemStack(Material.STICK));
@@ -45,7 +50,7 @@ class ContainerManagerTest {
     }
     @AfterEach void close() { tutorial.close(); tools.close(); graves.close(); construction.close(); plugin.close(); MockBukkit.unmock(); }
     Block block(int x,Material type) { var block=world.getBlockAt(x,64,0); block.setType(type); return block; }
-    ContainerData lock(Block block,UUID owner) { var lock=new ContainerData(block.getLocation(),owner); lock.setLockState(LockState.PRIVATE); data.put(block.getLocation(),lock); return lock; }
+    ContainerData lock(Block block,UUID owner) { var lock=new ContainerData(block.getLocation(),co(owner)); lock.setLockState(LockState.PRIVATE); data.put(block.getLocation(),lock); return lock; }
     PlayerInteractEvent interact(Block block,Action action) { var event=mock(PlayerInteractEvent.class); when(event.getPlayer()).thenReturn(player); when(event.getClickedBlock()).thenReturn(block); when(event.getAction()).thenReturn(action); return event; }
     InventoryOpenEvent open(Inventory inventory) { var event=mock(InventoryOpenEvent.class); when(event.getPlayer()).thenReturn(player); when(event.getInventory()).thenReturn(inventory); return event; }
     @Test void feedbackDefaultsOffAndAdminJoinsEnableIt() {
@@ -53,9 +58,9 @@ class ContainerManagerTest {
         when(player.hasPermission("thievery.admin")).thenReturn(true); manager.onPlayerJoin(event); assertTrue(manager.getFeedbackState(player.getUniqueId())); manager.setFeedbackState(player.getUniqueId(),false); assertFalse(manager.getFeedbackState(player.getUniqueId())); manager.enableFeedback(player); assertTrue(manager.getFeedbackState(player.getUniqueId()));
     }
     @Test void openingUnclaimedContainerClaimsItButPrivateLocksRequireAccessOrStaff() {
-        var block=block(0,Material.BARREL); var inventory=((Container)block.getState()).getInventory(); var event=open(inventory); manager.onInventoryOpen(event); assertEquals(player.getUniqueId(),data.get(block.getLocation()).getOwner()); verify(event,never()).setCancelled(true);
+        var block=block(0,Material.BARREL); var inventory=((Container)block.getState()).getInventory(); var event=open(inventory); manager.onInventoryOpen(event); assertEquals(co(player.getUniqueId()),data.get(block.getLocation()).getOwner()); verify(event,never()).setCancelled(true);
         var privateData=lock(block,UUID.randomUUID()); clearInvocations(storage); manager.onInventoryOpen(event); verify(event).setCancelled(true); verify(storage,never()).saveContainerData(any());
-        when(player.hasPermission("thievery.admin")).thenReturn(true); clearInvocations(event); manager.onInventoryOpen(event); verify(event,never()).setCancelled(true); verify(player).sendMessage("§cBypassing lock due to staff"); assertNotEquals(player.getUniqueId(),privateData.getOwner());
+        when(player.hasPermission("thievery.admin")).thenReturn(true); clearInvocations(event); manager.onInventoryOpen(event); verify(event,never()).setCancelled(true); verify(player).sendMessage("§cBypassing lock due to staff"); assertNotEquals(co(player.getUniqueId()),privateData.getOwner());
         var unrelated=open(mock(Inventory.class)); manager.onInventoryOpen(unrelated); verify(unrelated,never()).setCancelled(true);
         when(unrelated.getPlayer()).thenReturn(mock(HumanEntity.class)); manager.onInventoryOpen(unrelated);
     }
@@ -69,28 +74,28 @@ class ContainerManagerTest {
     @Test void onlyOwnerMayCycleLockStateAndFactionStateShowsTutorial() {
         var barrel=block(0,Material.BARREL); var event=interact(barrel,Action.LEFT_CLICK_BLOCK); manager.onShiftLeftClickContainer(event); verify(event,never()).setCancelled(true);
         when(player.isSneaking()).thenReturn(true); var locked=lock(barrel,UUID.randomUUID()); manager.onShiftLeftClickContainer(event); verify(event).setCancelled(true); assertEquals(LockState.PRIVATE,locked.getLockState());
-        locked.setOwner(player.getUniqueId()); locked.setLockState(LockState.GUILD); manager.onShiftLeftClickContainer(event); assertEquals(LockState.FACTION,locked.getLockState()); verify(storage).saveContainerData(locked); tutorial.verify(()->FactionLockTutorial.onLockState(player,LockState.FACTION));
+        locked.setOwner(co(player.getUniqueId())); locked.setLockState(LockState.GUILD); manager.onShiftLeftClickContainer(event); assertEquals(LockState.FACTION,locked.getLockState()); verify(storage).saveContainerData(locked); tutorial.verify(()->FactionLockTutorial.onLockState(player,LockState.FACTION));
         manager.onShiftLeftClickContainer(interact(barrel,Action.RIGHT_CLICK_BLOCK)); manager.onShiftLeftClickContainer(interact(null,Action.LEFT_CLICK_BLOCK)); manager.onShiftLeftClickContainer(interact(block(2,Material.STONE),Action.LEFT_CLICK_BLOCK));
         graves.when(()->GraveManager.get().isGrave(barrel)).thenReturn(true); manager.onShiftLeftClickContainer(event); assertEquals(LockState.FACTION,locked.getLockState());
     }
     @Test void breakingDeniedContainerPreservesMetadataAndAllowedBreakDeletesIt() {
         var barrel=block(0,Material.BARREL); var locked=lock(barrel,UUID.randomUUID()); var event=new BlockBreakEvent(barrel,player); manager.onBlockBreak(event); assertTrue(event.isCancelled()); verify(storage,never()).deleteContainerData(any());
-        locked.setOwner(player.getUniqueId()); event=new BlockBreakEvent(barrel,player); manager.onBlockBreak(event); assertFalse(event.isCancelled()); verify(storage,never()).deleteContainerData(any()); barrel.setType(Material.AIR); MockBukkit.getMock().getScheduler().performTicks(5); verify(storage).deleteContainerData(barrel.getLocation());
+        locked.setOwner(co(player.getUniqueId())); event=new BlockBreakEvent(barrel,player); manager.onBlockBreak(event); assertFalse(event.isCancelled()); verify(storage,never()).deleteContainerData(any()); barrel.setType(Material.AIR); MockBukkit.getMock().getScheduler().performTicks(5); verify(storage).deleteContainerData(barrel.getLocation());
         clearInvocations(storage); manager.onBlockBreak(new BlockBreakEvent(block(3,Material.STONE),player)); verifyNoInteractions(storage);
     }
     @Test void placingContainersClaimsThemAndPreventsMergingOtherOwnersChest() {
-        var barrel=block(0,Material.BARREL); var event=mock(BlockPlaceEvent.class); when(event.getPlayer()).thenReturn(player); when(event.getBlockPlaced()).thenReturn(barrel); manager.onBlockPlace(event); assertEquals(player.getUniqueId(),data.get(barrel.getLocation()).getOwner());
+        var barrel=block(0,Material.BARREL); var event=mock(BlockPlaceEvent.class); when(event.getPlayer()).thenReturn(player); when(event.getBlockPlaced()).thenReturn(barrel); manager.onBlockPlace(event); assertEquals(co(player.getUniqueId()),data.get(barrel.getLocation()).getOwner());
         var chest=block(3,Material.CHEST); var neighbor=block(4,Material.CHEST); var owned=lock(neighbor,UUID.randomUUID()); when(event.getBlockPlaced()).thenReturn(chest); manager.onBlockPlace(event); verify(event).setCancelled(true); assertFalse(data.containsKey(chest.getLocation()));
-        owned.setOwner(player.getUniqueId()); clearInvocations(event); manager.onBlockPlace(event); verify(event,never()).setCancelled(true); assertEquals(player.getUniqueId(),data.get(chest.getLocation()).getOwner());
+        owned.setOwner(co(player.getUniqueId())); clearInvocations(event); manager.onBlockPlace(event); verify(event,never()).setCancelled(true); assertEquals(co(player.getUniqueId()),data.get(chest.getLocation()).getOwner());
         when(event.getBlockPlaced()).thenReturn(block(7,Material.STONE)); clearInvocations(storage); manager.onBlockPlace(event); verifyNoInteractions(storage);
     }
     @Test void hoppersOnlyTransferBetweenTheirOwnersContainers() {
         var hopper=mock(Hopper.class); when(hopper.getLocation()).thenReturn(new Location(world,1,64,0)); var initiator=mock(Inventory.class); when(initiator.getType()).thenReturn(InventoryType.HOPPER); when(initiator.getHolder(false)).thenReturn(hopper);
         var event=mock(InventoryMoveItemEvent.class); when(event.getInitiator()).thenReturn(initiator); when(event.getSource()).thenReturn(initiator); manager.onInventoryMoveItem(event); verify(event).setCancelled(true);
-        var own=new ContainerData(hopper.getLocation(),player.getUniqueId()); data.put(hopper.getLocation(),own); clearInvocations(event); manager.onInventoryMoveItem(event); verify(event,never()).setCancelled(true);
+        var own=new ContainerData(hopper.getLocation(),co(player.getUniqueId())); data.put(hopper.getLocation(),own); clearInvocations(event); manager.onInventoryMoveItem(event); verify(event,never()).setCancelled(true);
         var destination=mock(Inventory.class); when(event.getDestination()).thenReturn(destination); manager.onInventoryMoveItem(event); verify(event,never()).setCancelled(true);
         var target=mock(Container.class); when(target.getLocation()).thenReturn(new Location(world,2,64,0)); when(destination.getHolder(false)).thenReturn(target); manager.onInventoryMoveItem(event); verify(event).setCancelled(true);
-        data.put(target.getLocation(),new ContainerData(target.getLocation(),player.getUniqueId())); clearInvocations(event); manager.onInventoryMoveItem(event); verify(event,never()).setCancelled(true);
+        data.put(target.getLocation(),new ContainerData(target.getLocation(),co(player.getUniqueId()))); clearInvocations(event); manager.onInventoryMoveItem(event); verify(event,never()).setCancelled(true);
         when(event.getSource()).thenReturn(destination); when(event.getDestination()).thenReturn(initiator); manager.onInventoryMoveItem(event); verify(event,never()).setCancelled(true);
         when(initiator.getType()).thenReturn(InventoryType.CHEST); manager.onInventoryMoveItem(event); when(initiator.getType()).thenReturn(InventoryType.HOPPER); when(initiator.getHolder(false)).thenReturn(null); manager.onInventoryMoveItem(event); verify(event,never()).setCancelled(true);
     }
@@ -103,7 +108,7 @@ class ContainerManagerTest {
         var hopperInventory=mock(Inventory.class);
         when(hopperInventory.getType()).thenReturn(InventoryType.HOPPER);
         when(hopperInventory.getHolder(false)).thenReturn(hopper);
-        data.put(hopperLocation,new ContainerData(hopperLocation,player.getUniqueId()));
+        data.put(hopperLocation,new ContainerData(hopperLocation,co(player.getUniqueId())));
         var barrel=block(2,Material.BARREL);
         var source=mock(Inventory.class);
         Container sourceContainer=(Container)barrel.getState();
@@ -114,7 +119,7 @@ class ContainerManagerTest {
         manager.onInventoryMoveItem(denied);
 
         assertTrue(denied.isCancelled());
-        foreign.setOwner(player.getUniqueId());
+        foreign.setOwner(co(player.getUniqueId()));
         var allowed=new InventoryMoveItemEvent(source,new ItemStack(Material.DIAMOND),hopperInventory,false);
         manager.onInventoryMoveItem(allowed);
         assertFalse(allowed.isCancelled());
@@ -170,7 +175,7 @@ class ContainerManagerTest {
         var chest=doubleChest();
         var left=lock(chest.block(),player.getUniqueId());
         var right=lock(chest.right().getBlock(),UUID.randomUUID());
-        UUID rightOwner=right.getOwner();
+        LockOwner rightOwner=right.getOwner();
         var denied=interact(chest.block(),Action.RIGHT_CLICK_BLOCK);
 
         manager.onContainerRightClickAccessCheck(denied);
@@ -181,7 +186,7 @@ class ContainerManagerTest {
         manager.onContainerRightClickAccessCheck(allowed);
         verify(allowed,never()).setCancelled(true);
         verify(player,never()).sendMessage("§cBypassing lock due to staff");
-        assertEquals(player.getUniqueId(),left.getOwner());
+        assertEquals(co(player.getUniqueId()),left.getOwner());
         assertEquals(rightOwner,right.getOwner());
         verify(storage,never()).saveContainerData(any());
     }
@@ -209,21 +214,35 @@ class ContainerManagerTest {
     }
     @Test void openingDoubleChestClaimsBothHalvesAndPreservesExistingOwnerAndLock() {
         var chest=doubleChest(); var event=open(chest.inventory()); manager.onInventoryOpen(event);
-        assertEquals(player.getUniqueId(),data.get(chest.left().getLocation()).getOwner()); assertEquals(player.getUniqueId(),data.get(chest.right().getLocation()).getOwner());
-        data.clear(); var right=new ContainerData(chest.right().getLocation(),player.getUniqueId()); right.setLockState(LockState.PRIVATE); data.put(right.getLocation(),right);
-        manager.onInventoryOpen(event); assertEquals(player.getUniqueId(),data.get(chest.left().getLocation()).getOwner()); assertEquals(LockState.PRIVATE,data.get(chest.left().getLocation()).getLockState());
-        var foreign=new ContainerData(chest.left().getLocation(),UUID.randomUUID()); foreign.setLockState(LockState.PRIVATE); data.put(foreign.getLocation(),foreign); clearInvocations(storage); manager.onInventoryOpen(event); verify(event).setCancelled(true); verify(storage,never()).saveContainerData(any());
-        when(player.hasPermission("thievery.admin")).thenReturn(true); clearInvocations(event); manager.onInventoryOpen(event); verify(event,never()).setCancelled(true); assertEquals(foreign.getOwner(),right.getOwner()); verify(player).sendMessage("§cBypassing lock due to staff");
+        assertEquals(co(player.getUniqueId()),data.get(chest.left().getLocation()).getOwner()); assertEquals(co(player.getUniqueId()),data.get(chest.right().getLocation()).getOwner());
+        data.clear(); var right=new ContainerData(chest.right().getLocation(),co(player.getUniqueId())); right.setLockState(LockState.PRIVATE); data.put(right.getLocation(),right);
+        manager.onInventoryOpen(event); assertEquals(co(player.getUniqueId()),data.get(chest.left().getLocation()).getOwner()); assertEquals(LockState.PRIVATE,data.get(chest.left().getLocation()).getLockState());
+        var foreign=new ContainerData(chest.left().getLocation(),co(UUID.randomUUID())); foreign.setLockState(LockState.PRIVATE); data.put(foreign.getLocation(),foreign); clearInvocations(storage); manager.onInventoryOpen(event); verify(event).setCancelled(true); verify(storage,never()).saveContainerData(any());
+        when(player.hasPermission("thievery.admin")).thenReturn(true); clearInvocations(event); manager.onInventoryOpen(event); verify(event,never()).setCancelled(true); verify(player).sendMessage("§cBypassing lock due to staff");
+        // Halves with different owners are never synced; the chest is listed for staff instead.
+        assertNotEquals(foreign.getOwner(),right.getOwner()); verify(storage,never()).saveContainerData(any());
+        assertEquals(List.of("containers-double 10 64 0 / containers-double 11 64 0"),net.tfminecraft.thievery.owner.LockQuarantine.snapshot().diverged());
+    }
+    @Test void openingAHalfOwnedChestFillsOnlyTheUnownedHalfAndSessionlessPlayersClaimNothing() {
+        var chest=doubleChest(); var event=open(chest.inventory()); var right=lock(chest.right().getBlock(),player.getUniqueId()); right.setLockState(LockState.GUILD);
+        var left=new ContainerData(chest.left().getLocation()); data.put(left.getLocation(),left);
+        manager.onInventoryOpen(event); assertEquals(co(player.getUniqueId()),left.getOwner()); assertEquals(LockState.GUILD,left.getLockState());
+        var reversed=doubleChest(); data.clear(); var owned=lock(reversed.block(),player.getUniqueId()); owned.setLockState(LockState.FACTION); var empty=new ContainerData(reversed.right().getLocation()); data.put(empty.getLocation(),empty);
+        manager.onInventoryOpen(open(reversed.inventory())); assertEquals(owned.getOwner(),empty.getOwner()); assertEquals(LockState.FACTION,empty.getLockState());
+        data.clear(); stage5Factions.plays(player,null); clearInvocations(storage);
+        manager.onInventoryOpen(event); assertNull(data.get(chest.left().getLocation()).getOwner()); verify(storage,never()).saveContainerData(any());
+        var barrel=block(0,Material.BARREL); manager.onInventoryOpen(open(((Container)barrel.getState()).getInventory())); assertNull(data.get(barrel.getLocation()).getOwner()); verify(storage,never()).saveContainerData(any());
     }
     @Test void doubleChestAccessBreakAndLockChangesRespectBothHalves() {
-        var chest=doubleChest(); var left=new ContainerData(chest.left().getLocation(),UUID.randomUUID()); left.setLockState(LockState.PRIVATE); data.put(left.getLocation(),left);
-        var right=new ContainerData(chest.right().getLocation(),player.getUniqueId()); right.setLockState(LockState.PRIVATE); data.put(right.getLocation(),right);
+        var chest=doubleChest(); var left=new ContainerData(chest.left().getLocation(),co(UUID.randomUUID())); left.setLockState(LockState.PRIVATE); data.put(left.getLocation(),left);
+        var right=new ContainerData(chest.right().getLocation(),co(player.getUniqueId())); right.setLockState(LockState.PRIVATE); data.put(right.getLocation(),right);
         var interact=interact(chest.block(),Action.RIGHT_CLICK_BLOCK); manager.onContainerRightClickAccessCheck(interact); verify(interact).setCancelled(true);
         var breaking=new BlockBreakEvent(chest.block(),player); manager.onBlockBreak(breaking); assertTrue(breaking.isCancelled()); verify(storage,never()).deleteContainerData(any());
-        UUID originalLeftOwner=left.getOwner();
         when(player.isSneaking()).thenReturn(true); var toggle=interact(chest.block(),Action.LEFT_CLICK_BLOCK);
-        try(var log=mockStatic(LockStateLog.class)) { manager.onShiftLeftClickContainer(toggle); log.verify(()->LockStateLog.record(player,chest.block().getLocation(),LockState.GUILD,false)); } assertEquals(LockState.GUILD,left.getLockState()); assertEquals(left.getLockState(),right.getLockState()); assertEquals(originalLeftOwner,left.getOwner()); assertEquals(player.getUniqueId(),right.getOwner());
-        left.setOwner(UUID.randomUUID()); right.setOwner(UUID.randomUUID()); clearInvocations(storage); manager.onShiftLeftClickContainer(toggle); verify(storage,never()).saveContainerData(any());
+        manager.onShiftLeftClickContainer(toggle); assertEquals(LockState.PRIVATE,left.getLockState()); verify(storage,never()).saveContainerData(any());
+        left.setOwner(co(player.getUniqueId()));
+        try(var log=mockStatic(LockStateLog.class)) { manager.onShiftLeftClickContainer(toggle); log.verify(()->LockStateLog.record(player,chest.block().getLocation(),LockState.GUILD,false)); } assertEquals(LockState.GUILD,left.getLockState()); assertEquals(left.getLockState(),right.getLockState()); assertEquals(co(player.getUniqueId()),right.getOwner());
+        left.setOwner(co(UUID.randomUUID())); right.setOwner(left.getOwner()); clearInvocations(storage); manager.onShiftLeftClickContainer(toggle); verify(storage,never()).saveContainerData(any());
     }
     @Test void deniedPlayersHearHowTheLockBarsThemAndOnlyPickableChestsHintAtPicking() {
         var barrel=block(0,Material.BARREL); var locked=lock(barrel,UUID.randomUUID()); var inventory=((Container)barrel.getState()).getInventory();
@@ -253,14 +272,14 @@ class ContainerManagerTest {
         when(player.hasPermission("thievery.admin")).thenReturn(true); when(player.isSneaking()).thenReturn(true);
         var barrel=block(0,Material.BARREL); UUID placer=MockBukkit.getMock().addPlayer("builder").getUniqueId(); var single=lock(barrel,placer);
         try(var log=mockStatic(LockStateLog.class)) { manager.onShiftLeftClickContainer(interact(barrel,Action.LEFT_CLICK_BLOCK)); log.verify(()->LockStateLog.record(player,barrel.getLocation(),LockState.GUILD,true)); }
-        assertEquals(LockState.GUILD,single.getLockState()); assertEquals(placer,single.getOwner()); verify(storage).saveContainerData(single);
-        verify(player).sendMessage("§eStaff override: lock owned by builder is now Guild.");
+        assertEquals(LockState.GUILD,single.getLockState()); assertEquals(co(placer),single.getOwner()); verify(storage).saveContainerData(single);
+        verify(player).sendMessage(argThat((String line) -> line.startsWith("§eStaff override: lock owned by Char-") && line.endsWith("(builder) is now Guild.")));
         var chest=doubleChest(); var left=new ContainerData(chest.left().getLocation()); data.put(left.getLocation(),left); var right=lock(chest.right().getBlock(),placer);
         manager.onShiftLeftClickContainer(interact(chest.block(),Action.LEFT_CLICK_BLOCK));
-        assertEquals(LockState.PRIVATE,left.getLockState()); assertEquals(LockState.PRIVATE,right.getLockState()); assertNull(left.getOwner()); assertEquals(placer,right.getOwner());
-        left.setOwner(placer); manager.onShiftLeftClickContainer(interact(chest.block(),Action.LEFT_CLICK_BLOCK));
-        assertEquals(LockState.GUILD,right.getLockState()); assertEquals(placer,left.getOwner());
-        verify(player,times(3)).sendMessage(startsWith("§eStaff override: lock owned by builder"));
+        assertEquals(LockState.PRIVATE,left.getLockState()); assertEquals(LockState.PRIVATE,right.getLockState()); assertNull(left.getOwner()); assertEquals(co(placer),right.getOwner());
+        left.setOwner(co(placer)); manager.onShiftLeftClickContainer(interact(chest.block(),Action.LEFT_CLICK_BLOCK));
+        assertEquals(LockState.GUILD,right.getLockState()); assertEquals(co(placer),left.getOwner());
+        verify(player,times(3)).sendMessage(contains("(builder) is now"));
         tutorial.verifyNoInteractions();
     }
     @Test void staffCannotCycleUnownedLocks() {
@@ -273,7 +292,7 @@ class ContainerManagerTest {
         verify(storage,never()).saveContainerData(any());
         verify(player,times(2)).sendMessage("§cOnly the owner can change this lock.");
     }
-    @Test void owningOnlyLeftDoubleChestHalfCyclesBothHalvesWithoutTransferringOwnership() {
+    @Test void halvesWithDifferentOwnersCannotBeRotatedByEitherOwnerOrStaffAndAreListed() {
         var chest = doubleChest();
         ContainerData left = lock(chest.block(), player.getUniqueId());
         UUID otherOwner = UUID.randomUUID();
@@ -281,13 +300,32 @@ class ContainerManagerTest {
         when(player.isSneaking()).thenReturn(true);
 
         manager.onShiftLeftClickContainer(interact(chest.block(), Action.LEFT_CLICK_BLOCK));
+        when(player.hasPermission("thievery.admin")).thenReturn(true);
+        manager.onShiftLeftClickContainer(interact(chest.block(), Action.LEFT_CLICK_BLOCK));
 
+        assertEquals(LockState.PRIVATE, left.getLockState());
+        assertEquals(LockState.PRIVATE, right.getLockState());
+        assertEquals(co(player.getUniqueId()), left.getOwner());
+        assertEquals(co(otherOwner), right.getOwner());
+        verify(storage, never()).saveContainerData(any());
+        verify(player).sendMessage("§cOnly the owner can change this lock.");
+        verify(player).sendMessage(contains("halves of this chest have different owners"));
+        assertEquals(1, net.tfminecraft.thievery.owner.LockQuarantine.snapshot().diverged().size());
+    }
+
+    @Test void theOwnerRotatesBothHalvesAndAnUnownedHalfFollowsItsPartner() {
+        var chest = doubleChest();
+        ContainerData left = lock(chest.block(), player.getUniqueId());
+        ContainerData right = new ContainerData(chest.right().getLocation());
+        data.put(right.getLocation(), right);
+        when(player.isSneaking()).thenReturn(true);
+        manager.onShiftLeftClickContainer(interact(chest.block(), Action.LEFT_CLICK_BLOCK));
         assertEquals(LockState.GUILD, left.getLockState());
         assertEquals(LockState.GUILD, right.getLockState());
-        assertEquals(player.getUniqueId(), left.getOwner());
-        assertEquals(otherOwner, right.getOwner());
-        verify(storage).saveContainerData(left);
-        verify(storage).saveContainerData(right);
+        assertNull(right.getOwner());
+        stage5Factions.plays(player, UUID.randomUUID());
+        manager.onShiftLeftClickContainer(interact(chest.block(), Action.LEFT_CLICK_BLOCK));
+        assertEquals(LockState.GUILD, left.getLockState(), "an alt on the same account is a stranger");
     }
 
     @Test void singleChestBreakIsGuardedByItsOwnLock() {
@@ -299,7 +337,7 @@ class ContainerManagerTest {
 
         assertTrue(denied.isCancelled());
         verify(player).sendMessage("§cIt's locked. Only its owner holds the key.");
-        locked.setOwner(player.getUniqueId());
+        locked.setOwner(co(player.getUniqueId()));
         BlockBreakEvent allowed = new BlockBreakEvent(chest, player);
         manager.onBlockBreak(allowed);
         assertFalse(allowed.isCancelled());
@@ -310,10 +348,10 @@ class ContainerManagerTest {
 
     @Test void hopperDoubleChestOwnershipFallsBackToRightWhenLeftUnowned() {
         var chest=doubleChest(); var hopper=mock(Hopper.class); when(hopper.getLocation()).thenReturn(new Location(world,12,64,0)); var initiator=mock(Inventory.class); when(initiator.getType()).thenReturn(InventoryType.HOPPER); when(initiator.getHolder(false)).thenReturn(hopper);
-        data.put(hopper.getLocation(),new ContainerData(hopper.getLocation(),player.getUniqueId()));
+        data.put(hopper.getLocation(),new ContainerData(hopper.getLocation(),co(player.getUniqueId())));
         var event=mock(InventoryMoveItemEvent.class); when(event.getInitiator()).thenReturn(initiator); when(event.getSource()).thenReturn(initiator); when(event.getDestination()).thenReturn(chest.inventory());
-        manager.onInventoryMoveItem(event); verify(event).setCancelled(true); data.put(chest.right().getLocation(),new ContainerData(chest.right().getLocation(),player.getUniqueId())); clearInvocations(event); manager.onInventoryMoveItem(event); verify(event,never()).setCancelled(true);
-        data.put(chest.left().getLocation(),new ContainerData(chest.left().getLocation(),UUID.randomUUID())); manager.onInventoryMoveItem(event); verify(event).setCancelled(true);
+        manager.onInventoryMoveItem(event); verify(event).setCancelled(true); data.put(chest.right().getLocation(),new ContainerData(chest.right().getLocation(),co(player.getUniqueId()))); clearInvocations(event); manager.onInventoryMoveItem(event); verify(event,never()).setCancelled(true);
+        data.put(chest.left().getLocation(),new ContainerData(chest.left().getLocation(),co(UUID.randomUUID()))); manager.onInventoryMoveItem(event); verify(event).setCancelled(true);
     }
     @Test void takingFromForeignContainerAlertsOnlyOptedInStaffAndThrottlesRepeats() {
         var barrel=block(0,Material.BARREL); var inventory=TestInventories.withHolderLookup(((Container)barrel.getState()).getInventory()); var lock=lock(barrel,UUID.randomUUID());
@@ -327,7 +365,7 @@ class ContainerManagerTest {
             manager.onBlockBreak(new BlockBreakEvent(barrel,player)); verify(staff,times(2)).sendMessage(any(net.kyori.adventure.text.Component.class));
         }
         when(event.getClick()).thenReturn(ClickType.RIGHT); manager.onInventoryClick(event); when(event.getClick()).thenReturn(ClickType.SHIFT_LEFT); when(event.getCurrentItem()).thenReturn(null); manager.onInventoryClick(event); when(event.getCurrentItem()).thenReturn(new ItemStack(Material.AIR)); manager.onInventoryClick(event);
-        when(event.getCurrentItem()).thenReturn(new ItemStack(Material.DIAMOND)); lock.setOwner(null); manager.onInventoryClick(event); lock.setOwner(player.getUniqueId()); manager.onInventoryClick(event); lock.setOwner(UUID.randomUUID()); when(player.hasPermission("thievery.admin")).thenReturn(true); manager.onInventoryClick(event);
+        when(event.getCurrentItem()).thenReturn(new ItemStack(Material.DIAMOND)); lock.setOwner(co(null)); manager.onInventoryClick(event); lock.setOwner(co(player.getUniqueId())); manager.onInventoryClick(event); lock.setOwner(co(UUID.randomUUID())); when(player.hasPermission("thievery.admin")).thenReturn(true); manager.onInventoryClick(event);
         when(event.getWhoClicked()).thenReturn(mock(HumanEntity.class)); manager.onInventoryClick(event);
     }
     @Test void cancelledContainerBreakPreservesOwnershipMetadata() {
@@ -362,7 +400,7 @@ class ContainerManagerTest {
 
         verify(storage).deleteContainerData(left.getLocation());
         verify(storage, never()).deleteContainerData(right.getLocation());
-        assertEquals(otherOwner, right.getOwner());
+        assertEquals(co(otherOwner), right.getOwner());
     }
 
     @org.junit.jupiter.params.ParameterizedTest
@@ -416,7 +454,7 @@ class ContainerManagerTest {
         tools.when(()->ToolResolver.isLockpick(any())).thenReturn(true); tools.when(()->ToolResolver.resolveLockpick(any())).thenReturn(pick);
         var stealManager=mock(net.tfminecraft.thievery.steal.StealManager.class); var gui=mock(Inventory.class);
         try(var clues=mockStatic(net.tfminecraft.thievery.clue.ClueChecker.class); var cooldown=mockStatic(net.tfminecraft.thievery.player.GuildAccessCooldown.class); var risk=mockStatic(net.tfminecraft.thievery.player.RiskCalculator.class); var targets=mockStatic(net.tfminecraft.thievery.player.TargetKeyResolver.class); var evil=mockStatic(net.tfminecraft.thievery.utils.EvilRpPlays.class); var sessions=mockStatic(net.tfminecraft.thievery.steal.StealManager.class); var menus=mockStatic(net.tfminecraft.thievery.steal.StealGui.class); var references=mockConstruction(net.tfminecraft.thievery.steal.ChestStealReference.class,(ref,context)->when(ref.buildTitle(any())).thenReturn("Search"))) {
-            clues.when(()->net.tfminecraft.thievery.clue.ClueChecker.hasEnoughClues(player)).thenReturn(true); cooldown.when(net.tfminecraft.thievery.player.GuildAccessCooldown::today).thenReturn("2026-09-26"); targets.when(()->net.tfminecraft.thievery.player.TargetKeyResolver.resolve(any())).thenReturn("target");
+            clues.when(()->net.tfminecraft.thievery.clue.ClueChecker.hasEnoughClues(player)).thenReturn(true); cooldown.when(net.tfminecraft.thievery.player.GuildAccessCooldown::today).thenReturn("2026-09-26"); targets.when(()->net.tfminecraft.thievery.player.TargetKeyResolver.forLockOwner(any())).thenReturn("target");
             sessions.when(net.tfminecraft.thievery.steal.StealManager::getInstance).thenReturn(stealManager); menus.when(()->net.tfminecraft.thievery.steal.StealGui.buildHiddenGui(any(),any(),anyString())).thenReturn(gui);
             var event=interact(barrel,Action.RIGHT_CLICK_BLOCK); manager.onRightClickChest(event); verify(event,atLeastOnce()).setCancelled(true); assertEquals(1,references.constructed().size()); verify(stealManager).openSession(player,references.constructed().getFirst(),gui); assertEquals("2026-09-26",locked.getLastAccess(player.getUniqueId())); evil.verify(()->net.tfminecraft.thievery.utils.EvilRpPlays.record(player));
             verify(storage,times(nearbyRadius < 0 ? 1 : 2)).saveContainerData(locked);
@@ -439,7 +477,7 @@ class ContainerManagerTest {
         List<java.util.function.IntConsumer> solved=new ArrayList<>(); doAnswer(call->{solved.add(call.getArgument(2)); return true;}).when(minigames).start(eq(player),eq(barrel),any());
         var stealManager=mock(net.tfminecraft.thievery.steal.StealManager.class); var gui=mock(Inventory.class); List<ChestLockpickSession> opened=new ArrayList<>();
         try(var clues=mockStatic(net.tfminecraft.thievery.clue.ClueChecker.class); var cooldown=mockStatic(net.tfminecraft.thievery.player.GuildAccessCooldown.class); var risk=mockStatic(net.tfminecraft.thievery.player.RiskCalculator.class); var targets=mockStatic(net.tfminecraft.thievery.player.TargetKeyResolver.class); var evil=mockStatic(net.tfminecraft.thievery.utils.EvilRpPlays.class); var sessions=mockStatic(net.tfminecraft.thievery.steal.StealManager.class); var menus=mockStatic(net.tfminecraft.thievery.steal.StealGui.class); var references=mockConstruction(net.tfminecraft.thievery.steal.ChestStealReference.class,(ref,context)->{opened.add((ChestLockpickSession)context.arguments().get(0)); when(ref.buildTitle(any())).thenReturn("Search");})) {
-            clues.when(()->net.tfminecraft.thievery.clue.ClueChecker.hasEnoughClues(player)).thenReturn(true); cooldown.when(net.tfminecraft.thievery.player.GuildAccessCooldown::today).thenReturn("2026-10-01"); targets.when(()->net.tfminecraft.thievery.player.TargetKeyResolver.resolve(any())).thenReturn("target");
+            clues.when(()->net.tfminecraft.thievery.clue.ClueChecker.hasEnoughClues(player)).thenReturn(true); cooldown.when(net.tfminecraft.thievery.player.GuildAccessCooldown::today).thenReturn("2026-10-01"); targets.when(()->net.tfminecraft.thievery.player.TargetKeyResolver.forLockOwner(any())).thenReturn("target");
             sessions.when(net.tfminecraft.thievery.steal.StealManager::getInstance).thenReturn(stealManager); menus.when(()->net.tfminecraft.thievery.steal.StealGui.buildHiddenGui(any(),any(),anyString())).thenReturn(gui);
             var event=interact(barrel,Action.RIGHT_CLICK_BLOCK);
 
@@ -502,7 +540,7 @@ class ContainerManagerTest {
         var barrel=lockpickBlock(); var locked=lock(barrel,player.getUniqueId()); var pick=mock(net.tfminecraft.thievery.player.LockpickDefinition.class); when(pick.getCapacity()).thenReturn(10); when(pick.getStrength()).thenReturn(.5);
         var stealManager=mock(net.tfminecraft.thievery.steal.StealManager.class); var gui=mock(Inventory.class); var saved=net.tfminecraft.thievery.cache.Parameters.excludedContainerMaterials;
         try(var clues=mockStatic(net.tfminecraft.thievery.clue.ClueChecker.class); var cooldown=mockStatic(net.tfminecraft.thievery.player.GuildAccessCooldown.class); var risk=mockStatic(net.tfminecraft.thievery.player.RiskCalculator.class); var targets=mockStatic(net.tfminecraft.thievery.player.TargetKeyResolver.class); var evil=mockStatic(net.tfminecraft.thievery.utils.EvilRpPlays.class); var sessions=mockStatic(net.tfminecraft.thievery.steal.StealManager.class); var menus=mockStatic(net.tfminecraft.thievery.steal.StealGui.class); var references=mockConstruction(net.tfminecraft.thievery.steal.ChestStealReference.class,(ref,context)->when(ref.buildTitle(any())).thenReturn("Search"))) {
-            cooldown.when(net.tfminecraft.thievery.player.GuildAccessCooldown::today).thenReturn("2026-10-02"); targets.when(()->net.tfminecraft.thievery.player.TargetKeyResolver.resolve(any())).thenReturn("target");
+            cooldown.when(net.tfminecraft.thievery.player.GuildAccessCooldown::today).thenReturn("2026-10-02"); targets.when(()->net.tfminecraft.thievery.player.TargetKeyResolver.forLockOwner(any())).thenReturn("target");
             sessions.when(net.tfminecraft.thievery.steal.StealManager::getInstance).thenReturn(stealManager); menus.when(()->net.tfminecraft.thievery.steal.StealGui.buildHiddenGui(any(),any(),anyString())).thenReturn(gui);
             manager.testPick(player,null);
             manager.testPick(player,block(6,Material.STONE));
@@ -523,7 +561,7 @@ class ContainerManagerTest {
         var barrel=lockpickBlock(); var locked=lock(barrel,player.getUniqueId()); var event=interact(barrel,Action.RIGHT_CLICK_BLOCK); tools.when(()->ToolResolver.isLockpick(any())).thenReturn(true);
         try(var clues=mockStatic(net.tfminecraft.thievery.clue.ClueChecker.class); var cooldown=mockStatic(net.tfminecraft.thievery.player.GuildAccessCooldown.class)) {
             manager.onRightClickChest(event); verify(player).sendMessage("§cNo need for picks, it's already open to you."); clues.verifyNoInteractions();
-            locked.setOwner(UUID.randomUUID()); manager.onRightClickChest(event); clues.verify(()->net.tfminecraft.thievery.clue.ClueChecker.sendInsufficientCluesMessage(player));
+            locked.setOwner(co(UUID.randomUUID())); manager.onRightClickChest(event); clues.verify(()->net.tfminecraft.thievery.clue.ClueChecker.sendInsufficientCluesMessage(player));
             clues.when(()->net.tfminecraft.thievery.clue.ClueChecker.hasEnoughClues(player)).thenReturn(true); manager.onRightClickChest(event); verify(storage,never()).saveContainerData(any());
             var pick=mock(net.tfminecraft.thievery.player.LockpickDefinition.class); tools.when(()->ToolResolver.resolveLockpick(any())).thenReturn(pick); cooldown.when(()->net.tfminecraft.thievery.player.GuildAccessCooldown.isOnCooldown(anyMap(),eq(player),anyInt())).thenReturn(true); cooldown.when(()->net.tfminecraft.thievery.player.GuildAccessCooldown.formatRemaining(anyLong())).thenReturn("one day");
             manager.onRightClickChest(event); verify(player).sendMessage(contains("one day before attempting")); verify(storage,never()).saveContainerData(any());
@@ -573,13 +611,13 @@ class ContainerManagerTest {
         when(placed.getState()).thenReturn(placedState);when(placed.getType()).thenReturn(Material.CHEST);when(placed.getLocation()).thenReturn(new Location(world,10,64,1));
         when(placed.getRelative(any(org.bukkit.block.BlockFace.class))).thenReturn(block(20,Material.AIR));when(placed.getRelative(org.bukkit.block.BlockFace.NORTH)).thenReturn(chest.block());
         var event=mock(BlockPlaceEvent.class);when(event.getPlayer()).thenReturn(player);when(event.getBlockPlaced()).thenReturn(placed);
-        manager.onBlockPlace(event);verify(event,never()).setCancelled(true);assertEquals(player.getUniqueId(),data.get(placed.getLocation()).getOwner());
-        assertNotEquals(player.getUniqueId(),data.get(chest.left().getLocation()).getOwner());assertNotEquals(player.getUniqueId(),data.get(chest.right().getLocation()).getOwner());
+        manager.onBlockPlace(event);verify(event,never()).setCancelled(true);assertEquals(co(player.getUniqueId()),data.get(placed.getLocation()).getOwner());
+        assertNotEquals(co(player.getUniqueId()),data.get(chest.left().getLocation()).getOwner());assertNotEquals(co(player.getUniqueId()),data.get(chest.right().getLocation()).getOwner());
     }
     @Test void successfulDoubleChestBreakDeletesOnlyRemovedHalfAfterBlockRemoval() {
         var chest=doubleChest();
-        data.put(chest.left().getLocation(),new ContainerData(chest.left().getLocation(),player.getUniqueId()));
-        data.put(chest.right().getLocation(),new ContainerData(chest.right().getLocation(),player.getUniqueId()));
+        data.put(chest.left().getLocation(),new ContainerData(chest.left().getLocation(),co(player.getUniqueId())));
+        data.put(chest.right().getLocation(),new ContainerData(chest.right().getLocation(),co(player.getUniqueId())));
         var event=new BlockBreakEvent(chest.block(),player); manager.onBlockBreak(event);
         assertFalse(event.isCancelled()); verify(storage,never()).deleteContainerData(any());
         when(chest.block().getState()).thenReturn(mock(BlockState.class)); when(chest.block().getType()).thenReturn(Material.AIR);
@@ -627,8 +665,13 @@ class ContainerManagerTest {
         tools.when(()->ToolResolver.isLockpick(any())).thenReturn(true);
         try(var clues=mockStatic(net.tfminecraft.thievery.clue.ClueChecker.class)) {
             manager.onRightClickChest(event);verify(player).sendMessage("§cNo need for picks, it's already open to you.");clues.verifyNoInteractions();
-            right.setOwner(UUID.randomUUID());manager.onRightClickChest(event);
-            left.setOwner(UUID.randomUUID());right.setOwner(player.getUniqueId());manager.onRightClickChest(event);
+            left.setOwner(co(UUID.randomUUID()));right.setOwner(left.getOwner());right.setLockState(LockState.PUBLIC);manager.onRightClickChest(event);
+            right.setLockState(LockState.PRIVATE);manager.onRightClickChest(event);
+            clues.verify(()->net.tfminecraft.thievery.clue.ClueChecker.sendInsufficientCluesMessage(player),times(2));
+            // Halves with different owners cannot be picked until staff settle the owner.
+            right.setOwner(co(player.getUniqueId()));manager.onRightClickChest(event);
+            left.setOwner(co(player.getUniqueId()));right.setOwner(co(UUID.randomUUID()));manager.onRightClickChest(event);
+            verify(player,times(2)).sendMessage("§cThis lock can't be picked.");
             clues.verify(()->net.tfminecraft.thievery.clue.ClueChecker.sendInsufficientCluesMessage(player),times(2));
             verify(storage,never()).saveContainerData(any());
         } finally {net.tfminecraft.thievery.cache.Cache.traits=savedTraits;net.tfminecraft.thievery.cache.Cache.requireOwnerOnline=online;net.tfminecraft.thievery.cache.Cache.debugAllowOwnChest=own;}
@@ -638,14 +681,12 @@ class ContainerManagerTest {
         net.tfminecraft.thievery.cache.Cache.traits=List.of();net.tfminecraft.thievery.cache.Cache.requireOwnerOnline=true;
         var barrel=lockpickBlock();UUID ownerId=UUID.randomUUID();lock(barrel,ownerId);var event=interact(barrel,Action.RIGHT_CLICK_BLOCK);
         tools.when(()->ToolResolver.isLockpick(any())).thenReturn(true);
-        var owner=mock(OfflinePlayer.class);when(owner.getName()).thenReturn("owner");var guild=mock(net.tfminecraft.simplefactions.guild.Guild.class);when(guild.getName()).thenReturn("Night Watch");when(guild.getMembers()).thenReturn(List.of("OfflineMember"));
-        try(var bukkit=mockStatic(Bukkit.class,CALLS_REAL_METHODS);var factions=mockStatic(net.tfminecraft.simplefactions.managers.FactionManager.class);var targets=mockStatic(net.tfminecraft.thievery.player.TargetKeyResolver.class);var window=mockStatic(net.tfminecraft.thievery.cache.LockpickTargetCache.class);var clues=mockStatic(net.tfminecraft.thievery.clue.ClueChecker.class)) {
-            bukkit.when(()->Bukkit.getOfflinePlayer(ownerId)).thenReturn(owner);stage5Factions.guild(ownerId,guild);
-            targets.when(()->net.tfminecraft.thievery.player.TargetKeyResolver.resolve(ownerId)).thenReturn("guild:night-watch");
-            manager.onRightClickChest(event);verify(player).sendMessage("§cCannot lockpick - Night Watch has no members online.");clues.verifyNoInteractions();
+        try(var window=mockStatic(net.tfminecraft.thievery.cache.LockpickTargetCache.class);var clues=mockStatic(net.tfminecraft.thievery.clue.ClueChecker.class)) {
+            stage5Factions.guild(ownerId,"night-watch","realm");
+            manager.onRightClickChest(event);verify(player).sendMessage("§cCannot lockpick - this lock's owners are away.");clues.verifyNoInteractions();
             window.when(()->net.tfminecraft.thievery.cache.LockpickTargetCache.isActive("guild:night-watch")).thenReturn(true);
             window.when(()->net.tfminecraft.thievery.cache.LockpickTargetCache.getRemainingMs("guild:night-watch")).thenReturn(65000L);
-            manager.onRightClickChest(event);verify(player).sendMessage("§eNight Watch has no members online - 1m 5s remaining on lockpick window.");
+            manager.onRightClickChest(event);verify(player).sendMessage("§eThis lock's owners are away - 1m 5s remaining on lockpick window.");
             clues.verify(()->net.tfminecraft.thievery.clue.ClueChecker.sendInsufficientCluesMessage(player));verify(storage,never()).saveContainerData(any());
         } finally {net.tfminecraft.thievery.cache.Cache.traits=savedTraits;net.tfminecraft.thievery.cache.Cache.requireOwnerOnline=online;}
     }
@@ -658,11 +699,11 @@ class ContainerManagerTest {
         tools.when(()->ToolResolver.isLockpick(any())).thenReturn(true);tools.when(()->ToolResolver.resolveLockpick(any())).thenReturn(pick);
         var stealManager=mock(net.tfminecraft.thievery.steal.StealManager.class);var menu=mock(Inventory.class);List<ChestLockpickSession> started=new ArrayList<>();List<Runnable> closers=new ArrayList<>();
         try(var clues=mockStatic(net.tfminecraft.thievery.clue.ClueChecker.class);var cooldown=mockStatic(net.tfminecraft.thievery.player.GuildAccessCooldown.class);var risk=mockStatic(net.tfminecraft.thievery.player.RiskCalculator.class);var targets=mockStatic(net.tfminecraft.thievery.player.TargetKeyResolver.class);var evil=mockStatic(net.tfminecraft.thievery.utils.EvilRpPlays.class);var sessions=mockStatic(net.tfminecraft.thievery.steal.StealManager.class);var menus=mockStatic(net.tfminecraft.thievery.steal.StealGui.class);var references=mockConstruction(net.tfminecraft.thievery.steal.ChestStealReference.class,(reference,context)->{started.add((ChestLockpickSession)context.arguments().get(0));closers.add((Runnable)context.arguments().get(1));when(reference.buildTitle(any())).thenReturn("Double chest");})) {
-            clues.when(()->net.tfminecraft.thievery.clue.ClueChecker.hasEnoughClues(player)).thenReturn(true);cooldown.when(net.tfminecraft.thievery.player.GuildAccessCooldown::today).thenReturn("2026-09-26");targets.when(()->net.tfminecraft.thievery.player.TargetKeyResolver.resolve(owner)).thenReturn("owner-target");
+            clues.when(()->net.tfminecraft.thievery.clue.ClueChecker.hasEnoughClues(player)).thenReturn(true);cooldown.when(net.tfminecraft.thievery.player.GuildAccessCooldown::today).thenReturn("2026-09-26");targets.when(()->net.tfminecraft.thievery.player.TargetKeyResolver.forLockOwner(co(owner))).thenReturn("owner-target");
             sessions.when(net.tfminecraft.thievery.steal.StealManager::getInstance).thenReturn(stealManager);menus.when(()->net.tfminecraft.thievery.steal.StealGui.buildHiddenGui(any(),any(),anyString())).thenReturn(menu);
             manager.onRightClickChest(interact(chest.block(),Action.RIGHT_CLICK_BLOCK));
             assertEquals(1,started.size());assertSame(chest.block(),started.getFirst().getChestBlock());assertEquals(54,started.getFirst().getLayout().getLogicalSlotCount());assertEquals("owner-target",started.getFirst().getTargetKey());
-            assertEquals("2026-09-26",left.getLastAccess(player.getUniqueId()));assertEquals("2026-09-26",right.getLastAccess(player.getUniqueId()));assertEquals(owner,left.getOwner());assertEquals(owner,right.getOwner());
+            assertEquals("2026-09-26",left.getLastAccess(player.getUniqueId()));assertEquals("2026-09-26",right.getLastAccess(player.getUniqueId()));assertEquals(co(owner),left.getOwner());assertEquals(co(owner),right.getOwner());
             verify(storage,times(2)).saveContainerData(left);verify(storage,times(2)).saveContainerData(right);
             verify(stealManager).openSession(player,references.constructed().getFirst(),menu);
             closers.getFirst().run();manager.onRightClickChest(interact(chest.block(),Action.RIGHT_CLICK_BLOCK));assertEquals(2,started.size());
@@ -693,4 +734,163 @@ class ContainerManagerTest {
         }
     }
 
+
+    // --- Stage 6a: guard mode, hopper minecarts, writers ---
+
+    static final String STARTING="§cLocks are starting up. Try again shortly.";
+
+    @Test void guardModeRefusesBreakingPlacingRotatingPickingAndTestPicks() {
+        net.tfminecraft.thievery.owner.LockGuard.enter("test");
+        var barrel=block(0,Material.BARREL); var locked=lock(barrel,player.getUniqueId());
+        var breaking=new BlockBreakEvent(barrel,player); manager.onBlockBreak(breaking); assertTrue(breaking.isCancelled());
+        var stone=new BlockBreakEvent(block(3,Material.STONE),player); manager.onBlockBreak(stone); assertFalse(stone.isCancelled());
+        var place=mock(BlockPlaceEvent.class); when(place.getPlayer()).thenReturn(player); when(place.getBlockPlaced()).thenReturn(block(5,Material.BARREL)); manager.onBlockPlace(place); verify(place).setCancelled(true);
+        when(player.isSneaking()).thenReturn(true); var rotate=interact(barrel,Action.LEFT_CLICK_BLOCK); manager.onShiftLeftClickContainer(rotate); verify(rotate).setCancelled(true); assertEquals(LockState.PRIVATE,locked.getLockState());
+        tools.when(()->ToolResolver.isLockpick(any())).thenReturn(true); var pick=interact(barrel,Action.RIGHT_CLICK_BLOCK); manager.onRightClickChest(pick); verify(pick).setCancelled(true);
+        manager.testPick(player,barrel);
+        verify(player,times(5)).sendMessage(STARTING); verify(storage,never()).saveContainerData(any()); verify(minigames,never()).start(any(),any(),any());
+    }
+    @Test void guardModeKeepsPlayersOutOfLockedContainersOpensPublicOnesWithoutClaimingAndShowsStaffAReadOnlyCopy() {
+        net.tfminecraft.thievery.owner.LockGuard.enter("test");
+        var barrel=block(0,Material.BARREL); var inventory=((Container)barrel.getState()).getInventory(); inventory.setItem(3,new ItemStack(Material.DIAMOND,2));
+        var unowned=open(inventory); manager.onInventoryOpen(unowned); verify(unowned,never()).setCancelled(true); assertNull(data.get(barrel.getLocation()).getOwner());
+        var check=interact(barrel,Action.RIGHT_CLICK_BLOCK); manager.onContainerRightClickAccessCheck(check); verify(check,never()).setCancelled(true);
+        var locked=lock(barrel,UUID.randomUUID()); locked.setLockState(LockState.PUBLIC);
+        var open=open(inventory); manager.onInventoryOpen(open); verify(open,never()).setCancelled(true);
+        locked.setLockState(LockState.GUILD);
+        var denied=open(inventory); manager.onInventoryOpen(denied); verify(denied).setCancelled(true);
+        var deniedCheck=interact(barrel,Action.RIGHT_CLICK_BLOCK); manager.onContainerRightClickAccessCheck(deniedCheck); verify(deniedCheck).setCancelled(true);
+        verify(player,times(2)).sendMessage(STARTING);
+        when(player.hasPermission("thievery.admin")).thenReturn(true);
+        var staffCheck=interact(barrel,Action.RIGHT_CLICK_BLOCK); manager.onContainerRightClickAccessCheck(staffCheck); verify(staffCheck,never()).setCancelled(true);
+        var staff=open(inventory); manager.onInventoryOpen(staff); verify(staff).setCancelled(true);
+        MockBukkit.getMock().getScheduler().performTicks(1);
+        var shown=ArgumentCaptor.forClass(Inventory.class); verify(player).openInventory(shown.capture());
+        assertEquals(27,shown.getValue().getSize()); assertEquals(new ItemStack(Material.DIAMOND,2),shown.getValue().getItem(3)); assertNull(shown.getValue().getItem(0));
+        assertNotSame(inventory.getItem(3),shown.getValue().getItem(3));
+        assertSame(shown.getValue(),shown.getValue().getHolder().getInventory());
+        var view=TestInventories.withHolderLookup(shown.getValue()); var click=mock(InventoryClickEvent.class); when(click.getWhoClicked()).thenReturn(player); when(click.getInventory()).thenReturn(view); manager.onInventoryClick(click); verify(click).setCancelled(true);
+        var drag=mock(InventoryDragEvent.class); when(drag.getInventory()).thenReturn(view); manager.onInventoryDrag(drag); verify(drag).setCancelled(true);
+        var plain=TestInventories.withHolderLookup(inventory); var otherDrag=mock(InventoryDragEvent.class); when(otherDrag.getInventory()).thenReturn(plain); manager.onInventoryDrag(otherDrag); verify(otherDrag,never()).setCancelled(true);
+        verify(storage,never()).saveContainerData(any());
+    }
+    @Test void guardModeChecksBothHalvesOfADoubleChest() {
+        net.tfminecraft.thievery.owner.LockGuard.enter("test");
+        var chest=doubleChest(); var event=open(chest.inventory()); manager.onInventoryOpen(event); verify(event,never()).setCancelled(true); assertNull(data.get(chest.left().getLocation()).getOwner());
+        var check=interact(chest.block(),Action.RIGHT_CLICK_BLOCK); manager.onContainerRightClickAccessCheck(check); verify(check,never()).setCancelled(true);
+        lock(chest.right().getBlock(),UUID.randomUUID());
+        var denied=open(chest.inventory()); manager.onInventoryOpen(denied); verify(denied).setCancelled(true);
+        var deniedCheck=interact(chest.block(),Action.RIGHT_CLICK_BLOCK); manager.onContainerRightClickAccessCheck(deniedCheck); verify(deniedCheck).setCancelled(true);
+        verify(storage,never()).saveContainerData(any());
+    }
+    @Test void hopperMinecartsCannotTouchOwnedNonPublicContainersFromEitherSide() {
+        var cart=mock(org.bukkit.entity.minecart.HopperMinecart.class); var initiator=mock(Inventory.class); when(initiator.getType()).thenReturn(InventoryType.HOPPER); when(initiator.getHolder(false)).thenReturn(cart);
+        var barrel=block(0,Material.BARREL); var barrelInventory=mock(Inventory.class); when(barrelInventory.getHolder(false)).thenReturn((Container)barrel.getState());
+        var event=new InventoryMoveItemEvent(barrelInventory,new ItemStack(Material.DIAMOND),initiator,false); manager.onInventoryMoveItem(event); assertFalse(event.isCancelled(),"unowned containers feed carts");
+        var locked=lock(barrel,player.getUniqueId());
+        event=new InventoryMoveItemEvent(barrelInventory,new ItemStack(Material.DIAMOND),initiator,false); manager.onInventoryMoveItem(event); assertTrue(event.isCancelled(),"even the owner's own private chest");
+        locked.setLockState(LockState.PUBLIC);
+        event=new InventoryMoveItemEvent(barrelInventory,new ItemStack(Material.DIAMOND),initiator,false); manager.onInventoryMoveItem(event); assertFalse(event.isCancelled());
+        event=new InventoryMoveItemEvent(initiator,new ItemStack(Material.DIAMOND),barrelInventory,true); manager.onInventoryMoveItem(event); assertFalse(event.isCancelled());
+        locked.setLockState(LockState.FACTION);
+        event=new InventoryMoveItemEvent(initiator,new ItemStack(Material.DIAMOND),barrelInventory,true); manager.onInventoryMoveItem(event); assertTrue(event.isCancelled(),"pushing into a locked chest");
+        var entityContainer=mock(Inventory.class); when(entityContainer.getHolder(false)).thenReturn(mock(org.bukkit.entity.minecart.StorageMinecart.class));
+        event=new InventoryMoveItemEvent(entityContainer,new ItemStack(Material.DIAMOND),initiator,false); manager.onInventoryMoveItem(event); assertFalse(event.isCancelled());
+        var chest=doubleChest(); var right=lock(chest.right().getBlock(),UUID.randomUUID());
+        event=new InventoryMoveItemEvent(holderOf(chest.holder()),new ItemStack(Material.DIAMOND),initiator,false); manager.onInventoryMoveItem(event); assertTrue(event.isCancelled(),"either half of a double chest");
+        right.setLockState(LockState.PUBLIC);
+        event=new InventoryMoveItemEvent(holderOf(chest.holder()),new ItemStack(Material.DIAMOND),initiator,false); manager.onInventoryMoveItem(event); assertFalse(event.isCancelled());
+        net.tfminecraft.thievery.owner.LockGuard.enter("test");
+        event=new InventoryMoveItemEvent(holderOf(chest.holder()),new ItemStack(Material.DIAMOND),initiator,false); manager.onInventoryMoveItem(event); assertTrue(event.isCancelled(),"guard mode stops carts at any owned container");
+        var noDestination=mock(InventoryMoveItemEvent.class); when(noDestination.getInitiator()).thenReturn(initiator); when(noDestination.getSource()).thenReturn(initiator);
+        manager.onInventoryMoveItem(noDestination); verify(noDestination,never()).setCancelled(true);
+        var spare=mock(Inventory.class); when(spare.getHolder(false)).thenReturn(null);
+        event=new InventoryMoveItemEvent(spare,new ItemStack(Material.DIAMOND),initiator,false); manager.onInventoryMoveItem(event); assertFalse(event.isCancelled());
+    }
+    @Test void blockHoppersNeedTheExactOwnerOnEveryOwnedHalfAndStopInGuardMode() {
+        var hopper=mock(Hopper.class); Location hopperLocation=new Location(world,1,64,0); when(hopper.getLocation()).thenReturn(hopperLocation);
+        var initiator=mock(Inventory.class); when(initiator.getType()).thenReturn(InventoryType.HOPPER); when(initiator.getHolder(false)).thenReturn(hopper);
+        data.put(hopperLocation,new ContainerData(hopperLocation,co(player.getUniqueId())));
+        var chest=doubleChest(); lock(chest.block(),player.getUniqueId());
+        var event=new InventoryMoveItemEvent(holderOf(chest.holder()),new ItemStack(Material.DIAMOND),initiator,false); manager.onInventoryMoveItem(event); assertFalse(event.isCancelled(),"an unowned half goes with its owned partner");
+        lock(chest.right().getBlock(),UUID.randomUUID());
+        event=new InventoryMoveItemEvent(holderOf(chest.holder()),new ItemStack(Material.DIAMOND),initiator,false); manager.onInventoryMoveItem(event); assertTrue(event.isCancelled());
+        data.put(chest.left().getLocation(),new ContainerData(chest.left().getLocation())); data.put(chest.right().getLocation(),new ContainerData(chest.right().getLocation()));
+        event=new InventoryMoveItemEvent(holderOf(chest.holder()),new ItemStack(Material.DIAMOND),initiator,false); manager.onInventoryMoveItem(event); assertTrue(event.isCancelled(),"a wholly unowned chest is not the hopper owner's");
+        // An alt's hopper on its main's chest: different characters, so nothing moves.
+        var barrel=block(4,Material.BARREL); lock(barrel,UUID.randomUUID()); data.put(hopperLocation,new ContainerData(hopperLocation,co(UUID.randomUUID())));
+        event=new InventoryMoveItemEvent(holderOf(barrel),new ItemStack(Material.DIAMOND),initiator,false); manager.onInventoryMoveItem(event); assertTrue(event.isCancelled());
+        data.put(hopperLocation,ContainerData.unreadable(hopperLocation));
+        event=new InventoryMoveItemEvent(initiator,new ItemStack(Material.DIAMOND),initiator,true); manager.onInventoryMoveItem(event); assertTrue(event.isCancelled(),"an unreadable hopper moves nothing");
+        data.put(hopperLocation,new ContainerData(hopperLocation,LockOwner.server()));
+        var serverChest=lock(barrel,UUID.randomUUID()); serverChest.setOwner(LockOwner.server());
+        event=new InventoryMoveItemEvent(holderOf(barrel),new ItemStack(Material.DIAMOND),initiator,false); manager.onInventoryMoveItem(event); assertFalse(event.isCancelled(),"server hoppers serve server containers");
+        net.tfminecraft.thievery.owner.LockGuard.enter("test");
+        event=new InventoryMoveItemEvent(holderOf(barrel),new ItemStack(Material.DIAMOND),initiator,false); manager.onInventoryMoveItem(event); assertTrue(event.isCancelled());
+    }
+    Inventory holderOf(Block block) { return holderOf((InventoryHolder)block.getState()); }
+    Inventory holderOf(InventoryHolder holder) { var inventory=mock(Inventory.class); when(inventory.getHolder(false)).thenReturn(holder); return inventory; }
+    @Test void aDoubleChestWithoutTwoChestSidesIsTreatedAsUnreadable() {
+        var hopper=mock(Hopper.class); Location hopperLocation=new Location(world,1,64,0); when(hopper.getLocation()).thenReturn(hopperLocation);
+        var initiator=mock(Inventory.class); when(initiator.getType()).thenReturn(InventoryType.HOPPER); when(initiator.getHolder(false)).thenReturn(hopper);
+        data.put(hopperLocation,new ContainerData(hopperLocation,co(player.getUniqueId())));
+        for (boolean leftIsChest : new boolean[] {false, true}) {
+            var holder=mock(DoubleChest.class); var inventory=mock(Inventory.class); when(inventory.getHolder(false)).thenReturn(holder);
+            when(holder.getLeftSide(false)).thenReturn(leftIsChest ? mock(Chest.class) : mock(InventoryHolder.class)); when(holder.getRightSide(false)).thenReturn(mock(InventoryHolder.class));
+            var event=new InventoryMoveItemEvent(inventory,new ItemStack(Material.DIAMOND),initiator,false); manager.onInventoryMoveItem(event); assertTrue(event.isCancelled());
+        }
+    }
+    @Test void placementWithoutACharacterLeavesContainersUnownedAndSessionlessStaffStampTheServer() {
+        stage5Factions.plays(player,null);
+        var barrel=block(0,Material.BARREL); var place=mock(BlockPlaceEvent.class); when(place.getPlayer()).thenReturn(player); when(place.getBlockPlaced()).thenReturn(barrel);
+        manager.onBlockPlace(place); verify(place,never()).setCancelled(true); assertFalse(data.containsKey(barrel.getLocation())); verify(storage,never()).saveContainerData(any());
+        verify(storage).deleteContainerData(barrel.getLocation());
+        var chest=block(3,Material.CHEST); lock(block(4,Material.CHEST),UUID.randomUUID()); when(place.getBlockPlaced()).thenReturn(chest);
+        manager.onBlockPlace(place); verify(place).setCancelled(true);
+        when(player.hasPermission("thievery.admin")).thenReturn(true); when(place.getBlockPlaced()).thenReturn(barrel);
+        manager.onBlockPlace(place); assertEquals(LockOwner.server(),data.get(barrel.getLocation()).getOwner()); assertEquals(LockState.PRIVATE,data.get(barrel.getLocation()).getLockState());
+        verify(player).sendTitle("§6Lock State","§ePrivate",5,30,10);
+    }
+    @Test void serverContainersOpenOnlyForStaffAndOnlyStaffRotateThem() {
+        var barrel=block(0,Material.BARREL); var server=lock(barrel,player.getUniqueId()); server.setOwner(LockOwner.server()); var inventory=((Container)barrel.getState()).getInventory();
+        var denied=open(inventory); manager.onInventoryOpen(denied); verify(denied).setCancelled(true);
+        when(player.isSneaking()).thenReturn(true); manager.onShiftLeftClickContainer(interact(barrel,Action.LEFT_CLICK_BLOCK)); assertEquals(LockState.PRIVATE,server.getLockState());
+        when(player.hasPermission("thievery.admin")).thenReturn(true);
+        var staff=open(inventory); manager.onInventoryOpen(staff); verify(staff,never()).setCancelled(true);
+        manager.onShiftLeftClickContainer(interact(barrel,Action.LEFT_CLICK_BLOCK)); assertEquals(LockState.GUILD,server.getLockState()); assertEquals(LockOwner.server(),server.getOwner());
+        verify(player).sendMessage("§eStaff override: lock owned by the server is now Guild.");
+    }
+    @Test void openingAChestWhoseHalvesShareAnOwnerKeepsBoth() {
+        var chest=doubleChest(); var left=lock(chest.block(),player.getUniqueId()); var right=lock(chest.right().getBlock(),player.getUniqueId()); right.setLockState(LockState.GUILD);
+        manager.onInventoryOpen(open(chest.inventory()));
+        assertEquals(LockState.PRIVATE,left.getLockState()); assertEquals(LockState.GUILD,right.getLockState()); assertEquals(left.getOwner(),right.getOwner());
+    }
+    @Test void anUnreadableHalfIsNeverCopiedOntoItsUnownedPartner() {
+        when(player.hasPermission("thievery.admin")).thenReturn(true);
+        var chest=doubleChest(); var left=new ContainerData(chest.left().getLocation()); data.put(left.getLocation(),left); data.put(chest.right().getLocation(),ContainerData.unreadable(chest.right().getLocation()));
+        var event=open(chest.inventory()); manager.onInventoryOpen(event);
+        verify(event,never()).setCancelled(true); assertNull(left.getOwner()); verify(storage,never()).saveContainerData(any());
+        assertEquals(1,net.tfminecraft.thievery.owner.LockQuarantine.snapshot().diverged().size());
+    }
+    @Test void staffCannotRotateAChestWithAnUnreadableHalf() {
+        when(player.hasPermission("thievery.admin")).thenReturn(true); when(player.isSneaking()).thenReturn(true);
+        var chest=doubleChest(); var left=new ContainerData(chest.left().getLocation()); data.put(left.getLocation(),left); data.put(chest.right().getLocation(),ContainerData.unreadable(chest.right().getLocation()));
+        manager.onShiftLeftClickContainer(interact(chest.block(),Action.LEFT_CLICK_BLOCK));
+        verify(player).sendMessage("§cThis lock's record is unreadable. Use /thievery locks setowner to replace it."); assertEquals(LockState.DEFAULT,left.getLockState());
+    }
+    @Test void unreadableRecordsCannotBeRotatedEvenByStaff() {
+        when(player.hasPermission("thievery.admin")).thenReturn(true); when(player.isSneaking()).thenReturn(true);
+        var barrel=block(0,Material.BARREL); data.put(barrel.getLocation(),ContainerData.unreadable(barrel.getLocation()));
+        manager.onShiftLeftClickContainer(interact(barrel,Action.LEFT_CLICK_BLOCK));
+        var chest=doubleChest(); var left=ContainerData.unreadable(chest.left().getLocation()); data.put(left.getLocation(),left); data.put(chest.right().getLocation(),ContainerData.unreadable(chest.right().getLocation()));
+        manager.onShiftLeftClickContainer(interact(chest.block(),Action.LEFT_CLICK_BLOCK));
+        verify(player,times(2)).sendMessage("§cThis lock's record is unreadable. Use /thievery locks setowner to replace it.");
+        verify(storage,never()).saveContainerData(any()); assertEquals(LockState.PRIVATE,left.getLockState());
+    }
+    @Test void anErrorWhileCheckingALockCancelsTheEvent() {
+        var barrel=block(0,Material.BARREL); var inventory=((Container)barrel.getState()).getInventory();
+        when(storage.loadContainerData(any())).thenThrow(new IllegalStateException("disk gone"));
+        var event=open(inventory); manager.onInventoryOpen(event); verify(event).setCancelled(true);
+        var breaking=new BlockBreakEvent(barrel,player); manager.onBlockBreak(breaking); assertTrue(breaking.isCancelled());
+    }
 }

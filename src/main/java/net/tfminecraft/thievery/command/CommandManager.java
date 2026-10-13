@@ -11,6 +11,7 @@ import net.tfminecraft.thievery.category.ItemValue;
 import net.tfminecraft.thievery.key.KeychainHandler;
 import net.tfminecraft.thievery.utils.ThieveryTexts;
 import net.tfminecraft.thievery.player.TraitChecker;
+import net.tfminecraft.thievery.owner.LockGuard;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
@@ -21,6 +22,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -35,15 +37,17 @@ public class CommandManager implements CommandExecutor, TabCompleter {
     private final CooldownResetService cooldownResetService;
     private final RiskSetService riskSetService;
     private final ClearCluesManager clearCluesManager;
+    private final LockAdminCommand lockAdminCommand;
 
     public CommandManager(ContainerManager containerManager, InventoryManager inventoryManager,
             CooldownResetService cooldownResetService, RiskSetService riskSetService,
-            ClearCluesManager clearCluesManager) {
+            ClearCluesManager clearCluesManager, LockAdminCommand lockAdminCommand) {
         this.containerManager = containerManager;
         this.inventoryManager = inventoryManager;
         this.cooldownResetService = cooldownResetService;
         this.riskSetService = riskSetService;
         this.clearCluesManager = clearCluesManager;
+        this.lockAdminCommand = lockAdminCommand;
     }
 
     private static void msg(CommandSender sender, String raw) {
@@ -94,9 +98,19 @@ public class CommandManager implements CommandExecutor, TabCompleter {
             return true;
         }
 
+        if (args.length >= 1 && args[0].equalsIgnoreCase("locks")) {
+            lockAdminCommand.handle(sender, Arrays.copyOfRange(args, 1, args.length));
+            return true;
+        }
+
         if (args.length >= 2 && args[0].equalsIgnoreCase("resetcooldowns")) {
             if (!sender.hasPermission("thievery.admin")) {
                 msg(sender, ThieveryTexts.ERROR + "You don't have permission to use this command.");
+                return true;
+            }
+            if (LockGuard.guarded()) {
+                // Cooldowns live in the lock files, which stay frozen until locks are ready.
+                msg(sender, ThieveryTexts.ERROR + LockGuard.STARTING);
                 return true;
             }
             if (args[1].equalsIgnoreCase("all")) {
@@ -172,6 +186,10 @@ public class CommandManager implements CommandExecutor, TabCompleter {
                 msg(player, ThieveryTexts.WARN + "/thievery keychain " + ThieveryTexts.MUTED + "- Get an empty keychain");
                 msg(player, ThieveryTexts.WARN + "/thievery testpick [pocket] " + ThieveryTexts.MUTED
                         + "- Test-pick the container you look at, or a pocket");
+                msg(player, ThieveryTexts.WARN + "/thievery locks quarantine " + ThieveryTexts.MUTED
+                        + "- List locks that need staff");
+                msg(player, ThieveryTexts.WARN + "/thievery locks setowner <character|uuid|server> " + ThieveryTexts.MUTED
+                        + "- Set the owner of the lock you look at");
             }
             msg(player, ThieveryTexts.WARN + "/thievery loadout " + ThieveryTexts.MUTED + "- Open thievery category loadout");
             msg(player, ThieveryTexts.WARN + "/thievery clearclues " + ThieveryTexts.MUTED + "- Clear clues on a door or container");
@@ -251,8 +269,13 @@ public class CommandManager implements CommandExecutor, TabCompleter {
                 options.add("itemvalue");
                 options.add("keychain");
                 options.add("testpick");
+                options.add("locks");
             }
             return options;
+        }
+
+        if (args.length >= 2 && args[0].equalsIgnoreCase("locks") && sender.hasPermission("thievery.admin")) {
+            return LockAdminCommand.complete(Arrays.copyOfRange(args, 1, args.length));
         }
 
         if (args.length == 2 && args[0].equalsIgnoreCase("testpick") && sender.hasPermission("thievery.admin")) {

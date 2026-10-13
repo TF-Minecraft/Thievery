@@ -7,41 +7,68 @@ import java.util.UUID;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 
+import net.tfminecraft.thievery.owner.LockOwner;
+
 public class ContainerData {
 
     private Location location;
-    private UUID owner;
+    private LockOwner owner;
     private LockState lockState = LockState.DEFAULT;
     private Map<UUID, String> accessMap = new HashMap<>();
+    // Unreadable records load locked and are never written back; only staff can replace them.
+    private boolean unreadable;
+    // A classification made while identity was unavailable; it must not be cached or acted on as final.
+    private boolean provisional;
 
     public ContainerData(Location location) {
         this.location = location;
     }
 
-    // Optionally provide owner at creation
-    public ContainerData(Location location, UUID owner) {
+    public ContainerData(Location location, LockOwner owner) {
         this.location = location;
         this.owner = owner;
+    }
+
+    /** A record that could not be read: locked, owner unresolved. */
+    public static ContainerData unreadable(Location location) {
+        ContainerData data = new ContainerData(location, LockOwner.unreadable());
+        data.lockState = LockState.PRIVATE;
+        data.unreadable = true;
+        return data;
     }
 
     public Location getLocation() {
         return location;
     }
 
-    public UUID getOwner() {
+    public LockOwner getOwner() {
         return owner;
     }
 
-    public boolean owns(Player p) {
-        return owner != null && owner.equals(p.getUniqueId());
+    public boolean isOwned() {
+        return owner != null;
     }
 
     public boolean canAccess(Player p) {
         return LockAccess.canAccess(p, owner, lockState);
     }
 
-    public void setOwner(UUID owner) {
+    public void setOwner(LockOwner owner) {
         this.owner = owner;
+        this.unreadable = false;
+        this.provisional = false;
+    }
+
+    public boolean isUnreadable() {
+        return unreadable;
+    }
+
+    public boolean isProvisional() {
+        return provisional;
+    }
+
+    void setProvisional(boolean provisional) {
+        this.provisional = provisional;
     }
 
     public LockState getLockState() {

@@ -2,20 +2,32 @@ package net.tfminecraft.thievery.steal;
 
 import java.util.Locale;
 import java.util.Map;
-import java.util.UUID;
 
-import org.bukkit.entity.Player;
+import org.bukkit.Location;
 
 import net.tfminecraft.interactiblefurniture.InteractibleFurniture;
 import net.tfminecraft.interactiblefurniture.furniture.Furniture;
 import net.tfminecraft.thievery.cache.Parameters;
-import net.tfminecraft.thievery.door.LockAccess;
 import net.tfminecraft.thievery.door.LockState;
+import net.tfminecraft.thievery.owner.LockGuard;
+import net.tfminecraft.thievery.owner.LockOwner;
+import net.tfminecraft.thievery.owner.LockQuarantine;
+import net.tfminecraft.thievery.owner.OwnerClassifier;
+import net.tfminecraft.thievery.owner.OwnerCodec;
 
+/**
+ * Furniture locks live in the furniture's own variables. They are read both ways until stage 7: a marked owner, or
+ * a bare account UUID that is upgraded on first interaction. Unreadable variables load locked with an unresolved
+ * owner, like an unreadable lock file.
+ */
 public final class FurnitureLockHelper {
 
     public static final String OWNER_KEY = "thievery.owner";
+    public static final String OWNER_KIND_KEY = "thievery.ownerKind";
     public static final String LOCK_STATE_KEY = "thievery.lockState";
+
+    /** A furniture lock as read: owner (null if unowned), state, and whether the variables were unreadable. */
+    public record FurnitureLock(LockOwner owner, LockState state, boolean unreadable) {}
 
     private FurnitureLockHelper() {}
 
@@ -23,51 +35,106 @@ public final class FurnitureLockHelper {
         return furniture != null && Parameters.isLockableFurnitureId(furniture.getId());
     }
 
-    public static UUID getOwner(Furniture furniture) {
-        if (furniture == null) {
-            return null;
-        }
-        Object raw = furniture.getVariables().get(OWNER_KEY);
-        if (raw == null) {
-            return null;
-        }
+    public static FurnitureLock read(Furniture furniture) {
+        Map<String, Object> variables = furniture.getVariables();
         try {
-            return UUID.fromString(raw.toString());
-        } catch (IllegalArgumentException ignored) {
-            return null;
+            OwnerCodec.Stored stored = OwnerCodec.parse(text(variables.get(OWNER_KEY)), text(variables.get(OWNER_KIND_KEY)));
+            String rawState = text(variables.get(LOCK_STATE_KEY));
+            if (rawState == null && stored.owned()) {
+                throw new IllegalArgumentException("owned furniture without a lock state");
+            }
+            LockState state = rawState == null ? LockState.DEFAULT : LockState.valueOf(rawState.toUpperCase(Locale.ROOT));
+            return new FurnitureLock(OwnerCodec.resolve(stored).owner(), state, false);
+        } catch (IllegalArgumentException e) {
+            LockQuarantine.noteUnreadable(quarantinePath(furniture));
+            return new FurnitureLock(LockOwner.unreadable(), LockState.PRIVATE, true);
         }
     }
 
-    public static void setOwner(Furniture furniture, UUID owner) {
-        if (furniture == null) {
+    /** How unreadable furniture is named in the staff quarantine list. */
+    public static java.nio.file.Path quarantinePath(Furniture furniture) {
+        return java.nio.file.Path.of("furniture", describe(furniture.getLoc()));
+    }
+
+    /** The lockable furniture piece an entity belongs to (its display or its interaction box), or null. */
+    public static Furniture find(org.bukkit.entity.Entity entity) {
+        for (Furniture furniture : InteractibleFurniture.getInstance().getFurnitureManager().getPlacedFurniture().values()) {
+            if (isLockable(furniture) && (entity.getUniqueId().equals(furniture.getEntityId())
+                    || entity.getUniqueId().equals(furniture.getInteractionEntityId()))) {
+                return furniture;
+            }
+        }
+        return null;
+    }
+
+    private static String text(Object raw) {
+        return raw == null ? null : raw.toString();
+    }
+
+    private static String describe(Location location) {
+        return location.getWorld().getName() + "_" + location.getBlockX() + "_" + location.getBlockY() + "_"
+                + location.getBlockZ();
+    }
+
+    public static LockOwner getOwner(Furniture furniture) {
+        return furniture == null ? null : read(furniture).owner();
+    }
+
+    public static LockState getLockState(Furniture furniture) {
+        return furniture == null ? LockState.DEFAULT : read(furniture).state();
+    }
+
+    /**
+     * The lazy upgrade on first interaction: a bare value gains its marker, a legacy account moves to its heir.
+     * Nothing is written in guard mode, for unreadable variables, or when the classification is not final.
+     */
+    public static void upgrade(Furniture furniture) {
+        if (LockGuard.guarded()) {
             return;
         }
         Map<String, Object> variables = furniture.getVariables();
-        if (owner == null) {
+        OwnerCodec.Stored stored;
+        try {
+            stored = OwnerCodec.parse(text(variables.get(OWNER_KEY)), text(variables.get(OWNER_KIND_KEY)));
+        } catch (IllegalArgumentException e) {
+            return;
+        }
+        if (!stored.markerless()) {
+            return;
+        }
+        OwnerClassifier.Classification classification = OwnerClassifier.classify(stored.id());
+        if (!classification.definitive()) {
+            return;
+        }
+        switch (classification.owner().kind()) {
+            case CHARACTER, SERVER -> setOwner(furniture, classification.owner());
+            case LEGACY -> setOwner(furniture, LockOwner.character(classification.heir()));
+            case UNRESOLVED -> { }
+        }
+    }
+
+    public static void setOwner(Furniture furniture, LockOwner owner) {
+        if (furniture == null || LockGuard.guarded()) {
+            return;
+        }
+        Map<String, Object> variables = furniture.getVariables();
+        OwnerCodec.Stored stored = OwnerCodec.store(owner);
+        if (!stored.owned()) {
             variables.remove(OWNER_KEY);
+            variables.remove(OWNER_KIND_KEY);
         } else {
-            variables.put(OWNER_KEY, owner.toString());
+            variables.put(OWNER_KEY, stored.id().toString());
+            if (stored.marker() == null) {
+                variables.remove(OWNER_KIND_KEY);
+            } else {
+                variables.put(OWNER_KIND_KEY, stored.marker().name());
+            }
         }
         persist(furniture);
     }
 
-    public static LockState getLockState(Furniture furniture) {
-        if (furniture == null) {
-            return LockState.DEFAULT;
-        }
-        Object raw = furniture.getVariables().get(LOCK_STATE_KEY);
-        if (raw == null) {
-            return LockState.DEFAULT;
-        }
-        try {
-            return LockState.valueOf(raw.toString().toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException ignored) {
-            return LockState.DEFAULT;
-        }
-    }
-
     public static void setLockState(Furniture furniture, LockState lockState) {
-        if (furniture == null) {
+        if (furniture == null || LockGuard.guarded()) {
             return;
         }
         LockState state = lockState == null ? LockState.DEFAULT : lockState;
@@ -79,15 +146,6 @@ public final class FurnitureLockHelper {
         LockState next = getLockState(furniture).next();
         setLockState(furniture, next);
         return next;
-    }
-
-    public static boolean owns(Furniture furniture, Player player) {
-        UUID owner = getOwner(furniture);
-        return owner != null && player != null && owner.equals(player.getUniqueId());
-    }
-
-    public static boolean canAccess(Furniture furniture, Player player) {
-        return LockAccess.canAccess(player, getOwner(furniture), getLockState(furniture));
     }
 
     private static void persist(Furniture furniture) {

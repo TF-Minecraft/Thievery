@@ -8,7 +8,6 @@ import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
-import org.bukkit.OfflinePlayer;
 import org.bukkit.Sound;
 import org.bukkit.Tag;
 import org.bukkit.block.Block;
@@ -43,6 +42,9 @@ import net.tfminecraft.thievery.utils.ThieveryTexts;
 import net.tfminecraft.thievery.utils.ToolResolver;
 import net.tfminecraft.thievery.utils.GuildChecker;
 import net.tfminecraft.thievery.utils.Keys;
+import net.tfminecraft.thievery.owner.LockGuard;
+import net.tfminecraft.thievery.owner.LockOwner;
+import net.tfminecraft.thievery.owner.LockOwnerNames;
 
 public class DoorManager implements Listener {
 
@@ -58,6 +60,11 @@ public class DoorManager implements Listener {
     @SuppressWarnings("deprecation")
     @EventHandler(priority = EventPriority.HIGH)
     public void onPlayerInteract(PlayerInteractEvent event) {
+        LockGuard.failClosed(event, "a door interaction", () -> handleInteract(event));
+    }
+
+    @SuppressWarnings("deprecation")
+    private void handleInteract(PlayerInteractEvent event) {
         if (event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
         if (event.getClickedBlock() == null) return;
 
@@ -84,11 +91,21 @@ public class DoorManager implements Listener {
             if (now - lastInteract.getOrDefault(player.getUniqueId(), 0L) < 200) return;
             lastInteract.put(player.getUniqueId(), now);
             event.setCancelled(true);
+            if (LockGuard.guarded()) {
+                player.sendTitle(ThieveryTexts.msg(ThieveryTexts.ERROR + LockGuard.STARTING), "", 5, 30, 10);
+                return;
+            }
             if (data == null) {
+                // Locking needs a current character; staff without one lock for the server.
+                LockOwner owner = LockWriters.placementOwner(player);
+                if (owner == null) {
+                    player.sendTitle(ThieveryTexts.msg(ThieveryTexts.ERROR + LockWriters.NEED_CHARACTER), "", 5, 30, 10);
+                    return;
+                }
                 String uuid = getOrCreateKeyUUID(heldItem);
                 if (uuid == null) return;
                 double strength = ToolResolver.getKeyStrength(heldItem);
-                doorDataManager.saveDoorData(new DoorData(canonical, uuid, strength, player.getUniqueId()));
+                doorDataManager.saveDoorData(new DoorData(canonical, uuid, strength, owner));
                 player.sendTitle(ThieveryTexts.msg(ThieveryTexts.SUCCESS + "Door locked."), "", 5, 30, 10);
                 playLockToggleSound(canonical);
             } else {
@@ -113,6 +130,10 @@ public class DoorManager implements Listener {
         if (ToolResolver.isLockpick(heldItem) && data != null) {
             event.setCancelled(true);
             UUID uuid = player.getUniqueId();
+            if (LockGuard.guarded()) {
+                player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + LockGuard.STARTING));
+                return;
+            }
 
             // Cannot lockpick a door that is already open
             if (isDoorOpen(block)) {
@@ -154,6 +175,11 @@ public class DoorManager implements Listener {
     @SuppressWarnings("deprecation")
     @EventHandler(ignoreCancelled = true)
     public void onBlockBreak(BlockBreakEvent event) {
+        LockGuard.failClosed(event, "a door break", () -> handleBreak(event));
+    }
+
+    @SuppressWarnings("deprecation")
+    private void handleBreak(BlockBreakEvent event) {
         Block block = event.getBlock();
         Player player = event.getPlayer();
 
@@ -166,6 +192,12 @@ public class DoorManager implements Listener {
             if (isDoor(block)) {
                 doorDataManager.deleteDoorData(lockedDoor);
             }
+            return;
+        }
+
+        if (LockGuard.guarded()) {
+            event.setCancelled(true);
+            player.sendTitle(ThieveryTexts.msg(ThieveryTexts.ERROR + LockGuard.STARTING), "", 5, 30, 10);
             return;
         }
 
@@ -287,7 +319,7 @@ public class DoorManager implements Listener {
                     + "You must wait " + seconds + "s before lockpicking this door again."));
             return;
         }
-        GuildChecker.LockpickAccessResult access = GuildChecker.checkLockpickAccess(data.getOwnerUUID());
+        GuildChecker.LockpickAccessResult access = GuildChecker.checkLockpickAccess(data.getOwner());
         if (access.type == GuildChecker.LockpickAccessResult.Type.DENY) {
             player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + access.message));
             return;
@@ -320,7 +352,7 @@ public class DoorManager implements Listener {
         int dexterity = RiskCalculator.getDexterity(player);
         double lockpickStrength = ToolResolver.getLockpickStrength(player.getInventory().getItemInMainHand());
         DoorData doorData = doorDataManager.loadDoorData(canonical);
-        UUID ownerUUID = doorData != null ? doorData.getOwnerUUID() : null;
+        LockOwner owner = doorData != null ? doorData.getOwner() : null;
         switch (result) {
             case SUCCESS -> {
                 openDoor(canonical);
@@ -330,12 +362,12 @@ public class DoorManager implements Listener {
                 }
                 player.sendTitle(ThieveryTexts.msg(ThieveryTexts.SUCCESS + "Picked!"), "", 5, 40, 10);
                 canonical.getWorld().playSound(canonical, Sound.BLOCK_WOODEN_DOOR_OPEN, 0.15f, 1.2f);
-                ClueDropper.tryDropDoorClue(player, canonical, ownerUUID, dexterity, lockpickStrength);
+                ClueDropper.tryDropDoorClue(player, canonical, owner, dexterity, lockpickStrength);
             }
             case FAIL -> {
                 player.sendTitle(ThieveryTexts.msg(ThieveryTexts.ERROR + "Failed!"), "", 5, 40, 10);
                 canonical.getWorld().playSound(canonical, Sound.BLOCK_IRON_TRAPDOOR_OPEN, 4.5f, 0.8f);
-                ClueDropper.tryDropDoorClue(player, canonical, ownerUUID, dexterity, lockpickStrength);
+                ClueDropper.tryDropDoorClue(player, canonical, owner, dexterity, lockpickStrength);
             }
             case BREAK -> {
                 ItemStack held = player.getInventory().getItemInMainHand();
@@ -347,7 +379,7 @@ public class DoorManager implements Listener {
                 player.sendTitle(ThieveryTexts.msg(ThieveryTexts.ERROR + "Lockpick broke!"), "", 5, 40, 10);
                 canonical.getWorld().playSound(canonical, Sound.BLOCK_IRON_TRAPDOOR_OPEN, 4.5f, 0.8f);
                 canonical.getWorld().playSound(canonical, Sound.ENTITY_ITEM_BREAK, 4.5f, 1f);
-                ClueDropper.tryDropDoorClue(player, canonical, ownerUUID, dexterity, lockpickStrength);
+                ClueDropper.tryDropDoorClue(player, canonical, owner, dexterity, lockpickStrength);
             }
             default -> {}
         }
@@ -357,15 +389,19 @@ public class DoorManager implements Listener {
         canonical.getWorld().playSound(canonical, Sound.BLOCK_IRON_TRAPDOOR_OPEN, 1.0f, 1.0f);
     }
 
+    // Only staff see who owns a lock; anyone else holding the debug tool learns only that it is locked.
     private void showDebugLockInfo(Player player, Location canonical) {
         DoorData data = doorDataManager.loadDoorData(canonical);
-        if (data == null || data.getOwnerUUID() == null) {
+        if (data == null || data.getOwner() == null) {
             player.sendMessage(ThieveryTexts.MUTED + "This door is not locked.");
             return;
         }
-        OfflinePlayer owner = Bukkit.getOfflinePlayer(data.getOwnerUUID());
-        String name = owner.getName() != null ? owner.getName() : data.getOwnerUUID().toString();
-        player.sendMessage(ThieveryTexts.msg(ThieveryTexts.INFO + "Door was locked by " + ThieveryTexts.INFO + name));
+        if (!player.hasPermission(LockWriters.STAFF)) {
+            player.sendMessage(ThieveryTexts.msg(ThieveryTexts.INFO + "This door is locked."));
+            return;
+        }
+        player.sendMessage(ThieveryTexts.msg(ThieveryTexts.INFO + "Door was locked by " + ThieveryTexts.INFO
+                + LockOwnerNames.staffLabel(data.getOwner())));
     }
 
     private void scheduleLockRemovalAfterBreak(BlockBreakEvent event, Location lockedDoor, Material brokenType) {

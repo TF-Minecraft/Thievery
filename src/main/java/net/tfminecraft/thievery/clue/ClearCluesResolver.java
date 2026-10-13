@@ -1,12 +1,9 @@
 package net.tfminecraft.thievery.clue;
 
 import java.util.Optional;
-import java.util.UUID;
 
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
-import net.tfminecraft.thievery.utils.FactionAccess;
 import org.bukkit.Tag;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
@@ -17,11 +14,12 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.DoubleChestInventory;
 import org.bukkit.inventory.Inventory;
 
-import net.tfminecraft.simplefactions.guild.Guild;
-import net.tfminecraft.simplefactions.managers.FactionManager;
 import net.tfminecraft.rpcharacters.managers.SpawnedClueManager;
 import net.tfminecraft.rpcharacters.utils.ClueGiver;
+import net.tfminecraft.thievery.door.ChestOwners;
 import net.tfminecraft.thievery.door.ContainerData;
+import net.tfminecraft.thievery.door.LockAccess;
+import net.tfminecraft.thievery.owner.LockOwner;
 import net.tfminecraft.thievery.door.DoorData;
 import net.tfminecraft.thievery.door.LockState;
 import net.tfminecraft.thievery.door.ContainerDataManager;
@@ -37,13 +35,13 @@ public final class ClearCluesResolver {
     public static final class ClearCluesTarget {
         private final Kind kind;
         private final Location canonicalLocation;
-        private final UUID ownerUuid;
+        private final LockOwner owner;
         private final LockState lockState;
 
-        public ClearCluesTarget(Kind kind, Location canonicalLocation, UUID ownerUuid, LockState lockState) {
+        public ClearCluesTarget(Kind kind, Location canonicalLocation, LockOwner owner, LockState lockState) {
             this.kind = kind;
             this.canonicalLocation = canonicalLocation;
-            this.ownerUuid = ownerUuid;
+            this.owner = owner;
             this.lockState = lockState;
         }
 
@@ -55,8 +53,8 @@ public final class ClearCluesResolver {
             return canonicalLocation;
         }
 
-        public UUID getOwnerUuid() {
-            return ownerUuid;
+        public LockOwner getOwner() {
+            return owner;
         }
 
         public LockState getLockState() {
@@ -76,13 +74,11 @@ public final class ClearCluesResolver {
         if (isDoor(block)) {
             Location canonical = getDoorCanonicalLocation(block);
             DoorData doorData = doorDataManager.loadDoorData(canonical);
-            UUID owner = doorData != null ? doorData.getOwnerUUID() : null;
+            LockOwner owner = doorData != null ? doorData.getOwner() : null;
             return Optional.of(new ClearCluesTarget(Kind.DOOR, canonical, owner, null));
         }
         if (block.getState() instanceof Container container) {
-            ContainerData data = loadContainerData(container);
-            return Optional.of(new ClearCluesTarget(Kind.CONTAINER, data.getLocation(),
-                    data.getOwner(), data.getLockState()));
+            return Optional.of(containerTarget(container));
         }
         return Optional.empty();
     }
@@ -106,37 +102,25 @@ public final class ClearCluesResolver {
         return removed;
     }
 
+    // Public and unowned containers are anyone's to tidy; private ones need the owning character, and guild and
+    // faction ones anyone the lock lets in.
     private static boolean canClearContainer(Player player, ClearCluesTarget target) {
-        LockState lockState = target.getLockState();
-        if (lockState == LockState.PUBLIC || target.getOwnerUuid() == null) {
+        if (target.getLockState() == LockState.PUBLIC || target.getOwner() == null) {
             return true;
         }
-        ContainerData data = containerDataManager.loadContainerData(target.getCanonicalLocation());
-        if (lockState == LockState.PRIVATE) {
-            return data.owns(player);
+        if (target.getLockState() == LockState.PRIVATE) {
+            return LockAccess.isOwner(player, target.getOwner());
         }
-        return data.canAccess(player);
+        return LockAccess.canAccess(player, target.getOwner(), target.getLockState());
     }
 
+    // The key is the door's credential; clue clearing goes to the owning character or its lock guild.
     private static boolean canClearDoor(Player player, ClearCluesTarget target) {
-        UUID ownerUuid = target.getOwnerUuid();
-        if (ownerUuid == null) {
+        LockOwner owner = target.getOwner();
+        if (owner == null) {
             return true;
         }
-        if (FactionAccess.owns(player, ownerUuid)) {
-            return true;
-        }
-        return sharesGuildWithOwner(player, ownerUuid);
-    }
-
-    private static boolean sharesGuildWithOwner(Player player, UUID ownerUuid) {
-        if (!FactionAccess.ready()) return false;
-        Guild ownerGuild = FactionAccess.ownerGuild(ownerUuid);
-        Guild playerGuild = FactionManager.getGuildByMember(player);
-        if (ownerGuild == null || playerGuild == null) {
-            return false;
-        }
-        return ownerGuild.getId().equals(playerGuild.getId());
+        return LockAccess.isOwner(player, owner) || LockAccess.sharesLockGuild(player, owner);
     }
 
     private static int clearChestPaperClues(Location canonical) {
@@ -159,19 +143,22 @@ public final class ClearCluesResolver {
         return removed;
     }
 
-    private static ContainerData loadContainerData(Container container) {
+    // A double chest is read from both halves: diverged owners act for nobody, and the stricter state applies.
+    private static ClearCluesTarget containerTarget(Container container) {
         Inventory inv = container.getInventory();
         if (inv instanceof DoubleChestInventory doubleInv) {
             DoubleChest dc = (DoubleChest) doubleInv.getHolder();
-            Location leftLoc = ((org.bukkit.block.Chest) dc.getLeftSide()).getLocation();
-            ContainerData left = containerDataManager.loadContainerData(leftLoc);
-            if (left.getOwner() != null) {
-                return left;
-            }
-            return containerDataManager.loadContainerData(
+            ContainerData left = containerDataManager.loadContainerData(
+                    ((org.bukkit.block.Chest) dc.getLeftSide()).getLocation());
+            ContainerData right = containerDataManager.loadContainerData(
                     ((org.bukkit.block.Chest) dc.getRightSide()).getLocation());
+            ChestOwners owners = ChestOwners.of(left, right);
+            LockState state = left.getLockState().ordinal() < right.getLockState().ordinal()
+                    ? left.getLockState() : right.getLockState();
+            return new ClearCluesTarget(Kind.CONTAINER, left.getLocation(), owners.effective(), state);
         }
-        return containerDataManager.loadContainerData(container.getLocation());
+        ContainerData data = containerDataManager.loadContainerData(container.getLocation());
+        return new ClearCluesTarget(Kind.CONTAINER, data.getLocation(), data.getOwner(), data.getLockState());
     }
 
     private static boolean isDoor(Block block) {

@@ -1,18 +1,19 @@
 package net.tfminecraft.thievery.utils;
 
-import java.util.UUID;
-
-import org.bukkit.Bukkit;
-import org.bukkit.OfflinePlayer;
-
-import net.tfminecraft.simplefactions.guild.Guild;
-import net.tfminecraft.simplefactions.identity.Members;
-import net.tfminecraft.tlibs.character.Characters;
 import net.tfminecraft.thievery.cache.Cache;
 import net.tfminecraft.thievery.cache.LockpickTargetCache;
+import net.tfminecraft.thievery.owner.LockGuildBridge;
+import net.tfminecraft.thievery.owner.LockGuilds;
+import net.tfminecraft.thievery.owner.LockOwner;
+import net.tfminecraft.thievery.owner.OwnerIdentity;
 import net.tfminecraft.thievery.player.TargetKeyResolver;
 
+/** Whether a lock may be picked now. Its messages never name the owner. */
 public final class GuildChecker {
+
+    static final String UNPICKABLE = "This lock can't be picked.";
+    static final String UNKNOWN = "There's no telling whether this lock's owners are about. Try again later.";
+    static final String AWAY = "Cannot lockpick - this lock's owners are away.";
 
     private GuildChecker() {}
 
@@ -27,37 +28,24 @@ public final class GuildChecker {
     }
 
     /**
-     * Checks whether lockpicking is allowed based on the owner's guild/online status
-     * and the targeted-lockpick cache window.
+     * Unowned locks are always pickable; server, quarantined and unreadable locks never are. With
+     * {@code require-owner-online}, a character's lock needs a member of its {@code lockGuild} online, or without a
+     * guild the owning character in play, or an open lockpick window.
      */
-    public static LockpickAccessResult checkLockpickAccess(UUID ownerUUID) {
-        if (ownerUUID == null) return new LockpickAccessResult(LockpickAccessResult.Type.ALLOWED, null);
-        if (!FactionAccess.ready() || FactionAccess.heir(ownerUUID).isEmpty())
-            return new LockpickAccessResult(LockpickAccessResult.Type.DENY, "Character guilds are unavailable for this owner.");
+    public static LockpickAccessResult checkLockpickAccess(LockOwner owner) {
+        if (owner == null) return new LockpickAccessResult(LockpickAccessResult.Type.ALLOWED, null);
+        if (!owner.isCharacter()) return new LockpickAccessResult(LockpickAccessResult.Type.DENY, UNPICKABLE);
         if (!Cache.requireOwnerOnline) {
             return new LockpickAccessResult(LockpickAccessResult.Type.ALLOWED, null);
         }
-        OfflinePlayer owner = Bukkit.getOfflinePlayer(ownerUUID);
-        String ownerName = owner.getName();
-        if (ownerName == null) ownerName = "The owner";
+        LockGuilds guilds = LockGuildBridge.get();
+        if (!guilds.ready()) return new LockpickAccessResult(LockpickAccessResult.Type.DENY, UNKNOWN);
 
-        Guild guild = FactionAccess.ownerGuild(ownerUUID);
-        String targetKey = TargetKeyResolver.resolve(ownerUUID);
-        String subjectName;
-        boolean membersOnline;
-
-        if (guild != null) {
-            subjectName = guild.getName();
-            membersOnline = false;
-            for (String m : guild.getMembers()) {
-                if (Members.online(m).isPresent()) { membersOnline = true; break; }
-            }
-        } else {
-            subjectName = ownerName;
-            membersOnline = FactionAccess.heir(ownerUUID).filter(ref -> Members.isOnline(ref.characterId().toString())).isPresent();
-        }
-
-        if (membersOnline) {
+        String targetKey = TargetKeyResolver.forLockOwner(owner);
+        boolean online = guilds.lockGuild(owner.id()).isPresent()
+                ? guilds.anyMemberOnline(owner.id())
+                : OwnerIdentity.playing(owner.id());
+        if (online) {
             LockpickTargetCache.refresh(targetKey);
             return new LockpickAccessResult(LockpickAccessResult.Type.ALLOWED, null);
         }
@@ -66,13 +54,9 @@ public final class GuildChecker {
             long remainingMs = LockpickTargetCache.getRemainingMs(targetKey);
             long minutes = remainingMs / 60000;
             long seconds = (remainingMs % 60000) / 1000;
-            String msg = subjectName + " has no members online - " + minutes + "m " + seconds + "s remaining on lockpick window.";
+            String msg = "This lock's owners are away - " + minutes + "m " + seconds + "s remaining on lockpick window.";
             return new LockpickAccessResult(LockpickAccessResult.Type.WARN, msg);
         }
-
-        String denyMsg = guild != null
-                ? "Cannot lockpick - " + subjectName + " has no members online."
-                : "Cannot lockpick - " + subjectName + " is not online.";
-        return new LockpickAccessResult(LockpickAccessResult.Type.DENY, denyMsg);
+        return new LockpickAccessResult(LockpickAccessResult.Type.DENY, AWAY);
     }
 }

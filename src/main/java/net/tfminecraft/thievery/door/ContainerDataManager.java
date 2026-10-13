@@ -1,39 +1,36 @@
 package net.tfminecraft.thievery.door;
 
 import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
-import java.io.Reader;
-import java.io.Writer;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 import org.bukkit.Bukkit;
-import org.bukkit.Chunk;
 import org.bukkit.Location;
 
-import com.google.gson.Gson;
-
-import net.tfminecraft.thievery.door.ContainerData;
-import net.tfminecraft.thievery.door.LockState;
+import net.tfminecraft.thievery.owner.DurableFiles;
+import net.tfminecraft.thievery.owner.LockGuard;
+import net.tfminecraft.thievery.owner.LockOwner;
+import net.tfminecraft.thievery.owner.LockQuarantine;
+import net.tfminecraft.thievery.owner.LockRecords;
+import net.tfminecraft.thievery.owner.OwnerCodec;
 
 public class ContainerDataManager {
 
+    /** Owner and state cached for hot paths such as hopper transfers. */
+    public record CachedLock(LockOwner owner, LockState state) {}
+
     // Shared across instances; container files are keyed by block coordinates only.
-    private static final Map<BlockKey, Optional<UUID>> OWNER_CACHE = new ConcurrentHashMap<>();
+    private static final Map<BlockKey, CachedLock> OWNER_CACHE = new ConcurrentHashMap<>();
 
     private final File dataFolder;
-    private final Gson gson = new Gson();
-
-    private static class ContainerDataJson {
-        UUID owner;
-        LockState lockState = LockState.DEFAULT;
-        Map<UUID, String> accessMap = new HashMap<>();
-    }
 
     public ContainerDataManager() {
         this.dataFolder = new File("plugins/Thievery/data");
@@ -48,34 +45,44 @@ public class ContainerDataManager {
         }
     }
 
+    /** Clears the owner cache; the guard does this before it lifts. */
+    public static void clearOwnerCache() {
+        OWNER_CACHE.clear();
+    }
+
     /** Cached owner lookup for hot paths such as hopper transfers. */
-    public UUID getOwner(Location location) {
+    public LockOwner getOwner(Location location) {
+        return getLock(location).owner();
+    }
+
+    /** Cached owner and state; unreadable records come back as locked with an unresolved owner. */
+    public CachedLock getLock(Location location) {
         BlockKey key = BlockKey.of(location);
-        Optional<UUID> cached = OWNER_CACHE.get(key);
+        CachedLock cached = OWNER_CACHE.get(key);
         if (cached != null) {
-            return cached.orElse(null);
+            return cached;
         }
-        File file = getFileForLocation(location);
-        if (!file.exists()) {
-            OWNER_CACHE.putIfAbsent(key, Optional.empty());
-            return null;
+        ContainerData data = loadContainerData(location);
+        CachedLock lock = new CachedLock(data.getOwner(), data.getLockState());
+        if (!data.isProvisional()) {
+            OWNER_CACHE.put(key, lock);
         }
-        try (Reader reader = new FileReader(file)) {
-            ContainerDataJson json = gson.fromJson(reader, ContainerDataJson.class);
-            UUID owner = json == null ? null : json.owner;
-            OWNER_CACHE.putIfAbsent(key, Optional.ofNullable(owner));
-            return owner;
-        } catch (IOException e) {
-            // Leave uncached so the next lookup retries the read.
-            Bukkit.getLogger().warning("Failed to load container owner for " + location + ": " + e.getMessage());
-            return null;
-        }
+        return lock;
     }
 
     public boolean deleteContainerData(Location location) {
-        OWNER_CACHE.remove(BlockKey.of(location));
         File file = getFileForLocation(location);
-        return file.exists() && file.delete();
+        if (LockGuard.guarded()) {
+            LockGuard.queueDeletion(file.toPath());
+            return false;
+        }
+        OWNER_CACHE.remove(BlockKey.of(location));
+        try {
+            return DurableFiles.delete(file.toPath());
+        } catch (IOException e) {
+            Bukkit.getLogger().warning("Failed to delete container data for " + location + ": " + e.getMessage());
+            return false;
+        }
     }
 
     public ContainerData loadContainerData(Location location) {
@@ -83,42 +90,79 @@ public class ContainerDataManager {
         if (!file.exists()) {
             return new ContainerData(location); // fresh
         }
-
-        try (Reader reader = new FileReader(file)) {
-            ContainerDataJson json = gson.fromJson(reader, ContainerDataJson.class);
-
-            ContainerData data = new ContainerData(location);
-            data.setOwner(json.owner);
-            data.setAccessMap(json.accessMap);
-            data.setLockState(json.lockState);
-            return data;
+        byte[] bytes;
+        try {
+            bytes = Files.readAllBytes(file.toPath());
         } catch (IOException e) {
-            Bukkit.getLogger().warning("Failed to load container data for " + location + ": " + e.getMessage());
-            return new ContainerData(location);
+            return unreadable(location, file, e, new byte[0]);
         }
+        LockRecords.Container record;
+        try {
+            record = LockRecords.decodeContainer(bytes);
+        } catch (IllegalArgumentException e) {
+            return unreadable(location, file, e, bytes);
+        }
+        OwnerCodec.Resolved owner = OwnerCodec.resolve(record.owner());
+        ContainerData data = new ContainerData(location, owner.owner());
+        data.setProvisional(!owner.definitive());
+        data.setAccessMap(record.accessMap());
+        data.setLockState(record.state());
+        return data;
     }
 
-    public void saveContainerData(ContainerData data) {
-        File file = getFileForLocation(data.getLocation());
-        File parent = file.getParentFile();
-        if (!parent.exists()) parent.mkdirs();
+    // Locked with an unresolved owner; thief cooldowns are kept when they can be read, so staff fixes keep them.
+    private static ContainerData unreadable(Location location, File file, Exception e, byte[] bytes) {
+        Bukkit.getLogger().warning("Unreadable container lock " + file + ": " + e.getMessage());
+        LockQuarantine.noteUnreadable(file.toPath());
+        ContainerData data = ContainerData.unreadable(location);
+        data.setAccessMap(LockRecords.salvageAccessMap(bytes));
+        return data;
+    }
 
-        try (Writer writer = new FileWriter(file)) {
-            ContainerDataJson json = new ContainerDataJson();
-            json.owner = data.getOwner();
-            json.lockState = data.getLockState();
-            json.accessMap = data.getAccessMap();
-            gson.toJson(json, writer);
-            OWNER_CACHE.put(BlockKey.of(data.getLocation()), Optional.ofNullable(data.getOwner()));
+    /**
+     * Writes the record when it has changed. Owner and state changes are forced to disk; cooldown-only changes are
+     * not. Nothing is written in guard mode or for an unreadable record.
+     */
+    public void saveContainerData(ContainerData data) {
+        if (LockGuard.guarded() || data.isUnreadable()) {
+            return;
+        }
+        File file = getFileForLocation(data.getLocation());
+        LockRecords.Container next = new LockRecords.Container(OwnerCodec.store(data.getOwner()),
+                data.getLockState(), data.getAccessMap());
+        try {
+            LockRecords.Container previous = readExisting(file.toPath());
+            if (next.equals(previous)) {
+                return;
+            }
+            boolean ownership = previous == null || !Objects.equals(previous.owner(), next.owner())
+                    || previous.state() != next.state();
+            DurableFiles.write(file.toPath(), LockRecords.encodeContainer(next), ownership);
+            if (data.isProvisional()) {
+                OWNER_CACHE.remove(BlockKey.of(data.getLocation()));
+            } else {
+                OWNER_CACHE.put(BlockKey.of(data.getLocation()), new CachedLock(data.getOwner(), data.getLockState()));
+            }
         } catch (IOException e) {
             OWNER_CACHE.remove(BlockKey.of(data.getLocation()));
             Bukkit.getLogger().warning("Failed to save container data for " + data.getLocation() + ": " + e.getMessage());
         }
     }
 
-    private File getFileForLocation(Location loc) {
-        Chunk chunk = loc.getChunk();
-        String chunkFolder = chunk.getX() + "_" + chunk.getZ();
+    // The current record, or null when the file is missing or unreadable.
+    private static LockRecords.Container readExisting(Path path) throws IOException {
+        if (!Files.exists(path)) {
+            return null;
+        }
+        try {
+            return LockRecords.decodeContainer(Files.readAllBytes(path));
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    public File getFileForLocation(Location loc) {
+        String chunkFolder = (loc.getBlockX() >> 4) + "_" + (loc.getBlockZ() >> 4);
         String fileName = loc.getBlockX() + "_" + loc.getBlockY() + "_" + loc.getBlockZ() + ".json";
         return new File(new File(dataFolder, chunkFolder), fileName);
     }
@@ -140,12 +184,8 @@ public class ContainerDataManager {
         }));
     }
 
-    private interface AccessMapMutation {
-        boolean apply(java.util.Map<UUID, String> accessMap);
-    }
-
-    private void forEachContainerFile(java.util.function.Consumer<File> action) {
-        if (!dataFolder.exists()) {
+    private void forEachContainerFile(Consumer<File> action) {
+        if (LockGuard.guarded() || !dataFolder.exists()) {
             return;
         }
         File[] chunkDirs = dataFolder.listFiles(File::isDirectory);
@@ -163,22 +203,17 @@ public class ContainerDataManager {
         }
     }
 
-    private void updateAccessMap(File file, AccessMapMutation mutation) {
-        try (Reader reader = new FileReader(file)) {
-            ContainerDataJson json = gson.fromJson(reader, ContainerDataJson.class);
-            if (json == null) {
+    // Cooldown-only rewrites keep the owner exactly as stored and are not forced to disk.
+    private void updateAccessMap(File file, Predicate<Map<UUID, String>> mutation) {
+        try {
+            LockRecords.Container record = LockRecords.decodeContainer(Files.readAllBytes(file.toPath()));
+            Map<UUID, String> accessMap = new HashMap<>(record.accessMap());
+            if (!mutation.test(accessMap)) {
                 return;
             }
-            if (json.accessMap == null) {
-                json.accessMap = new HashMap<>();
-            }
-            if (!mutation.apply(json.accessMap)) {
-                return;
-            }
-            try (Writer writer = new FileWriter(file)) {
-                gson.toJson(json, writer);
-            }
-        } catch (IOException e) {
+            DurableFiles.write(file.toPath(), LockRecords.encodeContainer(
+                    new LockRecords.Container(record.owner(), record.state(), accessMap)), false);
+        } catch (IOException | IllegalArgumentException e) {
             Bukkit.getLogger().warning("Failed to update container cooldown data for " + file + ": " + e.getMessage());
         }
     }
