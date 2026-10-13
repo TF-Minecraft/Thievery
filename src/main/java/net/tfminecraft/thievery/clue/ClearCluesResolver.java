@@ -102,12 +102,16 @@ public final class ClearCluesResolver {
         return removed;
     }
 
-    // Public and unowned containers are anyone's to tidy; otherwise only the owning character.
+    // Public and unowned containers are anyone's to tidy; private ones need the owning character, and guild and
+    // faction ones anyone the lock lets in.
     private static boolean canClearContainer(Player player, ClearCluesTarget target) {
         if (target.getLockState() == LockState.PUBLIC || target.getOwner() == null) {
             return true;
         }
-        return LockAccess.isOwner(player, target.getOwner());
+        if (target.getLockState() == LockState.PRIVATE) {
+            return LockAccess.isOwner(player, target.getOwner());
+        }
+        return LockAccess.canAccess(player, target.getOwner(), target.getLockState());
     }
 
     // The key is the door's credential; clue clearing goes to the owning character or its lock guild.

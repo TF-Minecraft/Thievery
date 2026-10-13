@@ -30,7 +30,7 @@ class ClearCluesResolverTest {
         var top=location.clone().add(0,1,0).getBlock(); top.setType(Material.OAK_DOOR); var data=(Bisected)top.getBlockData(); data.setHalf(Bisected.Half.TOP); top.setBlockData(data); assertEquals(location,ClearCluesResolver.resolve(top).orElseThrow().getCanonicalLocation());
         doors.deleteDoorData(location); block.setType(Material.OAK_TRAPDOOR); assertNull(ClearCluesResolver.resolve(block).orElseThrow().getOwner()); block.setType(Material.OAK_FENCE_GATE); assertEquals(ClearCluesResolver.Kind.DOOR,ClearCluesResolver.resolve(block).orElseThrow().getKind());
     }
-    @Test void onlyTheOwningCharacterClearsAnOwnedContainerEvenAGuildOne() {
+    @Test void onlyTheOwningCharacterClearsAPrivateContainerAndTheLockDecidesForGuildAndFactionOnes() {
         location.getBlock().setType(Material.CHEST); UUID owner=UUID.randomUUID(); var data=new ContainerData(location,co(owner)); data.setLockState(LockState.PRIVATE); containers.saveContainerData(data);
         var target=ClearCluesResolver.resolve(location.getBlock()).orElseThrow(); assertEquals(ClearCluesResolver.Kind.CONTAINER,target.getKind()); assertEquals(co(owner),target.getOwner()); assertEquals(LockState.PRIVATE,target.getLockState());
         var player=mock(Player.class); when(player.getUniqueId()).thenReturn(owner); identity.plays(player,UUID.randomUUID());
@@ -39,8 +39,17 @@ class ClearCluesResolverTest {
         var publicTarget=new ClearCluesResolver.ClearCluesTarget(ClearCluesResolver.Kind.CONTAINER,location,co(owner),LockState.PUBLIC); identity.plays(player,null); assertTrue(ClearCluesResolver.canClear(player,publicTarget,false));
         var unowned=new ClearCluesResolver.ClearCluesTarget(ClearCluesResolver.Kind.CONTAINER,location,null,LockState.PRIVATE); assertTrue(ClearCluesResolver.canClear(player,unowned,false));
         data.setLockState(LockState.GUILD); containers.saveContainerData(data); var guildTarget=ClearCluesResolver.resolve(location.getBlock()).orElseThrow();
-        UUID guildmate=UUID.randomUUID(); identity.guild(owner,"inc","realm"); identity.guild(guildmate,"inc","realm"); identity.plays(player,guildmate);
-        assertFalse(ClearCluesResolver.canClear(player,guildTarget,false)); identity.plays(player,owner); assertTrue(ClearCluesResolver.canClear(player,guildTarget,false));
+        UUID guildmate=UUID.randomUUID(); identity.plays(player,guildmate);
+        assertFalse(ClearCluesResolver.canClear(player,guildTarget,false), "no guild, no access");
+        identity.guild(owner,"inc","realm"); identity.guild(guildmate,"inc","realm");
+        assertTrue(ClearCluesResolver.canClear(player,guildTarget,false), "a guildmate the lock lets in may clear");
+        identity.guild(guildmate,"other","realm"); assertFalse(ClearCluesResolver.canClear(player,guildTarget,false));
+        data.setLockState(LockState.FACTION); containers.saveContainerData(data); var factionTarget=ClearCluesResolver.resolve(location.getBlock()).orElseThrow();
+        assertTrue(ClearCluesResolver.canClear(player,factionTarget,false), "same faction, another guild");
+        identity.guild(guildmate,"other","elsewhere"); assertFalse(ClearCluesResolver.canClear(player,factionTarget,false));
+        UUID alt=UUID.randomUUID(); identity.plays(player,alt); assertFalse(ClearCluesResolver.canClear(player,factionTarget,false), "an unguilded alt is a stranger");
+        identity.plays(player,owner); assertTrue(ClearCluesResolver.canClear(player,guildTarget,false));
+        var guildDiverged=new ClearCluesResolver.ClearCluesTarget(ClearCluesResolver.Kind.CONTAINER,location,LockOwner.unreadable(),LockState.GUILD); assertFalse(ClearCluesResolver.canClear(player,guildDiverged,false));
         var server=new ClearCluesResolver.ClearCluesTarget(ClearCluesResolver.Kind.CONTAINER,location,LockOwner.server(),LockState.PRIVATE); assertFalse(ClearCluesResolver.canClear(player,server,false)); assertTrue(ClearCluesResolver.canClear(player,server,true));
     }
     @Test void doorOwnerAndLockGuildMembersMayClearButStrangersAndAltsCannot() {
