@@ -26,6 +26,7 @@ import net.tfminecraft.thievery.door.DoorData;
 import net.tfminecraft.thievery.door.DoorDataManager;
 import net.tfminecraft.thievery.door.EntityLockData;
 import net.tfminecraft.thievery.door.EntityLockDataManager;
+import net.tfminecraft.thievery.door.LockState;
 import net.tfminecraft.thievery.owner.CharacterNames;
 import net.tfminecraft.thievery.owner.LockAudit;
 import net.tfminecraft.thievery.owner.LockGuard;
@@ -217,9 +218,12 @@ public final class LockAdminCommand {
             ContainerData data = containers.loadContainerData(half);
             String before = LockOwnerNames.staffLabel(data.getOwner());
             data.setOwner(owner);
+            if (owner.isServer()) {
+                data.setLockState(LockState.PRIVATE);
+            }
             containers.saveContainerData(data);
             LockQuarantine.resolved(where(half), containers.getFileForLocation(half).toPath());
-            done(player, "container at " + where(half), before, owner);
+            done(player, "container at " + where(half), before, owner, true);
         }
     }
 
@@ -238,7 +242,7 @@ public final class LockAdminCommand {
         data.setOwner(owner);
         doors.saveDoorData(data);
         LockQuarantine.resolved(where(canonical), doors.getFileForLocation(canonical).toPath());
-        done(player, "door at " + where(canonical), before, owner);
+        done(player, "door at " + where(canonical), before, owner, false);
     }
 
     private void setEntityOwner(Player player, Entity entity, LockOwner owner) {
@@ -246,9 +250,12 @@ public final class LockAdminCommand {
         EntityLockData data = entities.load(entity.getUniqueId());
         String before = LockOwnerNames.staffLabel(data.getOwner());
         data.setOwner(owner);
+        if (owner.isServer()) {
+            data.setLockState(LockState.PRIVATE);
+        }
         entities.save(data);
         LockQuarantine.resolved(where(entity.getLocation()), entities.getFile(entity.getUniqueId()).toPath());
-        done(player, "display " + entity.getUniqueId(), before, owner);
+        done(player, "display " + entity.getUniqueId(), before, owner, true);
     }
 
     // Unreadable furniture variables become a PRIVATE lock for the new owner; readable ones keep their state.
@@ -256,15 +263,17 @@ public final class LockAdminCommand {
         FurnitureLockHelper.FurnitureLock lock = FurnitureLockHelper.read(furniture);
         String before = LockOwnerNames.staffLabel(lock.owner());
         FurnitureLockHelper.setOwner(furniture, owner);
-        FurnitureLockHelper.setLockState(furniture, lock.state());
+        FurnitureLockHelper.setLockState(furniture, owner.isServer() ? LockState.PRIVATE : lock.state());
         LockQuarantine.resolved(where(furniture.getLoc()), FurnitureLockHelper.quarantinePath(furniture));
-        done(player, "furniture at " + where(furniture.getLoc()), before, owner);
+        done(player, "furniture at " + where(furniture.getLoc()), before, owner, true);
     }
 
-    private void done(Player player, String what, String before, LockOwner owner) {
+    // Server locks are always PRIVATE, so a lock handed to the server never stays open to everyone.
+    private void done(Player player, String what, String before, LockOwner owner, boolean hasState) {
         String after = LockOwnerNames.staffLabel(owner);
+        String privated = owner.isServer() && hasState ? " Server locks are PRIVATE, so it is now PRIVATE." : "";
         msg(player, ThieveryTexts.SUCCESS + "[Thievery] The " + what + " now belongs to " + ThieveryTexts.WARN + after
-                + ThieveryTexts.SUCCESS + " (was " + before + ").");
+                + ThieveryTexts.SUCCESS + " (was " + before + ")." + privated);
         audit(player, "set the owner of the " + what + " from " + before + " to " + after);
     }
 

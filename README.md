@@ -42,6 +42,10 @@ run for combined coverage; focused runs do not establish the suite's coverage.
 See the [testing guide](https://github.com/TF-Minecraft/Docs/blob/main/projects/Thievery/docs/testing.md)
 for fixture isolation and local report checks.
 
+The offline lock rollback tool in `tools/` has its own tests:
+`python3 -m unittest discover -s tools -p 'test_*.py'`. CI runs them after the
+Maven build.
+
 ## License
 
 Copyright (c) 2026 TF-Minecraft contributors.

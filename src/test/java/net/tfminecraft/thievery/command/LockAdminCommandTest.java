@@ -288,6 +288,7 @@ class LockAdminCommandTest {
         assertEquals(0.8, data.getStrength());
         assertEquals(LockOwner.server(), data.getOwner());
         assertTrue(last().contains("door at locks"));
+        assertFalse(last().contains("PRIVATE"), "doors have no lock state");
         assertTrue(LockQuarantine.snapshot().unreadable().isEmpty());
     }
 
@@ -346,6 +347,7 @@ class LockAdminCommandTest {
             command.handle(staff, new String[] { "setowner", "server" });
             assertEquals("SERVER", variables.get("thievery.ownerKind"));
             assertEquals("PRIVATE", variables.get("thievery.lockState"));
+            assertTrue(last().endsWith("so it is now PRIVATE."));
             assertTrue(last().contains("furniture at locks"));
             assertTrue(LockQuarantine.snapshot().unreadable().isEmpty());
             UUID kira = UUID.randomUUID();
@@ -361,6 +363,45 @@ class LockAdminCommandTest {
         } finally {
             net.tfminecraft.thievery.cache.Cache.interactibleFurniture = saved;
             Parameters.lockableFurnitureIds = savedIds;
+        }
+    }
+
+    @Test
+    void handingALockToTheServerMakesItPrivateWhileCharacterOwnersKeepTheState() {
+        Block barrel = at.getBlock();
+        barrel.setType(Material.BARREL);
+        ContainerData open = new ContainerData(at, LockOwner.character(UUID.randomUUID()));
+        open.setLockState(LockState.GUILD);
+        containers.saveContainerData(open);
+        when(staff.getTargetBlockExact(5)).thenReturn(barrel);
+        UUID kira = UUID.randomUUID();
+        command.handle(staff, new String[] { "setowner", kira.toString() });
+        assertEquals(LockState.GUILD, containers.loadContainerData(at).getLockState(), "a character keeps the state");
+        assertFalse(last().contains("PRIVATE"));
+        ContainerData opened = containers.loadContainerData(at);
+        opened.setLockState(LockState.PUBLIC);
+        containers.saveContainerData(opened);
+        command.handle(staff, new String[] { "setowner", "server" });
+        assertEquals(LockOwner.server(), containers.loadContainerData(at).getOwner());
+        assertEquals(LockState.PRIVATE, containers.loadContainerData(at).getLockState(), "a public chest never becomes a public server chest");
+        assertTrue(last().endsWith("Server locks are PRIVATE, so it is now PRIVATE."));
+
+        var saved = Parameters.lockableEntityTypes;
+        Parameters.lockableEntityTypes = java.util.EnumSet.of(EntityType.ARMOR_STAND);
+        try {
+            ArmorStand stand = mock(ArmorStand.class);
+            UUID id = UUID.randomUUID();
+            when(stand.getType()).thenReturn(EntityType.ARMOR_STAND);
+            when(stand.getUniqueId()).thenReturn(id);
+            when(stand.getLocation()).thenReturn(at);
+            when(staff.getTargetBlockExact(5)).thenReturn(null);
+            when(staff.getTargetEntity(5)).thenReturn(stand);
+            EntityLockData display = new EntityLockData(id, LockOwner.character(kira));
+            new EntityLockDataManager().save(display);
+            command.handle(staff, new String[] { "setowner", "server" });
+            assertEquals(LockState.PRIVATE, new EntityLockDataManager().load(id).getLockState());
+        } finally {
+            Parameters.lockableEntityTypes = saved;
         }
     }
 }
