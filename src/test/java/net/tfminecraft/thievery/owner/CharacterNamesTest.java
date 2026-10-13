@@ -30,7 +30,8 @@ class CharacterNamesTest {
     @AfterEach void tearDown() { identity.close(); CharacterNames.use(null); }
 
     @Test void theProbeFindsFindByNameOnlyWhereItExists() throws Exception {
-        assertNull(CharacterNames.probe("net.tfminecraft.tlibs.character.Characters"), "TLibs 2.4 has no findByName");
+        assertNotNull(CharacterNames.probe("net.tfminecraft.tlibs.character.Characters"), "TLibs 2.5.0 and later");
+        assertNull(CharacterNames.probe(String.class.getName()), "a class without findByName, as on TLibs 2.4");
         assertNull(CharacterNames.probe("net.tfminecraft.tlibs.character.Missing"));
         assertNotNull(CharacterNames.probe(CharacterNamesTest.class.getName()));
         CharacterNames.use(null);
@@ -61,7 +62,7 @@ class CharacterNamesTest {
         } catch (ReflectiveOperationException e) {
             throw new AssertionError(e);
         }
-        assertFalse(CharacterNames.available());
-        assertFalse(CharacterNames.available());
+        assertTrue(CharacterNames.available());
+        assertTrue(CharacterNames.available());
     }
 }

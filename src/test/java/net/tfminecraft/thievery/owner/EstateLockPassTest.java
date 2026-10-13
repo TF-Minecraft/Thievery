@@ -298,6 +298,20 @@ class EstateLockPassTest {
     }
 
     @Test
+    void aGuildLockStillWithTheTestatorAfterThePassWaitsForARestart() throws Exception {
+        estates.add(estate(heir, leader));
+        Path bare = container("1_64_1.json", "{\"owner\":\"" + dead + "\",\"lockState\":\"FACTION\"}");
+
+        Report report = only(migration().run());
+
+        assertEquals(Report.Kind.AT_RESTART, report.kind());
+        assertEquals(0, report.leftProperty());
+        assertEquals(1, report.leftGuild());
+        assertEquals(Report.Kind.DONE, only(migration().run()).kind());
+        assertTrue(read(bare).contains(leader.toString()));
+    }
+
+    @Test
     void aPlannerFailureLeavesThePassWithIts6aEntriesOnly() throws Exception {
         Path bare = container("1_64_1.json", "{\"owner\":\"" + other + "\",\"lockState\":\"PRIVATE\"}");
         Path chest = container("3_64_1.json", marked(dead, "PRIVATE"));
