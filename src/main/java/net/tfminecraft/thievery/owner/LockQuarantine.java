@@ -102,12 +102,23 @@ public final class LockQuarantine {
         if (!Files.exists(file)) {
             return new Contents();
         }
+        Contents read;
         try {
-            Contents read = GSON.fromJson(Files.readString(file), Contents.class);
-            return read == null ? new Contents() : read;
+            read = GSON.fromJson(Files.readString(file), Contents.class);
         } catch (IOException | JsonParseException e) {
             return new Contents();
         }
+        Contents contents = new Contents();
+        if (read != null) {
+            contents.quarantined = orEmpty(read.quarantined);
+            contents.unreadable = orEmpty(read.unreadable);
+            contents.missing = orEmpty(read.missing);
+        }
+        return contents;
+    }
+
+    private static List<Entry> orEmpty(List<Entry> entries) {
+        return entries == null ? new ArrayList<>() : new ArrayList<>(entries);
     }
 
     /** For tests and plugin restarts. */

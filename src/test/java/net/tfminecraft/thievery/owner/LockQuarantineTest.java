@@ -61,6 +61,10 @@ class LockQuarantineTest {
         assertTrue(LockQuarantine.read(broken).quarantined.isEmpty());
         Path empty = Files.writeString(temp.resolve("empty.json"), "");
         assertTrue(LockQuarantine.read(empty).missing.isEmpty());
+        Path nulls = Files.writeString(temp.resolve("nulls.json"), "{\"quarantined\":null,\"unreadable\":null,\"missing\":null}");
+        LockQuarantine.Contents cleaned = LockQuarantine.read(nulls);
+        assertTrue(cleaned.quarantined.isEmpty() && cleaned.unreadable.isEmpty() && cleaned.missing.isEmpty());
+        cleaned.missing.add(new LockQuarantine.Entry("a", null, "b"));
         Path directory = Files.createDirectories(temp.resolve("dir.json"));
         assertTrue(LockQuarantine.read(directory).unreadable.isEmpty());
     }
