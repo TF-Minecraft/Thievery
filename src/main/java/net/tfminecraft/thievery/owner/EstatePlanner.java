@@ -8,7 +8,6 @@ import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -70,7 +69,7 @@ final class EstatePlanner {
                 }
                 Map<String, Integer> counts = new TreeMap<>();
                 for (String path : paths) {
-                    counts.merge(stores.resolve(path).store().name().toLowerCase(Locale.ROOT), 1, Integer::sum);
+                    counts.merge(countKey(stores.resolve(path).store()), 1, Integer::sum);
                 }
                 Report.Kind kind;
                 String reason = null;
@@ -170,6 +169,11 @@ final class EstatePlanner {
         Map<UUID, int[]> left = new HashMap<>();
         owners.forEach((file, owner) -> left.computeIfAbsent(owner, id -> new int[2])[guild(file.state()) ? 1 : 0]++);
         return left;
+    }
+
+    // Counts read as possessions on the site ("3 locks, 1 door"): chests and displays are locks, doors are doors.
+    static String countKey(LockStores.Store store) {
+        return store == LockStores.Store.DOORS ? "doors" : "locks";
     }
 
     private static boolean guild(LockState state) {

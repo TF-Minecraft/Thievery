@@ -182,7 +182,7 @@ class EstateLockPassTest {
 
         Report report = only(outcome);
         assertEquals(Report.Kind.DONE, report.kind());
-        assertEquals(Map.of("containers", 4, "doors", 1, "entities", 2), report.counts());
+        assertEquals(Map.of("locks", 6, "doors", 1), report.counts());
         assertEquals(7, report.moved().size());
         assertTrue(report.moved().contains("door-data/0_0/9_64_1.json"));
         assertEquals(0, report.leftProperty());
@@ -294,7 +294,7 @@ class EstateLockPassTest {
         assertEquals(moved(heir, "PRIVATE"), read(joined));
         assertEquals("{\"owner\":\"" + heir + "\",\"lockState\":\"PRIVATE\",\"ownerKind\":\"CHARACTER\"}", read(bare));
         assertEquals(marked(leader, "GUILD"), read(nextToLegacy));
-        assertEquals(Map.of("containers", 8), after.counts());
+        assertEquals(Map.of("locks", 8), after.counts());
     }
 
     @Test
