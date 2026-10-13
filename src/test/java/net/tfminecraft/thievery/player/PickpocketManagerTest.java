@@ -78,7 +78,7 @@ class PickpocketManagerTest {
         guilds = statics(GuildAccessCooldown.class);
         evil = statics(EvilRpPlays.class);
         String targetKey = victim.getName();
-        statics(TargetKeyResolver.class).when(() -> TargetKeyResolver.resolve(victim.getUniqueId())).thenReturn(targetKey);
+        statics(TargetKeyResolver.class).when(() -> TargetKeyResolver.forVictim(victim)).thenReturn(targetKey);
         minigames = mock(LockMinigameManager.class);
         when(minigames.startPickpocket(eq(pickpocket), eq(victim), any())).thenAnswer(call -> {
             picks.add(call.getArgument(2));

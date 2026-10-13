@@ -1,5 +1,8 @@
 package net.tfminecraft.thievery.clue;
 
+import static net.tfminecraft.thievery.testsupport.FactionFixture.co;
+import net.tfminecraft.thievery.owner.LockOwner;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import java.util.*;
@@ -29,7 +32,7 @@ class ClueDropperTest {
         rpData=mock(net.tfminecraft.rpcharacters.objects.PlayerData.class); character=mock(RPCharacter.class); when(character.getName()).thenReturn("Thief"); when(rpData.hasActiveCharacter()).thenReturn(true); when(rpData.getActiveCharacter()).thenReturn(character);
         characters=mockStatic(net.tfminecraft.rpcharacters.managers.PlayerManager.class); characters.when(()->net.tfminecraft.rpcharacters.managers.PlayerManager.get(player)).thenReturn(rpData);
         clues=mockStatic(ClueGiver.class,RETURNS_DEEP_STUBS); clues.when(()->ClueGiver.getRandomClueExcluding(character,List.of("old"))).thenReturn("footprint");
-        database=mockStatic(Database.class); risks=mockStatic(RiskCalculator.class); targets=mockStatic(TargetKeyResolver.class); targets.when(()->TargetKeyResolver.resolve(any())).thenReturn("target");
+        database=mockStatic(Database.class); risks=mockStatic(RiskCalculator.class); targets=mockStatic(TargetKeyResolver.class); targets.when(()->TargetKeyResolver.forLockOwner(any())).thenReturn("target");
         session=mock(ChestLockpickSession.class); when(session.getTargetKey()).thenReturn("target"); when(session.getLockType()).thenReturn(LockTypeProfile.IDENTITY); block=mock(Block.class); when(block.getLocation()).thenReturn(location);
     }
     @AfterEach void close() { targets.close(); risks.close(); database.close(); clues.close(); characters.close(); plugins.close(); Cache.minCluesContainer=minChest; Cache.minCluesDoor=minDoor; Cache.criticalClue=critical; }
@@ -53,7 +56,7 @@ class ClueDropperTest {
         clearInvocations(data); when(session.getLockType()).thenReturn(new LockTypeProfile(1,1,false,1)); ClueDropper.tryDropChestClue(player,session,block,20,.5,3.0); verify(data).recordClueUsed("footprint","target");
     }
     @Test void doorCluesUseCanonicalAnchorAndOnlyPersistSuccessfulDrops() {
-        UUID owner=UUID.randomUUID(); ClueDropper.tryDropDoorClue(player,location,owner,20,.5); targets.verify(()->TargetKeyResolver.resolve(owner)); verify(data).recordClueUsed("footprint","target"); database.verify(()->Database.savePlayerData(data));
+        LockOwner owner=co(UUID.randomUUID()); ClueDropper.tryDropDoorClue(player,location,owner,20,.5); targets.verify(()->TargetKeyResolver.forLockOwner(owner)); verify(data).recordClueUsed("footprint","target"); database.verify(()->Database.savePlayerData(data));
         clearInvocations(data); database.clearInvocations(); clues.when(()->ClueGiver.spawnClueWithText(location,location,player,"footprint",true)).thenReturn(null); ClueDropper.tryDropDoorClue(player,location,owner,20,.5); database.verifyNoInteractions();
         clues.when(()->ClueGiver.getRandomClueExcluding(character,List.of("old"))).thenReturn(null); ClueDropper.tryDropDoorClue(player,location,owner,20,.5); verify(data,never()).recordClueUsed(anyString(),anyString());
         Cache.minCluesDoor=0; when(data.getRisk()).thenReturn(0.0); targets.clearInvocations(); ClueDropper.tryDropDoorClue(player,location,owner,20,.5); targets.verifyNoInteractions();

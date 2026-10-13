@@ -2,8 +2,8 @@ package net.tfminecraft.thievery.steal;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.UUID;
+import java.util.Locale;
 
 import org.bukkit.Location;
 import org.bukkit.Sound;
@@ -47,6 +47,10 @@ import net.tfminecraft.thievery.door.LockDenial;
 import net.tfminecraft.thievery.door.LockPickManager;
 import net.tfminecraft.thievery.door.LockState;
 import net.tfminecraft.thievery.door.LockStateLog;
+import net.tfminecraft.thievery.door.LockWriters;
+import net.tfminecraft.thievery.owner.LockGuard;
+import net.tfminecraft.thievery.owner.LockOwner;
+import net.tfminecraft.thievery.owner.LockOwnerNames;
 import net.tfminecraft.thievery.player.LockpickDefinition;
 import net.tfminecraft.thievery.player.PlayerData;
 import net.tfminecraft.thievery.player.RiskCalculator;
@@ -83,14 +87,14 @@ public class DisplayStealManager implements Listener {
     // Staff keep the placer as owner, so guild and faction locks still follow the placer's
     // membership. Skip the faction tutorial because it describes the staff member's own faction.
     @SuppressWarnings("deprecation")
-    static void notifyStaffLockStateChange(Player player, UUID owner, LockState lockState) {
+    static void notifyStaffLockStateChange(Player player, LockOwner owner, LockState lockState) {
         String displayState = formatLockState(lockState);
         player.sendTitle(
                 ThieveryTexts.msg(ThieveryTexts.ACCENT + "Lock State"),
                 ThieveryTexts.msg(ThieveryTexts.WARN + displayState), 5, 30, 10);
         player.playSound(player.getLocation(), Sound.BLOCK_IRON_TRAPDOOR_OPEN, 1.0f, 1.0f);
         player.sendMessage(ThieveryTexts.msg(ThieveryTexts.WARN + "Staff override: lock owned by "
-                + LockAccess.ownerName(owner) + " is now " + displayState + "."));
+                + LockOwnerNames.staffLabel(owner) + " is now " + displayState + "."));
     }
 
     static void notifyStaffBypass(Player player) {
@@ -102,7 +106,7 @@ public class DisplayStealManager implements Listener {
         return Character.toUpperCase(value.charAt(0)) + value.substring(1);
     }
 
-    static boolean canUse(Player player, UUID owner, LockState lockState, boolean notifyBypass) {
+    static boolean canUse(Player player, LockOwner owner, LockState lockState, boolean notifyBypass) {
         if (LockAccess.canAccess(player, owner, lockState)) {
             return true;
         }
@@ -124,7 +128,7 @@ public class DisplayStealManager implements Listener {
         LockDenial.sendNotOwner(player);
     }
 
-    static boolean isLockableDisplay(Entity entity) {
+    public static boolean isLockableDisplay(Entity entity) {
         if (entity == null || !Parameters.isLockableEntityType(entity.getType())) {
             return false;
         }
@@ -140,14 +144,33 @@ public class DisplayStealManager implements Listener {
         return block.getRelative(BlockFace.DOWN).getLocation();
     }
 
-    static void applyToggle(Player player, java.util.function.Supplier<Location> location, UUID owner,
-            java.util.function.Consumer<UUID> claim, java.util.function.Supplier<LockState> rotate) {
+    /**
+     * Sneak-break on a display: claims an unowned one for the current character, rotates the owner's own lock, or
+     * lets staff rotate any owned lock. Refused in guard mode, and claims need a current character.
+     */
+    static void applyToggle(Player player, java.util.function.Supplier<Location> location, LockOwner owner,
+            java.util.function.Consumer<LockOwner> claim, java.util.function.Supplier<LockState> rotate) {
+        if (LockGuard.guarded()) {
+            player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + LockGuard.STARTING));
+            return;
+        }
         if (owner == null) {
-            claim.accept(player.getUniqueId());
+            LockOwner character = LockWriters.claimOwner(player);
+            if (character == null) {
+                player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + LockWriters.NEED_CHARACTER));
+                return;
+            }
+            claim.accept(character);
             notifyLockStateChange(player, LockState.DEFAULT);
             return;
         }
-        if (owner.equals(player.getUniqueId())) {
+        if (owner.id() == null) {
+            // Unreadable: nobody rotates it; staff replace it with setowner.
+            player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR
+                    + "This lock's record is unreadable. Use /thievery locks setowner to replace it."));
+            return;
+        }
+        if (LockAccess.isOwner(player, owner)) {
             LockState next = rotate.get();
             LockStateLog.record(player, location.get(), next, false);
             notifyLockStateChange(player, next);
@@ -162,9 +185,13 @@ public class DisplayStealManager implements Listener {
         denyNotOwner(player);
     }
 
-    void handleLockpick(Player player, Entity entity, UUID owner, LockState lockState,
+    void handleLockpick(Player player, Entity entity, LockOwner owner, LockState lockState,
             List<DisplayLoot.DisplaySlot> slots) {
         if (player == null || entity == null || !entity.isValid()) {
+            return;
+        }
+        if (LockGuard.guarded()) {
+            player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + LockGuard.STARTING));
             return;
         }
         String targetId = DoorLockpick.entityTargetId(entity.getUniqueId());
@@ -176,7 +203,7 @@ public class DisplayStealManager implements Listener {
         startLockpicking(player, entity, owner, lockState, slots);
     }
 
-    private void startLockpicking(Player player, Entity entity, UUID owner, LockState lockState,
+    private void startLockpicking(Player player, Entity entity, LockOwner owner, LockState lockState,
             List<DisplayLoot.DisplaySlot> slots) {
         if (!TraitChecker.hasLockpickingTraits(player)) {
             return;
@@ -239,7 +266,7 @@ public class DisplayStealManager implements Listener {
 
     // Keep the existing legacy text representation, formatting, and exact-string comparisons.
     @SuppressWarnings("deprecation")
-    private void handleSelectResult(Player player, Entity entity, UUID owner, List<DisplayLoot.DisplaySlot> slots,
+    private void handleSelectResult(Player player, Entity entity, LockOwner owner, List<DisplayLoot.DisplaySlot> slots,
             LockPickManager.SelectResult result) {
         int dexterity = RiskCalculator.getDexterity(player);
         double lockpickStrength = ToolResolver.getLockpickStrength(player.getInventory().getItemInMainHand());
@@ -359,40 +386,41 @@ public class DisplayStealManager implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onEntityPlace(EntityPlaceEvent event) {
-        Entity entity = event.getEntity();
-        Player player = event.getPlayer();
-        if (player == null || !isLockableDisplay(entity)) {
-            return;
-        }
-        EntityLockData data = lockDataManager.load(entity.getUniqueId());
-        if (data.getOwner() != null) {
-            return;
-        }
-        data.setOwner(player.getUniqueId());
-        data.setLockState(LockState.DEFAULT);
-        lockDataManager.save(data);
-        notifyLockStateChange(player, LockState.DEFAULT);
+        LockGuard.failClosed(event, "a display placement", () -> stampPlaced(event, event.getEntity(), event.getPlayer()));
     }
 
     @EventHandler(ignoreCancelled = true)
     public void onHangingPlace(HangingPlaceEvent event) {
-        Entity entity = event.getEntity();
-        Player player = event.getPlayer();
+        LockGuard.failClosed(event, "a display placement", () -> stampPlaced(event, event.getEntity(), event.getPlayer()));
+    }
+
+    // A placed display belongs to the placer's character, the server for staff without one, or nobody.
+    private void stampPlaced(org.bukkit.event.Cancellable event, Entity entity, Player player) {
         if (player == null || !isLockableDisplay(entity)) {
             return;
         }
-        EntityLockData data = lockDataManager.load(entity.getUniqueId());
-        if (data.getOwner() != null) {
+        if (LockGuard.guarded()) {
+            event.setCancelled(true);
+            player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + LockGuard.STARTING));
             return;
         }
-        data.setOwner(player.getUniqueId());
-        data.setLockState(LockState.DEFAULT);
+        EntityLockData data = lockDataManager.load(entity.getUniqueId());
+        LockOwner owner = LockWriters.placementOwner(player);
+        if (data.getOwner() != null || owner == null) {
+            return;
+        }
+        data.setOwner(owner);
+        data.setLockState(LockWriters.initialState(owner));
         lockDataManager.save(data);
-        notifyLockStateChange(player, LockState.DEFAULT);
+        notifyLockStateChange(player, data.getLockState());
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onEntityDamage(EntityDamageByEntityEvent event) {
+        LockGuard.failClosed(event, "a display hit", () -> handleDamage(event));
+    }
+
+    private void handleDamage(EntityDamageByEntityEvent event) {
         Entity entity = event.getEntity();
         if (!isLockableDisplay(entity) || entity instanceof Hanging) {
             return;
@@ -403,15 +431,12 @@ public class DisplayStealManager implements Listener {
         EntityLockData data = lockDataManager.load(entity.getUniqueId());
         if (player.isSneaking()) {
             event.setCancelled(true);
-            applyToggle(player, () -> supportLocation(entity), data.getOwner(), owner -> {
-                data.setOwner(owner);
-                data.setLockState(LockState.DEFAULT);
-                lockDataManager.save(data);
-            }, () -> {
-                LockState next = data.rotateLockState();
-                lockDataManager.save(data);
-                return next;
-            });
+            toggle(player, entity, data);
+            return;
+        }
+        if (LockGuard.guarded()) {
+            event.setCancelled(true);
+            player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + LockGuard.STARTING));
             return;
         }
         if (!canUse(player, data.getOwner(), data.getLockState(), true)) {
@@ -420,8 +445,30 @@ public class DisplayStealManager implements Listener {
         }
     }
 
+    private void toggle(Player player, Entity entity, EntityLockData data) {
+        applyToggle(player, () -> supportLocation(entity), data.getOwner(), owner -> {
+            data.setOwner(owner);
+            data.setLockState(LockState.DEFAULT);
+            lockDataManager.save(data);
+        }, () -> {
+            LockState next = data.rotateLockState();
+            lockDataManager.save(data);
+            return next;
+        });
+    }
+
+    // In guard mode an owned, non-PUBLIC display stays shut to everyone but staff.
+    private static boolean deniedDuringGuard(Player player, EntityLockData data) {
+        return LockGuard.guarded() && data.getOwner() != null && data.getLockState() != LockState.PUBLIC
+                && !player.hasPermission(LockWriters.STAFF);
+    }
+
     @EventHandler(ignoreCancelled = true)
     public void onArmorStandManipulate(PlayerArmorStandManipulateEvent event) {
+        LockGuard.failClosed(event, "an armour stand use", () -> handleManipulate(event));
+    }
+
+    private void handleManipulate(PlayerArmorStandManipulateEvent event) {
         Entity entity = event.getRightClicked();
         if (!isLockableDisplay(entity)) {
             return;
@@ -434,6 +481,11 @@ public class DisplayStealManager implements Listener {
             return;
         }
         EntityLockData data = lockDataManager.load(entity.getUniqueId());
+        if (deniedDuringGuard(player, data)) {
+            event.setCancelled(true);
+            player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + LockGuard.STARTING));
+            return;
+        }
         if (!canUse(player, data.getOwner(), data.getLockState(), true)) {
             event.setCancelled(true);
             denyAccess(player, data.getLockState(), true);
@@ -442,6 +494,10 @@ public class DisplayStealManager implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onInteractEntity(PlayerInteractEntityEvent event) {
+        LockGuard.failClosed(event, "a display use", () -> handleInteract(event));
+    }
+
+    private void handleInteract(PlayerInteractEntityEvent event) {
         Entity entity = event.getRightClicked();
         if (!isLockableDisplay(entity)) {
             return;
@@ -457,6 +513,11 @@ public class DisplayStealManager implements Listener {
             return;
         }
         EntityLockData data = lockDataManager.load(entity.getUniqueId());
+        if (deniedDuringGuard(player, data)) {
+            event.setCancelled(true);
+            player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + LockGuard.STARTING));
+            return;
+        }
         if (!canUse(player, data.getOwner(), data.getLockState(), false)) {
             event.setCancelled(true);
             denyAccess(player, data.getLockState(), true);
@@ -465,6 +526,10 @@ public class DisplayStealManager implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onHangingBreak(HangingBreakByEntityEvent event) {
+        LockGuard.failClosed(event, "a display break", () -> handleHangingBreak(event));
+    }
+
+    private void handleHangingBreak(HangingBreakByEntityEvent event) {
         Entity entity = event.getEntity();
         if (!isLockableDisplay(entity)) {
             return;
@@ -475,15 +540,12 @@ public class DisplayStealManager implements Listener {
         EntityLockData data = lockDataManager.load(entity.getUniqueId());
         if (player.isSneaking()) {
             event.setCancelled(true);
-            applyToggle(player, () -> supportLocation(entity), data.getOwner(), owner -> {
-                data.setOwner(owner);
-                data.setLockState(LockState.DEFAULT);
-                lockDataManager.save(data);
-            }, () -> {
-                LockState next = data.rotateLockState();
-                lockDataManager.save(data);
-                return next;
-            });
+            toggle(player, entity, data);
+            return;
+        }
+        if (LockGuard.guarded()) {
+            event.setCancelled(true);
+            player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + LockGuard.STARTING));
             return;
         }
         if (!canUse(player, data.getOwner(), data.getLockState(), true)) {
@@ -494,6 +556,10 @@ public class DisplayStealManager implements Listener {
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onSupportBlockBreak(BlockBreakEvent event) {
+        LockGuard.failClosed(event, "a display support break", () -> handleSupportBreak(event));
+    }
+
+    private void handleSupportBreak(BlockBreakEvent event) {
         Block block = event.getBlock();
         Player player = event.getPlayer();
         for (Entity nearby : block.getWorld().getNearbyEntities(
@@ -504,6 +570,11 @@ public class DisplayStealManager implements Listener {
             Block attached = hanging.getLocation().getBlock().getRelative(hanging.getAttachedFace());
             if (!attached.equals(block)) {
                 continue;
+            }
+            if (LockGuard.guarded()) {
+                event.setCancelled(true);
+                player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + LockGuard.STARTING));
+                return;
             }
             EntityLockData data = lockDataManager.load(hanging.getUniqueId());
             if (!canUse(player, data.getOwner(), data.getLockState(), true)) {

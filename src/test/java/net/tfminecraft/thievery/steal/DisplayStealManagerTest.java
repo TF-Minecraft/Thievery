@@ -1,5 +1,8 @@
 package net.tfminecraft.thievery.steal;
 
+import static net.tfminecraft.thievery.testsupport.FactionFixture.co;
+import net.tfminecraft.thievery.owner.LockOwner;
+
 import net.tfminecraft.thievery.testsupport.FactionFixture;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -111,7 +114,7 @@ class DisplayStealManagerTest {
         picks = mock(LockPickManager.class);
         manager = new DisplayStealManager(picks);
         store = stores.constructed().getFirst();
-        lock = new EntityLockData(stand.getUniqueId(), UUID.randomUUID());
+        lock = new EntityLockData(stand.getUniqueId(),co( UUID.randomUUID()));
         lock.setLockState(LockState.PRIVATE);
         when(store.load(any())).thenReturn(lock);
         plugin = mockStatic(Thievery.class);
@@ -126,6 +129,7 @@ class DisplayStealManagerTest {
         tools.when(() -> ToolResolver.resolveLockpick(held)).thenReturn(definition);
         tools.when(() -> ToolResolver.getLockpickStrength(held)).thenReturn(0.7);
         access = mockStatic(LockAccess.class);
+        access.when(() -> LockAccess.isOwner(any(), any())).thenCallRealMethod();
         tutorial = mockStatic(FactionLockTutorial.class);
         DisplayLoot.DisplaySlot displaySlot = mock(DisplayLoot.DisplaySlot.class);
         ItemStack displayedItem = new ItemStack(Material.DIAMOND);
@@ -183,18 +187,18 @@ class DisplayStealManagerTest {
         when(placed.getPlayer()).thenReturn(player);
         manager.onEntityPlace(placed);
         verify(store, never()).save(any());
-        lock.setOwner(null);
+        lock.setOwner(co(null));
         manager.onEntityPlace(placed);
-        assertEquals(player.getUniqueId(), lock.getOwner());
+        assertEquals(co(player.getUniqueId()), lock.getOwner());
         assertEquals(LockState.DEFAULT, lock.getLockState());
         verify(store).save(lock);
         tutorial.verify(() -> FactionLockTutorial.onLockState(player, LockState.DEFAULT));
-        lock.setOwner(null);
+        lock.setOwner(co(null));
         HangingPlaceEvent hanging = mock(HangingPlaceEvent.class);
         when(hanging.getEntity()).thenReturn(frame);
         when(hanging.getPlayer()).thenReturn(player);
         manager.onHangingPlace(hanging);
-        assertEquals(player.getUniqueId(), lock.getOwner());
+        assertEquals(co(player.getUniqueId()), lock.getOwner());
         verify(store, times(2)).save(lock);
         manager.onHangingPlace(hanging);
         verify(store, times(2)).save(lock);
@@ -209,9 +213,9 @@ class DisplayStealManagerTest {
     void sneakingDamageClaimsRotatesOrRejectsBasedOnOwner() {
         EntityDamageByEntityEvent event = damage(stand, player);
         when(player.isSneaking()).thenReturn(true);
-        lock.setOwner(null);
+        lock.setOwner(co(null));
         manager.onEntityDamage(event);
-        assertEquals(player.getUniqueId(), lock.getOwner());
+        assertEquals(co(player.getUniqueId()), lock.getOwner());
         assertEquals(LockState.DEFAULT, lock.getLockState());
         try (MockedStatic<LockStateLog> log = mockStatic(LockStateLog.class)) {
             manager.onEntityDamage(event);
@@ -220,7 +224,7 @@ class DisplayStealManagerTest {
         }
         assertEquals(LockState.PRIVATE, lock.getLockState());
         verify(store, times(2)).save(lock);
-        lock.setOwner(UUID.randomUUID());
+        lock.setOwner(co(UUID.randomUUID()));
         manager.onEntityDamage(event);
         verify(store, times(2)).save(lock);
         verify(player).sendMessage(contains("Only the owner can change this lock"));
@@ -272,9 +276,9 @@ class DisplayStealManagerTest {
         manager.onHangingBreak(event);
         verify(event).setCancelled(true);
         when(player.isSneaking()).thenReturn(true);
-        lock.setOwner(null);
+        lock.setOwner(co(null));
         manager.onHangingBreak(event);
-        assertEquals(player.getUniqueId(), lock.getOwner());
+        assertEquals(co(player.getUniqueId()), lock.getOwner());
         manager.onHangingBreak(event);
         assertEquals(LockState.PRIVATE, lock.getLockState());
         when(event.getRemover()).thenReturn(mock(Entity.class));
@@ -297,10 +301,11 @@ class DisplayStealManagerTest {
         when(event.getRemover()).thenReturn(player);
         when(player.isSneaking()).thenReturn(true);
         when(player.hasPermission("thievery.admin")).thenReturn(true);
-        UUID placer = lock.getOwner();
-        access.when(() -> LockAccess.ownerName(placer)).thenReturn("placer");
+        LockOwner placer = lock.getOwner();
         when(frame.getAttachedFace()).thenReturn(BlockFace.NORTH);
-        try (MockedStatic<LockStateLog> log = mockStatic(LockStateLog.class)) {
+        try (MockedStatic<LockStateLog> log = mockStatic(LockStateLog.class);
+                var names = mockStatic(net.tfminecraft.thievery.owner.LockOwnerNames.class)) {
+            names.when(() -> net.tfminecraft.thievery.owner.LockOwnerNames.staffLabel(placer)).thenReturn("placer");
             manager.onHangingBreak(event);
             log.verify(() -> LockStateLog.record(player, frame.getLocation().getBlock().getRelative(BlockFace.NORTH).getLocation(),
                     LockState.GUILD, true));
@@ -369,23 +374,17 @@ class DisplayStealManagerTest {
     @ValueSource(booleans = {false, true})
     void offlineOwnerRequiresCachedWindowAndWarnsBeforeStarting(boolean cachedWindow) {
         Cache.requireOwnerOnline = true;
-        UUID ownerId = lock.getOwner();
-        OfflinePlayer owner = mock(OfflinePlayer.class);
-        when(owner.getName()).thenReturn("Owner");
-        when(owner.isOnline()).thenReturn(false);
+        UUID ownerId = lock.getOwner().id();
         String targetKey = "player:" + ownerId;
         String sessionTarget = DoorLockpick.entityTargetId(stand.getUniqueId());
-        try (var bukkit = mockStatic(Bukkit.class, CALLS_REAL_METHODS);
-                var factions = mockStatic(FactionManager.class);
-                var windows = mockStatic(LockpickTargetCache.class)) {
-            bukkit.when(() -> Bukkit.getOfflinePlayer(ownerId)).thenReturn(owner);
+        try (var windows = mockStatic(LockpickTargetCache.class)) {
             windows.when(() -> LockpickTargetCache.isActive(targetKey)).thenReturn(cachedWindow);
             windows.when(() -> LockpickTargetCache.getRemainingMs(targetKey)).thenReturn(125_000L);
 
             select(lootSlots);
 
             if (cachedWindow) {
-                verify(player).sendMessage(contains("Owner has no members online - 2m 5s remaining"));
+                verify(player).sendMessage(contains("owners are away - 2m 5s remaining"));
                 verify(playerData).addRiskGain(15, 0.7, RiskSource.DOOR);
                 database.verify(() -> Database.savePlayerData(playerData));
                 verify(picks).startSession(eq(player), any(DoorLockpick.EntityProximityAnchor.class),
@@ -393,7 +392,7 @@ class DisplayStealManagerTest {
                         eq(Parameters.displayLockStrength * (1 - 0.7 * Parameters.lockpickMaxReduction)),
                         eq(15), eq(0.7), isNull());
             } else {
-                verify(player).sendMessage(contains("Cannot lockpick - Owner is not online."));
+                verify(player).sendMessage(contains("Cannot lockpick - this lock's owners are away."));
                 verify(picks, never()).startSession(any(), any(), any(), any(), anyDouble(), anyInt(), anyDouble(), any());
                 verifyNoInteractions(playerData);
                 database.verifyNoInteractions();
@@ -461,7 +460,7 @@ class DisplayStealManagerTest {
     void hangingDamageDefersLockRotationToHangingBreakExactlyOnce() {
         var realFrame = new org.mockbukkit.mockbukkit.entity.ItemFrameMock(MockBukkit.getMock(), UUID.randomUUID());
         realFrame.setFacingDirection(BlockFace.SOUTH, true);
-        EntityLockData frameLock = new EntityLockData(realFrame.getUniqueId(), player.getUniqueId());
+        EntityLockData frameLock = new EntityLockData(realFrame.getUniqueId(),co( player.getUniqueId()));
         frameLock.setLockState(LockState.PRIVATE);
         when(store.load(realFrame.getUniqueId())).thenReturn(frameLock);
         when(player.isSneaking()).thenReturn(true);
@@ -488,7 +487,7 @@ class DisplayStealManagerTest {
         ItemStack displayed = new ItemStack(Material.DIAMOND);
         realFrame.setItem(displayed, false);
         UUID owner = UUID.randomUUID();
-        EntityLockData frameLock = new EntityLockData(realFrame.getUniqueId(), owner);
+        EntityLockData frameLock = new EntityLockData(realFrame.getUniqueId(),co( owner));
         frameLock.setLockState(LockState.PRIVATE);
         when(store.load(realFrame.getUniqueId())).thenReturn(frameLock);
         PlayerInteractEntityEvent click = new PlayerInteractEntityEvent(player, realFrame);
@@ -498,13 +497,13 @@ class DisplayStealManagerTest {
         assertTrue(click.isCancelled());
         assertEquals(displayed, realFrame.getItem());
         verify(player).sendMessage("§cIt's locked. Only its owner holds the key, though a steady hand and a pick might manage.");
-        access.when(() -> LockAccess.canAccess(player, owner, LockState.PRIVATE)).thenReturn(true);
+        access.when(() -> LockAccess.canAccess(player, co(owner), LockState.PRIVATE)).thenReturn(true);
         HangingBreakByEntityEvent allowed = new HangingBreakByEntityEvent(realFrame, player);
         manager.onHangingBreak(allowed);
         assertFalse(allowed.isCancelled());
         verify(store, never()).save(any());
         verify(store, never()).delete(any());
-        assertEquals(owner, frameLock.getOwner());
+        assertEquals(co(owner), frameLock.getOwner());
         assertEquals(LockState.PRIVATE, frameLock.getLockState());
 
         manager.onHangingRemoved(allowed);

@@ -1,13 +1,13 @@
 package net.tfminecraft.thievery.door;
 
-import java.util.UUID;
+import net.tfminecraft.thievery.owner.LockOwner;
 
 public final class ChestMergeRules {
 
     private ChestMergeRules() {}
 
-    /** Unowned neighbors are allowed. Guild/access does not count. */
-    public static boolean personallyOwns(UUID placer, UUID neighborOwner) {
-        return neighborOwner == null || placer.equals(neighborOwner);
+    /** Unowned neighbours are allowed; otherwise the neighbour must have exactly the owner the new chest gets. */
+    public static boolean personallyOwns(LockOwner placer, LockOwner neighborOwner) {
+        return neighborOwner == null || neighborOwner.equals(placer);
     }
 }

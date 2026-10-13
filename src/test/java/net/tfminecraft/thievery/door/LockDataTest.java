@@ -1,5 +1,8 @@
 package net.tfminecraft.thievery.door;
 
+import static net.tfminecraft.thievery.testsupport.FactionFixture.co;
+import net.tfminecraft.thievery.owner.LockOwner;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -17,16 +20,24 @@ class LockDataTest {
     void doorRetainsLockIdentityAndAllowsExpiryToBeCleared() {
         Location location = new Location(null, 1, 2, 3);
         UUID owner = UUID.randomUUID();
-        DoorData door = new DoorData(location, "bronze", 0.75, owner);
+        DoorData door = new DoorData(location, "bronze", 0.75,co( owner));
         assertSame(location, door.getLocation());
         assertEquals("bronze", door.getKey());
         assertEquals(0.75, door.getStrength());
-        assertEquals(owner, door.getOwnerUUID());
+        assertEquals(co(owner), door.getOwner());
+        assertFalse(door.isUnreadable());
         assertNull(door.getUnlockExpiryMs());
         door.setUnlockExpiryMs(123456L);
         assertEquals(123456L, door.getUnlockExpiryMs());
         door.setUnlockExpiryMs(null);
         assertNull(door.getUnlockExpiryMs());
+        DoorData unreadable = DoorData.unreadable(location, "kept");
+        assertTrue(unreadable.isUnreadable());
+        assertEquals(LockOwner.unreadable(), unreadable.getOwner());
+        assertEquals("kept", unreadable.getKey());
+        unreadable.setOwner(LockOwner.server());
+        assertFalse(unreadable.isUnreadable());
+        assertEquals(LockOwner.server(), unreadable.getOwner());
     }
 
     @Test
@@ -38,32 +49,33 @@ class LockDataTest {
         EntityLockData lock = new EntityLockData(entityId);
         assertEquals(entityId, lock.getEntityId());
         assertNull(lock.getOwner());
-        assertFalse(lock.owns(player));
-        lock.setOwner(owner);
-        assertEquals(owner, lock.getOwner());
-        assertTrue(lock.owns(player));
-        lock.setOwner(UUID.randomUUID());
-        assertFalse(lock.owns(player));
+        lock.setOwner(co(owner));
+        assertEquals(co(owner), lock.getOwner());
         lock.setOwner(null);
-        assertFalse(lock.owns(player));
-        assertEquals(owner, new EntityLockData(entityId, owner).getOwner());
+        assertNull(lock.getOwner());
+        assertEquals(co(owner), new EntityLockData(entityId,co( owner)).getOwner());
+        EntityLockData unreadable = EntityLockData.unreadable(entityId);
+        assertTrue(unreadable.isUnreadable());
+        assertEquals(LockState.PRIVATE, unreadable.getLockState());
+        unreadable.setOwner(LockOwner.server());
+        assertFalse(unreadable.isUnreadable());
     }
 
     @Test
     void entityAccessDelegatesCurrentOwnerAndStateAndPropagatesDecision() {
         Player player = mock(Player.class);
         UUID owner = UUID.randomUUID();
-        EntityLockData lock = new EntityLockData(UUID.randomUUID(), owner);
+        EntityLockData lock = new EntityLockData(UUID.randomUUID(),co( owner));
         assertEquals(LockState.DEFAULT, lock.getLockState());
         lock.setLockState(LockState.GUILD);
         assertEquals(LockState.GUILD, lock.getLockState());
         try (MockedStatic<LockAccess> access = mockStatic(LockAccess.class)) {
-            access.when(() -> LockAccess.canAccess(player, owner, LockState.GUILD)).thenReturn(true);
+            access.when(() -> LockAccess.canAccess(player, co(owner), LockState.GUILD)).thenReturn(true);
             assertTrue(lock.canAccess(player));
-            access.verify(() -> LockAccess.canAccess(player, owner, LockState.GUILD));
+            access.verify(() -> LockAccess.canAccess(player, co(owner), LockState.GUILD));
             lock.setLockState(LockState.PRIVATE);
             assertFalse(lock.canAccess(player));
-            access.verify(() -> LockAccess.canAccess(player, owner, LockState.PRIVATE));
+            access.verify(() -> LockAccess.canAccess(player, co(owner), LockState.PRIVATE));
         }
         lock.setLockState(null);
         assertEquals(LockState.DEFAULT, lock.getLockState());
@@ -80,32 +92,37 @@ class LockDataTest {
         ContainerData container = new ContainerData(location);
         assertSame(location, container.getLocation());
         assertNull(container.getOwner());
-        assertFalse(container.owns(player));
-        container.setOwner(owner);
-        assertEquals(owner, container.getOwner());
-        assertTrue(container.owns(player));
-        container.setOwner(UUID.randomUUID());
-        assertFalse(container.owns(player));
+        assertFalse(container.isOwned());
+        container.setOwner(co(owner));
+        assertEquals(co(owner), container.getOwner());
+        assertTrue(container.isOwned());
         container.setOwner(null);
-        assertFalse(container.owns(player));
-        assertEquals(owner, new ContainerData(location, owner).getOwner());
+        assertFalse(container.isOwned());
+        assertEquals(co(owner), new ContainerData(location,co( owner)).getOwner());
+        ContainerData unreadable = ContainerData.unreadable(location);
+        assertTrue(unreadable.isUnreadable());
+        assertEquals(LockOwner.unreadable(), unreadable.getOwner());
+        assertEquals(LockState.PRIVATE, unreadable.getLockState());
+        unreadable.setOwner(LockOwner.server());
+        assertFalse(unreadable.isUnreadable());
+        assertFalse(unreadable.isProvisional());
     }
 
     @Test
     void containerAccessDelegatesCurrentOwnerAndStateAndPropagatesDecision() {
         Player player = mock(Player.class);
         UUID owner = UUID.randomUUID();
-        ContainerData container = new ContainerData(new Location(null, 0, 0, 0), owner);
+        ContainerData container = new ContainerData(new Location(null, 0, 0, 0),co( owner));
         assertEquals(LockState.DEFAULT, container.getLockState());
         container.setLockState(LockState.FACTION);
         assertEquals(LockState.FACTION, container.getLockState());
         try (MockedStatic<LockAccess> access = mockStatic(LockAccess.class)) {
-            access.when(() -> LockAccess.canAccess(player, owner, LockState.FACTION)).thenReturn(true);
+            access.when(() -> LockAccess.canAccess(player, co(owner), LockState.FACTION)).thenReturn(true);
             assertTrue(container.canAccess(player));
-            access.verify(() -> LockAccess.canAccess(player, owner, LockState.FACTION));
+            access.verify(() -> LockAccess.canAccess(player, co(owner), LockState.FACTION));
             container.setLockState(LockState.PRIVATE);
             assertFalse(container.canAccess(player));
-            access.verify(() -> LockAccess.canAccess(player, owner, LockState.PRIVATE));
+            access.verify(() -> LockAccess.canAccess(player, co(owner), LockState.PRIVATE));
         }
         container.setLockState(null);
         assertEquals(LockState.DEFAULT, container.getLockState());

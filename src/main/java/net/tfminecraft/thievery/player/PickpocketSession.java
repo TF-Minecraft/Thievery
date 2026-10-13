@@ -5,15 +5,15 @@ import java.util.UUID;
 import net.tfminecraft.thievery.steal.session.HiddenStealSession;
 import net.tfminecraft.thievery.steal.StealBudget;
 import net.tfminecraft.thievery.steal.StealGui;
-import net.tfminecraft.thievery.player.TargetKeyResolver;
 
 public class PickpocketSession extends HiddenStealSession {
 
     private final UUID pickpocketId;
     private final UUID victimId;
 
-    public PickpocketSession(UUID pickpocketId, UUID victimId, StealBudget budget, StealGui.Layout layout) {
-        super(budget, layout, TargetKeyResolver.resolve(victimId));
+    public PickpocketSession(UUID pickpocketId, UUID victimId, String targetKey, StealBudget budget,
+            StealGui.Layout layout) {
+        super(budget, layout, targetKey);
         this.pickpocketId = pickpocketId;
         this.victimId = victimId;
     }

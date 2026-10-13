@@ -1,28 +1,23 @@
 package net.tfminecraft.thievery.door;
 
 import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
-import java.io.Reader;
-import java.io.Writer;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.UUID;
 
 import org.bukkit.Bukkit;
 
-import com.google.gson.Gson;
-
 import net.tfminecraft.thievery.Thievery;
+import net.tfminecraft.thievery.owner.DurableFiles;
+import net.tfminecraft.thievery.owner.LockGuard;
+import net.tfminecraft.thievery.owner.LockQuarantine;
+import net.tfminecraft.thievery.owner.LockRecords;
+import net.tfminecraft.thievery.owner.OwnerCodec;
 
 public class EntityLockDataManager {
 
     private final File dataFolder;
-    private final Gson gson = new Gson();
-
-    private static class EntityLockDataJson {
-        UUID owner;
-        LockState lockState = LockState.DEFAULT;
-    }
 
     public EntityLockDataManager() {
         this.dataFolder = new File(Thievery.getInstance().getDataFolder(), "entities");
@@ -39,45 +34,59 @@ public class EntityLockDataManager {
         if (!file.exists()) {
             return new EntityLockData(entityId);
         }
-        try (Reader reader = new FileReader(file)) {
-            EntityLockDataJson json = gson.fromJson(reader, EntityLockDataJson.class);
-            EntityLockData data = new EntityLockData(entityId);
-            if (json != null) {
-                data.setOwner(json.owner);
-                data.setLockState(json.lockState);
-            }
+        try {
+            LockRecords.Entity record = LockRecords.decodeEntity(Files.readAllBytes(file.toPath()));
+            EntityLockData data = new EntityLockData(entityId, OwnerCodec.resolve(record.owner()).owner());
+            data.setLockState(record.state());
             return data;
-        } catch (IOException e) {
-            Bukkit.getLogger().warning("Failed to load entity lock data for " + entityId + ": " + e.getMessage());
-            return new EntityLockData(entityId);
+        } catch (IOException | IllegalArgumentException e) {
+            Bukkit.getLogger().warning("Unreadable entity lock " + file + ": " + e.getMessage());
+            LockQuarantine.noteUnreadable(file.toPath());
+            return EntityLockData.unreadable(entityId);
         }
     }
 
+    /** Writes the record when it has changed, forced to disk. Frozen in guard mode. */
     public void save(EntityLockData data) {
-        if (data == null || data.getEntityId() == null) {
+        if (data == null || data.getEntityId() == null || LockGuard.guarded() || data.isUnreadable()) {
             return;
         }
-        File file = getFile(data.getEntityId());
-        File parent = file.getParentFile();
-        if (!parent.exists()) {
-            parent.mkdirs();
-        }
-        try (Writer writer = new FileWriter(file)) {
-            EntityLockDataJson json = new EntityLockDataJson();
-            json.owner = data.getOwner();
-            json.lockState = data.getLockState();
-            gson.toJson(json, writer);
+        Path path = getFile(data.getEntityId()).toPath();
+        LockRecords.Entity next = new LockRecords.Entity(OwnerCodec.store(data.getOwner()), data.getLockState());
+        try {
+            if (Files.exists(path) && next.equals(decodeOrNull(Files.readAllBytes(path)))) {
+                return;
+            }
+            DurableFiles.write(path, LockRecords.encodeEntity(next), true);
         } catch (IOException e) {
             Bukkit.getLogger().warning("Failed to save entity lock data for " + data.getEntityId() + ": " + e.getMessage());
         }
     }
 
+    /** Removes the record; in guard mode the deletion waits until the migration has finished. */
     public boolean delete(UUID entityId) {
         if (entityId == null) {
             return false;
         }
-        File file = getFile(entityId);
-        return file.exists() && file.delete();
+        Path path = getFile(entityId).toPath();
+        if (LockGuard.guarded()) {
+            LockGuard.queueDeletion(path);
+            return false;
+        }
+        try {
+            return DurableFiles.delete(path);
+        } catch (IOException e) {
+            Bukkit.getLogger().warning("Failed to delete entity lock data for " + entityId + ": " + e.getMessage());
+            return false;
+        }
+    }
+
+    private static LockRecords.Entity decodeOrNull(byte[] bytes) {
+        try {
+            return LockRecords.decodeEntity(bytes);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     private File getFile(UUID entityId) {

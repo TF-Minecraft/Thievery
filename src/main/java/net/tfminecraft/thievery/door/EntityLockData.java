@@ -4,35 +4,47 @@ import java.util.UUID;
 
 import org.bukkit.entity.Player;
 
+import net.tfminecraft.thievery.owner.LockOwner;
+
 public class EntityLockData {
 
     private final UUID entityId;
-    private UUID owner;
+    private LockOwner owner;
     private LockState lockState = LockState.DEFAULT;
+    private boolean unreadable;
 
     public EntityLockData(UUID entityId) {
         this.entityId = entityId;
     }
 
-    public EntityLockData(UUID entityId, UUID owner) {
+    public EntityLockData(UUID entityId, LockOwner owner) {
         this.entityId = entityId;
         this.owner = owner;
+    }
+
+    /** A record that could not be read: locked, owner unresolved. */
+    public static EntityLockData unreadable(UUID entityId) {
+        EntityLockData data = new EntityLockData(entityId, LockOwner.unreadable());
+        data.lockState = LockState.PRIVATE;
+        data.unreadable = true;
+        return data;
     }
 
     public UUID getEntityId() {
         return entityId;
     }
 
-    public UUID getOwner() {
+    public LockOwner getOwner() {
         return owner;
     }
 
-    public void setOwner(UUID owner) {
+    public void setOwner(LockOwner owner) {
         this.owner = owner;
+        this.unreadable = false;
     }
 
-    public boolean owns(Player player) {
-        return owner != null && owner.equals(player.getUniqueId());
+    public boolean isUnreadable() {
+        return unreadable;
     }
 
     public boolean canAccess(Player player) {

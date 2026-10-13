@@ -1,7 +1,5 @@
 package net.tfminecraft.thievery.clue;
 
-import java.util.UUID;
-
 import org.bukkit.Location;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
@@ -13,6 +11,7 @@ import net.tfminecraft.thievery.Thievery;
 import net.tfminecraft.thievery.cache.Cache;
 import net.tfminecraft.thievery.door.ChestLockpickSession;
 import net.tfminecraft.thievery.database.Database;
+import net.tfminecraft.thievery.owner.LockOwner;
 import net.tfminecraft.thievery.player.PlayerData;
 import net.tfminecraft.thievery.player.RiskCalculator;
 import net.tfminecraft.thievery.player.TargetKeyResolver;
@@ -52,7 +51,7 @@ public final class ClueDropper {
         recordSuccess(player, playerData, clueText, targetKey, session);
     }
 
-    public static void tryDropDoorClue(Player player, Location doorCanonical, UUID ownerUUID,
+    public static void tryDropDoorClue(Player player, Location doorCanonical, LockOwner owner,
             int dexterity, double lockpickStrength) {
         PlayerData playerData = Thievery.getPlayerManager().get(player.getUniqueId());
         playerData.applyRiskDecay(dexterity);
@@ -61,7 +60,7 @@ public final class ClueDropper {
             return;
         }
 
-        String targetKey = TargetKeyResolver.resolve(ownerUUID);
+        String targetKey = TargetKeyResolver.forLockOwner(owner);
         String clueText = pickClue(player, playerData, targetKey, dexterity, lockpickStrength, sessionRisk, true);
         if (clueText == null) return;
 

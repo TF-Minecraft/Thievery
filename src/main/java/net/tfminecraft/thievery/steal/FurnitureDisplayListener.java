@@ -9,6 +9,7 @@ import org.bukkit.block.BlockFace;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.Cancellable;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.inventory.ItemStack;
@@ -23,6 +24,10 @@ import net.tfminecraft.interactiblefurniture.furniture.Furniture;
 import net.tfminecraft.interactiblefurniture.furniture.PlacedSlot;
 import net.tfminecraft.interactiblefurniture.furniture.SlotDefinition;
 import net.tfminecraft.thievery.door.LockState;
+import net.tfminecraft.thievery.door.LockWriters;
+import net.tfminecraft.thievery.owner.LockGuard;
+import net.tfminecraft.thievery.owner.LockOwner;
+import net.tfminecraft.thievery.utils.ThieveryTexts;
 import net.tfminecraft.thievery.utils.ToolResolver;
 
 public class FurnitureDisplayListener implements Listener {
@@ -35,17 +40,38 @@ public class FurnitureDisplayListener implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onFurniturePlace(FurniturePlaceEvent event) {
+        LockGuard.failClosed(event, "a furniture placement", () -> handlePlace(event));
+    }
+
+    private void handlePlace(FurniturePlaceEvent event) {
         Furniture furniture = event.getFurniture();
         if (!FurnitureLockHelper.isLockable(furniture) || !event.hasPlayer()) {
             return;
         }
-        if (FurnitureLockHelper.getOwner(furniture) != null) {
+        Player player = event.getPlayer();
+        if (LockGuard.guarded()) {
+            event.setCancelled(true);
+            player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + LockGuard.STARTING));
             return;
         }
-        Player player = event.getPlayer();
-        FurnitureLockHelper.setOwner(furniture, player.getUniqueId());
-        FurnitureLockHelper.setLockState(furniture, LockState.DEFAULT);
-        DisplayStealManager.notifyLockStateChange(player, LockState.DEFAULT);
+        LockOwner owner = LockWriters.placementOwner(player);
+        if (FurnitureLockHelper.getOwner(furniture) != null || owner == null) {
+            return;
+        }
+        FurnitureLockHelper.setOwner(furniture, owner);
+        FurnitureLockHelper.setLockState(furniture, LockWriters.initialState(owner));
+        DisplayStealManager.notifyLockStateChange(player, LockWriters.initialState(owner));
+    }
+
+    // Upgrades a bare owner on first interaction, then reads the lock afresh.
+    private static FurnitureLockHelper.FurnitureLock lockOf(Furniture furniture) {
+        FurnitureLockHelper.upgrade(furniture);
+        return FurnitureLockHelper.read(furniture);
+    }
+
+    private static boolean deniedDuringGuard(Player player, FurnitureLockHelper.FurnitureLock lock) {
+        return LockGuard.guarded() && lock.owner() != null && lock.state() != LockState.PUBLIC
+                && !player.hasPermission(LockWriters.STAFF);
     }
 
     // CoreProtect drops interactions on air, so prefer the block the furniture was placed on.
@@ -56,46 +82,54 @@ public class FurnitureDisplayListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onFurnitureBreak(FurnitureBreakEvent event) {
+        LockGuard.failClosed(event, "a furniture break", () -> handleBreak(event));
+    }
+
+    private void handleBreak(FurnitureBreakEvent event) {
         Furniture furniture = event.getFurniture();
         if (!FurnitureLockHelper.isLockable(furniture) || !event.hasPlayer()) {
             return;
         }
         Player player = event.getPlayer();
+        if (LockGuard.guarded() && !player.isSneaking()) {
+            event.setCancelled(true);
+            player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + LockGuard.STARTING));
+            return;
+        }
+        FurnitureLockHelper.FurnitureLock lock = lockOf(furniture);
         if (player.isSneaking()) {
             event.setCancelled(true);
-            DisplayStealManager.applyToggle(player, () -> supportLocation(furniture),
-                    FurnitureLockHelper.getOwner(furniture), owner -> {
+            DisplayStealManager.applyToggle(player, () -> supportLocation(furniture), lock.owner(), owner -> {
                 FurnitureLockHelper.setOwner(furniture, owner);
                 FurnitureLockHelper.setLockState(furniture, LockState.DEFAULT);
             }, () -> FurnitureLockHelper.rotateLockState(furniture));
             return;
         }
-        if (!DisplayStealManager.canUse(player, FurnitureLockHelper.getOwner(furniture),
-                FurnitureLockHelper.getLockState(furniture), true)) {
+        if (!DisplayStealManager.canUse(player, lock.owner(), lock.state(), true)) {
             event.setCancelled(true);
-            DisplayStealManager.denyAccess(player, FurnitureLockHelper.getLockState(furniture), false);
+            DisplayStealManager.denyAccess(player, lock.state(), false);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onFurnitureInteract(FurnitureInteractEvent event) {
+        LockGuard.failClosed(event, "a furniture use", () -> handleInteract(event));
+    }
+
+    private void handleInteract(FurnitureInteractEvent event) {
         Furniture furniture = event.getFurniture();
         if (!FurnitureLockHelper.isLockable(furniture)) {
             return;
         }
         Player player = event.getPlayer();
+        FurnitureLockHelper.FurnitureLock lock = lockOf(furniture);
         if (ToolResolver.isLockpick(player.getInventory().getItemInMainHand())) {
             event.setCancelled(true);
             Entity entity = Bukkit.getEntity(furniture.getEntityId());
-            displayStealManager.handleLockpick(player, entity, FurnitureLockHelper.getOwner(furniture),
-                    FurnitureLockHelper.getLockState(furniture), slotsFor(furniture, player));
+            displayStealManager.handleLockpick(player, entity, lock.owner(), lock.state(), slotsFor(furniture, player));
             return;
         }
-        if (!DisplayStealManager.canUse(player, FurnitureLockHelper.getOwner(furniture),
-                FurnitureLockHelper.getLockState(furniture), false)) {
-            event.setCancelled(true);
-            DisplayStealManager.denyAccess(player, FurnitureLockHelper.getLockState(furniture), true);
-        }
+        checkUse(event, player, lock, false, true);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -103,29 +137,33 @@ public class FurnitureDisplayListener implements Listener {
         if (DisplayLoot.isDumping()) {
             return;
         }
-        Furniture furniture = event.getFurniture();
-        if (!FurnitureLockHelper.isLockable(furniture)) {
-            return;
-        }
-        Player player = event.getPlayer();
-        if (!DisplayStealManager.canUse(player, FurnitureLockHelper.getOwner(furniture),
-                FurnitureLockHelper.getLockState(furniture), true)) {
-            event.setCancelled(true);
-            DisplayStealManager.denyAccess(player, FurnitureLockHelper.getLockState(furniture), true);
-        }
+        LockGuard.failClosed(event, "a furniture slot take", () -> handleSlot(event, event.getFurniture(),
+                event.getPlayer(), true));
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onSlotAdd(FurnitureSlotItemAddEvent event) {
-        Furniture furniture = event.getFurniture();
+        LockGuard.failClosed(event, "a furniture slot add", () -> handleSlot(event, event.getFurniture(),
+                event.getPlayer(), false));
+    }
+
+    private static void handleSlot(Cancellable event, Furniture furniture, Player player, boolean pickable) {
         if (!FurnitureLockHelper.isLockable(furniture)) {
             return;
         }
-        Player player = event.getPlayer();
-        if (!DisplayStealManager.canUse(player, FurnitureLockHelper.getOwner(furniture),
-                FurnitureLockHelper.getLockState(furniture), true)) {
+        checkUse(event, player, lockOf(furniture), true, pickable);
+    }
+
+    private static void checkUse(Cancellable event, Player player, FurnitureLockHelper.FurnitureLock lock,
+            boolean notifyBypass, boolean pickable) {
+        if (deniedDuringGuard(player, lock)) {
             event.setCancelled(true);
-            DisplayStealManager.denyAccess(player, FurnitureLockHelper.getLockState(furniture), false);
+            player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + LockGuard.STARTING));
+            return;
+        }
+        if (!DisplayStealManager.canUse(player, lock.owner(), lock.state(), notifyBypass)) {
+            event.setCancelled(true);
+            DisplayStealManager.denyAccess(player, lock.state(), pickable);
         }
     }
 

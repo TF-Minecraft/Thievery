@@ -104,7 +104,7 @@ class DisplayLootTest {
             }
         },MockBukkit.createMockPlugin());
         try(var locks=mockStatic(FurnitureLockHelper.class);var tools=mockStatic(net.tfminecraft.thievery.utils.ToolResolver.class);var bukkit=mockStatic(org.bukkit.Bukkit.class,CALLS_REAL_METHODS)) {
-            locks.when(()->FurnitureLockHelper.isLockable(furniture)).thenReturn(true);locks.when(()->FurnitureLockHelper.getLockState(furniture)).thenReturn(net.tfminecraft.thievery.door.LockState.PRIVATE);tools.when(()->net.tfminecraft.thievery.utils.ToolResolver.isLockpick(any())).thenReturn(true);
+            locks.when(()->FurnitureLockHelper.isLockable(furniture)).thenReturn(true);locks.when(()->FurnitureLockHelper.read(furniture)).thenReturn(new FurnitureLockHelper.FurnitureLock(null,net.tfminecraft.thievery.door.LockState.PRIVATE,false));tools.when(()->net.tfminecraft.thievery.utils.ToolResolver.isLockpick(any())).thenReturn(true);
             bukkit.when(()->org.bukkit.Bukkit.getEntity(entityId)).thenReturn(entity);
             var interaction=mock(net.tfminecraft.interactiblefurniture.events.FurnitureInteractEvent.class);when(interaction.getFurniture()).thenReturn(furniture);when(interaction.getPlayer()).thenReturn(player);
             listener.onFurnitureInteract(interaction);

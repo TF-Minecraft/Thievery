@@ -1,12 +1,13 @@
 package net.tfminecraft.thievery.clue;
 
+import static net.tfminecraft.thievery.testsupport.FactionFixture.co;
+import net.tfminecraft.thievery.owner.LockOwner;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import java.util.*;
-import net.tfminecraft.thievery.utils.FactionAccess;
+import net.tfminecraft.thievery.testsupport.FactionFixture;
 import net.tfminecraft.thievery.door.*;
-import net.tfminecraft.simplefactions.guild.Guild;
-import net.tfminecraft.simplefactions.managers.FactionManager;
 import net.tfminecraft.rpcharacters.managers.SpawnedClueManager;
 import net.tfminecraft.rpcharacters.utils.ClueGiver;
 import org.bukkit.*;
@@ -18,44 +19,38 @@ import org.junit.jupiter.api.*;
 import org.mockbukkit.mockbukkit.MockBukkit;
 
 class ClearCluesResolverTest {
-    World world; Location location; DoorDataManager doors; ContainerDataManager containers;
-    @BeforeEach void setup() { MockBukkit.mock(); world=MockBukkit.getMock().addSimpleWorld("clues"); location=new Location(world,Math.abs(UUID.randomUUID().hashCode()%100000),64,0); doors=new DoorDataManager(); containers=new ContainerDataManager(); }
-    @AfterEach void close() { doors.deleteDoorData(location); containers.deleteContainerData(location); MockBukkit.unmock(); }
+    World world; Location location; DoorDataManager doors; ContainerDataManager containers; FactionFixture identity;
+    @BeforeEach void setup() { identity=new FactionFixture(); MockBukkit.mock(); world=MockBukkit.getMock().addSimpleWorld("clues"); location=new Location(world,Math.abs(UUID.randomUUID().hashCode()%100000),64,0); doors=new DoorDataManager(); containers=new ContainerDataManager(); }
+    @AfterEach void close() { doors.deleteDoorData(location); containers.deleteContainerData(location); MockBukkit.unmock(); identity.close(); }
     @Test void resolutionRecognizesSupportedDoorsAndCanonicalizesTheirTopHalf() {
         assertTrue(ClearCluesResolver.resolve(null).isEmpty()); var block=location.getBlock(); assertTrue(ClearCluesResolver.resolve(block).isEmpty());
         block.setType(Material.IRON_DOOR); assertTrue(ClearCluesResolver.resolve(block).isEmpty()); block.setType(Material.IRON_TRAPDOOR); assertTrue(ClearCluesResolver.resolve(block).isEmpty());
-        block.setType(Material.OAK_DOOR); var owner=UUID.randomUUID(); doors.saveDoorData(new DoorData(location,"key",.5,owner));
-        var target=ClearCluesResolver.resolve(block).orElseThrow(); assertEquals(ClearCluesResolver.Kind.DOOR,target.getKind()); assertEquals(location,target.getCanonicalLocation()); assertEquals(owner,target.getOwnerUuid()); assertNull(target.getLockState());
+        block.setType(Material.OAK_DOOR); var owner=UUID.randomUUID(); doors.saveDoorData(new DoorData(location,"key",.5,co(owner)));
+        var target=ClearCluesResolver.resolve(block).orElseThrow(); assertEquals(ClearCluesResolver.Kind.DOOR,target.getKind()); assertEquals(location,target.getCanonicalLocation()); assertEquals(co(owner),target.getOwner()); assertNull(target.getLockState());
         var top=location.clone().add(0,1,0).getBlock(); top.setType(Material.OAK_DOOR); var data=(Bisected)top.getBlockData(); data.setHalf(Bisected.Half.TOP); top.setBlockData(data); assertEquals(location,ClearCluesResolver.resolve(top).orElseThrow().getCanonicalLocation());
-        doors.deleteDoorData(location); block.setType(Material.OAK_TRAPDOOR); assertNull(ClearCluesResolver.resolve(block).orElseThrow().getOwnerUuid()); block.setType(Material.OAK_FENCE_GATE); assertEquals(ClearCluesResolver.Kind.DOOR,ClearCluesResolver.resolve(block).orElseThrow().getKind());
+        doors.deleteDoorData(location); block.setType(Material.OAK_TRAPDOOR); assertNull(ClearCluesResolver.resolve(block).orElseThrow().getOwner()); block.setType(Material.OAK_FENCE_GATE); assertEquals(ClearCluesResolver.Kind.DOOR,ClearCluesResolver.resolve(block).orElseThrow().getKind());
     }
-    @Test void containerResolutionAndClearPermissionsFollowSavedLockRules() {
-        location.getBlock().setType(Material.CHEST); UUID owner=UUID.randomUUID(); var data=new ContainerData(location,owner); data.setLockState(LockState.PRIVATE); containers.saveContainerData(data);
-        var target=ClearCluesResolver.resolve(location.getBlock()).orElseThrow(); assertEquals(ClearCluesResolver.Kind.CONTAINER,target.getKind()); assertEquals(owner,target.getOwnerUuid()); assertEquals(LockState.PRIVATE,target.getLockState());
-        var player=mock(Player.class); when(player.getUniqueId()).thenReturn(UUID.randomUUID()); assertTrue(ClearCluesResolver.canClear(player,target,true)); assertFalse(ClearCluesResolver.canClear(player,target,false)); when(player.getUniqueId()).thenReturn(owner); assertTrue(ClearCluesResolver.canClear(player,target,false));
-        var publicTarget=new ClearCluesResolver.ClearCluesTarget(ClearCluesResolver.Kind.CONTAINER,location,owner,LockState.PUBLIC); assertTrue(ClearCluesResolver.canClear(player,publicTarget,false));
+    @Test void onlyTheOwningCharacterClearsAnOwnedContainerEvenAGuildOne() {
+        location.getBlock().setType(Material.CHEST); UUID owner=UUID.randomUUID(); var data=new ContainerData(location,co(owner)); data.setLockState(LockState.PRIVATE); containers.saveContainerData(data);
+        var target=ClearCluesResolver.resolve(location.getBlock()).orElseThrow(); assertEquals(ClearCluesResolver.Kind.CONTAINER,target.getKind()); assertEquals(co(owner),target.getOwner()); assertEquals(LockState.PRIVATE,target.getLockState());
+        var player=mock(Player.class); when(player.getUniqueId()).thenReturn(owner); identity.plays(player,UUID.randomUUID());
+        assertTrue(ClearCluesResolver.canClear(player,target,true)); assertFalse(ClearCluesResolver.canClear(player,target,false), "an alt on the owner's account is a stranger");
+        identity.plays(player,owner); assertTrue(ClearCluesResolver.canClear(player,target,false));
+        var publicTarget=new ClearCluesResolver.ClearCluesTarget(ClearCluesResolver.Kind.CONTAINER,location,co(owner),LockState.PUBLIC); identity.plays(player,null); assertTrue(ClearCluesResolver.canClear(player,publicTarget,false));
         var unowned=new ClearCluesResolver.ClearCluesTarget(ClearCluesResolver.Kind.CONTAINER,location,null,LockState.PRIVATE); assertTrue(ClearCluesResolver.canClear(player,unowned,false));
         data.setLockState(LockState.GUILD); containers.saveContainerData(data); var guildTarget=ClearCluesResolver.resolve(location.getBlock()).orElseThrow();
-        try(var access=mockStatic(LockAccess.class)) { assertFalse(ClearCluesResolver.canClear(player,guildTarget,false)); access.when(()->LockAccess.canAccess(player,owner,LockState.GUILD)).thenReturn(true); assertTrue(ClearCluesResolver.canClear(player,guildTarget,false)); }
+        UUID guildmate=UUID.randomUUID(); identity.guild(owner,"inc","realm"); identity.guild(guildmate,"inc","realm"); identity.plays(player,guildmate);
+        assertFalse(ClearCluesResolver.canClear(player,guildTarget,false)); identity.plays(player,owner); assertTrue(ClearCluesResolver.canClear(player,guildTarget,false));
+        var server=new ClearCluesResolver.ClearCluesTarget(ClearCluesResolver.Kind.CONTAINER,location,LockOwner.server(),LockState.PRIVATE); assertFalse(ClearCluesResolver.canClear(player,server,false)); assertTrue(ClearCluesResolver.canClear(player,server,true));
     }
-    @Test void doorOwnerAndGuildMembersMayClearButUnknownOrOtherGuildsCannot() {
-        UUID owner=UUID.randomUUID(); var target=new ClearCluesResolver.ClearCluesTarget(ClearCluesResolver.Kind.DOOR,location,owner,null); var player=mock(Player.class);
-        try(var access=mockStatic(FactionAccess.class); var factions=mockStatic(FactionManager.class)) {
-            assertTrue(ClearCluesResolver.canClear(player,new ClearCluesResolver.ClearCluesTarget(ClearCluesResolver.Kind.DOOR,location,null,null),false));
-            assertFalse(ClearCluesResolver.canClear(player,target,false));
-            access.when(()->FactionAccess.owns(player,owner)).thenReturn(true);
-            assertTrue(ClearCluesResolver.canClear(player,target,false));
-            access.when(()->FactionAccess.owns(player,owner)).thenReturn(false);
-            access.when(FactionAccess::ready).thenReturn(true);
-            assertFalse(ClearCluesResolver.canClear(player,target,false));
-            Guild a=mock(Guild.class), b=mock(Guild.class);
-            access.when(()->FactionAccess.ownerGuild(owner)).thenReturn(a);
-            assertFalse(ClearCluesResolver.canClear(player,target,false));
-            factions.when(()->FactionManager.getGuildByMember(player)).thenReturn(b);
-            when(a.getId()).thenReturn("a"); when(b.getId()).thenReturn("b");
-            assertFalse(ClearCluesResolver.canClear(player,target,false));
-            when(b.getId()).thenReturn("a"); assertTrue(ClearCluesResolver.canClear(player,target,false));
-        }
+    @Test void doorOwnerAndLockGuildMembersMayClearButStrangersAndAltsCannot() {
+        UUID owner=UUID.randomUUID(); var target=new ClearCluesResolver.ClearCluesTarget(ClearCluesResolver.Kind.DOOR,location,co(owner),null); var player=mock(Player.class); when(player.getUniqueId()).thenReturn(owner);
+        assertTrue(ClearCluesResolver.canClear(player,new ClearCluesResolver.ClearCluesTarget(ClearCluesResolver.Kind.DOOR,location,null,null),false));
+        UUID alt=UUID.randomUUID(); identity.plays(player,alt); assertFalse(ClearCluesResolver.canClear(player,target,false));
+        identity.plays(player,owner); assertTrue(ClearCluesResolver.canClear(player,target,false));
+        UUID guildmate=UUID.randomUUID(); identity.plays(player,guildmate); identity.guild(owner,"a",null); identity.guild(guildmate,"b",null); assertFalse(ClearCluesResolver.canClear(player,target,false));
+        identity.guild(guildmate,"a",null); assertTrue(ClearCluesResolver.canClear(player,target,false));
+        assertFalse(ClearCluesResolver.canClear(player,new ClearCluesResolver.ClearCluesTarget(ClearCluesResolver.Kind.DOOR,location,LockOwner.server(),null),false));
     }
     @Test void clearingRemovesLinkedHologramsAndOnlyClueItemsFromContainers() {
         location.getBlock().setType(Material.CHEST); var inventory=((Container)location.getBlock().getState()).getInventory(); var clue=new ItemStack(Material.PAPER); var loot=new ItemStack(Material.DIAMOND); inventory.setItem(0,clue); inventory.setItem(1,loot);
@@ -67,20 +62,22 @@ class ClearCluesResolverTest {
             location.getBlock().setType(Material.STONE); assertEquals(2,ClearCluesResolver.clearLinkedClues(target));
         }
     }
-    @Test void doubleChestCanonicalOwnerUsesLeftWhenOwnedOtherwiseRightRegardlessOfClickedHalf() {
+    @Test void doubleChestTargetsReadBothHalvesAndDivergedOwnersActForNobody() {
         var chest=doubleChest(); UUID leftOwner=UUID.randomUUID(), rightOwner=UUID.randomUUID();
         try {
             var empty=ClearCluesResolver.resolve(chest.leftBlock()).orElseThrow();
-            assertEquals(chest.rightLocation(),empty.getCanonicalLocation()); assertNull(empty.getOwnerUuid());
-            var right=new ContainerData(chest.rightLocation(),rightOwner); right.setLockState(LockState.PRIVATE); containers.saveContainerData(right);
+            assertEquals(chest.leftLocation(),empty.getCanonicalLocation()); assertNull(empty.getOwner()); assertEquals(LockState.PUBLIC,empty.getLockState());
+            var right=new ContainerData(chest.rightLocation(),co(rightOwner)); right.setLockState(LockState.PRIVATE); containers.saveContainerData(right);
             for (Block half:List.of(chest.leftBlock(),chest.rightBlock())) {
                 var target=ClearCluesResolver.resolve(half).orElseThrow();
-                assertEquals(chest.rightLocation(),target.getCanonicalLocation()); assertEquals(rightOwner,target.getOwnerUuid()); assertEquals(LockState.PRIVATE,target.getLockState());
+                assertEquals(chest.leftLocation(),target.getCanonicalLocation()); assertEquals(co(rightOwner),target.getOwner()); assertEquals(LockState.PRIVATE,target.getLockState());
             }
-            var left=new ContainerData(chest.leftLocation(),leftOwner); left.setLockState(LockState.GUILD); containers.saveContainerData(left);
+            var left=new ContainerData(chest.leftLocation(),co(leftOwner)); left.setLockState(LockState.GUILD); containers.saveContainerData(left);
+            var player=mock(Player.class); when(player.getUniqueId()).thenReturn(leftOwner);
             for (Block half:List.of(chest.leftBlock(),chest.rightBlock())) {
                 var target=ClearCluesResolver.resolve(half).orElseThrow();
-                assertEquals(chest.leftLocation(),target.getCanonicalLocation()); assertEquals(leftOwner,target.getOwnerUuid()); assertEquals(LockState.GUILD,target.getLockState());
+                assertEquals(LockOwner.unreadable(),target.getOwner()); assertEquals(LockState.PRIVATE,target.getLockState());
+                assertFalse(ClearCluesResolver.canClear(player,target,false)); assertTrue(ClearCluesResolver.canClear(player,target,true));
             }
         } finally { containers.deleteContainerData(chest.leftLocation()); containers.deleteContainerData(chest.rightLocation()); }
     }

@@ -28,6 +28,7 @@ import org.bukkit.block.Chest;
 import org.bukkit.block.Container;
 import org.bukkit.block.DoubleChest;
 import org.bukkit.block.Hopper;
+import org.bukkit.entity.minecart.HopperMinecart;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -37,6 +38,7 @@ import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.inventory.InventoryType;
@@ -72,6 +74,10 @@ import net.tfminecraft.thievery.utils.EvilRpPlays;
 import net.tfminecraft.thievery.utils.ThieveryTexts;
 import net.tfminecraft.thievery.utils.ToolResolver;
 import net.tfminecraft.thievery.utils.GuildChecker;
+import net.tfminecraft.thievery.owner.LockGuard;
+import net.tfminecraft.thievery.owner.LockOwner;
+import net.tfminecraft.thievery.owner.LockOwnerNames;
+import net.tfminecraft.thievery.owner.LockQuarantine;
 
 public class ContainerManager implements Listener {
 
@@ -144,6 +150,10 @@ public class ContainerManager implements Listener {
         player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "Bypassing lock due to staff"));
     }
 
+    static void sendStarting(Player player) {
+        player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + LockGuard.STARTING));
+    }
+
     private boolean canAccessContainer(Player player, ContainerData data, boolean notifyBypass) {
         if (data.canAccess(player)) {
             return true;
@@ -162,7 +172,7 @@ public class ContainerManager implements Listener {
     }
 
     private boolean canAccessLockedContainer(Player player, ContainerData data, boolean notifyBypass) {
-        if (data.getOwner() == null) {
+        if (!data.isOwned()) {
             return true;
         }
         return canAccessContainer(player, data, notifyBypass);
@@ -173,7 +183,7 @@ public class ContainerManager implements Listener {
     }
 
     private boolean canAccessLockedDoubleChest(Player player, ContainerData left, ContainerData right, boolean notifyBypass) {
-        boolean hasOwner = left.getOwner() != null || right.getOwner() != null;
+        boolean hasOwner = left.isOwned() || right.isOwned();
         if (!hasOwner) {
             return true;
         }
@@ -193,6 +203,16 @@ public class ContainerManager implements Listener {
         return canAccessLockedDoubleChest(player, left, right, true);
     }
 
+    /** In guard mode, a half that is owned and not PUBLIC keeps non-staff out. */
+    private static boolean lockedDuringGuard(ContainerData... halves) {
+        for (ContainerData half : halves) {
+            if (half.isOwned() && half.getLockState() != LockState.PUBLIC) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private Component clickableText(String label, String command) {
         return LegacyComponentSerializer.legacySection()
                 .deserialize(ThieveryTexts.msg(ThieveryTexts.INFO + "[" + label + "]"))
@@ -202,6 +222,10 @@ public class ContainerManager implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onBlockBreak(BlockBreakEvent event) {
+        LockGuard.failClosed(event, "a container break", () -> handleBlockBreak(event));
+    }
+
+    private void handleBlockBreak(BlockBreakEvent event) {
         Block block = event.getBlock();
 
         // Only handle containers (chests, barrels, etc.)
@@ -209,6 +233,12 @@ public class ContainerManager implements Listener {
 
         Location location = block.getLocation();
         Player breaker = event.getPlayer();
+
+        if (LockGuard.guarded()) {
+            event.setCancelled(true);
+            sendStarting(breaker);
+            return;
+        }
 
         ContainerData data = containerDataManager.loadContainerData(location);
 
@@ -249,13 +279,28 @@ public class ContainerManager implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onInventoryMoveItem(InventoryMoveItemEvent event) {
+        LockGuard.failClosed(event, "a hopper transfer", () -> handleInventoryMove(event));
+    }
+
+    private void handleInventoryMove(InventoryMoveItemEvent event) {
         // Hoppers fire this every transfer tick, so avoid block-state snapshots here.
         Inventory initiator = event.getInitiator();
-        if (initiator.getType() != InventoryType.HOPPER || !(initiator.getHolder(false) instanceof Hopper hopper)) {
+        if (initiator.getType() != InventoryType.HOPPER) {
             return;
         }
-        UUID hopperOwner = containerDataManager.getOwner(hopper.getLocation());
-        if (hopperOwner == null) {
+        InventoryHolder initiatorHolder = initiator.getHolder(false);
+        if (initiatorHolder instanceof HopperMinecart) {
+            // A hopper minecart has no owner, so it may not touch an owned, non-PUBLIC container.
+            if (lockedForMinecart(event.getSource(), initiator) || lockedForMinecart(event.getDestination(), initiator)) {
+                event.setCancelled(true);
+            }
+            return;
+        }
+        if (!(initiatorHolder instanceof Hopper hopper)) {
+            return;
+        }
+        LockOwner hopperOwner = containerDataManager.getOwner(hopper.getLocation());
+        if (hopperOwner == null || hopperOwner.id() == null || LockGuard.guarded()) {
             event.setCancelled(true);
             return;
         }
@@ -265,38 +310,70 @@ public class ContainerManager implements Listener {
         }
     }
 
-    private boolean isHopperTargetAllowed(Inventory inv, Inventory hopperInventory, UUID hopperOwner) {
+    // In guard mode any owned container counts; otherwise an owned container that is not PUBLIC.
+    private boolean lockedForMinecart(Inventory inv, Inventory minecartInventory) {
+        if (inv == null || inv == minecartInventory) {
+            return false;
+        }
+        for (ContainerDataManager.CachedLock half : locksOf(inv.getHolder(false))) {
+            if (half.owner() != null && (LockGuard.guarded() || half.state() != LockState.PUBLIC)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // A block hopper may only move items to or from containers with exactly its owner; double chests check both
+    // halves, and an unowned half of an owned chest goes with it.
+    private boolean isHopperTargetAllowed(Inventory inv, Inventory hopperInventory, LockOwner hopperOwner) {
         if (inv == null || inv == hopperInventory) {
             return true;
         }
-        InventoryHolder holder = inv.getHolder(false);
-        if (!(holder instanceof Container) && !(holder instanceof DoubleChest)) {
-            return true;
+        List<ContainerDataManager.CachedLock> halves = locksOf(inv.getHolder(false));
+        boolean matched = halves.isEmpty();
+        for (ContainerDataManager.CachedLock half : halves) {
+            if (half.owner() == null) {
+                continue;
+            }
+            if (!hopperOwner.equals(half.owner())) {
+                return false;
+            }
+            matched = true;
         }
-        return hopperOwner.equals(getOwnerFromHolder(holder));
+        return matched;
     }
 
-    private UUID getOwnerFromInventory(Inventory inv) {
-        return getOwnerFromHolder(inv.getHolder(false));
-    }
-
-    private UUID getOwnerFromHolder(InventoryHolder holder) {
+    // The locks of a container inventory's holder: one for a container, both halves for a double chest, none for
+    // anything else (entity containers and plugin menus).
+    private List<ContainerDataManager.CachedLock> locksOf(InventoryHolder holder) {
         if (holder instanceof DoubleChest doubleChest) {
-            if (!(doubleChest.getLeftSide(false) instanceof Chest leftChest)) {
-                return null;
+            if (!(doubleChest.getLeftSide(false) instanceof Chest leftChest)
+                    || !(doubleChest.getRightSide(false) instanceof Chest rightChest)) {
+                return List.of(new ContainerDataManager.CachedLock(LockOwner.unreadable(), LockState.PRIVATE));
             }
-            if (!(doubleChest.getRightSide(false) instanceof Chest rightChest)) {
-                return null;
-            }
-            UUID leftOwner = containerDataManager.getOwner(leftChest.getLocation());
-            if (leftOwner != null) {
-                return leftOwner;
-            }
-            return containerDataManager.getOwner(rightChest.getLocation());
+            return List.of(containerDataManager.getLock(leftChest.getLocation()),
+                    containerDataManager.getLock(rightChest.getLocation()));
         }
-        // Callers only pass container inventories, whose holder is either a
-        // DoubleChest or the Container itself.
-        return containerDataManager.getOwner(((Container) holder).getLocation());
+        if (holder instanceof Container container) {
+            return List.of(containerDataManager.getLock(container.getLocation()));
+        }
+        return List.of();
+    }
+
+    // The owner a pick or clue is keyed to: both halves of a double chest, diverged halves as unresolved.
+    private ChestOwners ownersOf(Inventory inv) {
+        InventoryHolder holder = inv.getHolder(false);
+        if (holder instanceof DoubleChest doubleChest) {
+            if (!(doubleChest.getLeftSide(false) instanceof Chest leftChest)
+                    || !(doubleChest.getRightSide(false) instanceof Chest rightChest)) {
+                return new ChestOwners(null, true);
+            }
+            return ChestOwners.of(containerDataManager.loadContainerData(leftChest.getLocation()),
+                    containerDataManager.loadContainerData(rightChest.getLocation()));
+        }
+        // Callers only pass container inventories, whose holder is either a DoubleChest or the Container itself.
+        Location location = ((Container) holder).getLocation();
+        return new ChestOwners(containerDataManager.loadContainerData(location).getOwner(), false);
     }
 
 
@@ -307,6 +384,11 @@ public class ContainerManager implements Listener {
         Inventory inv = event.getInventory();
         // Fires on every inventory click, so avoid block-state snapshots here.
         InventoryHolder holder = inv.getHolder(false);
+
+        if (holder instanceof GuardView) {
+            event.setCancelled(true);
+            return;
+        }
 
         Location location;
 
@@ -341,9 +423,20 @@ public class ContainerManager implements Listener {
         }
     }
 
+    @EventHandler
+    public void onInventoryDrag(InventoryDragEvent event) {
+        if (event.getInventory().getHolder(false) instanceof GuardView) {
+            event.setCancelled(true);
+        }
+    }
+
 
     @EventHandler
     public void onInventoryOpen(InventoryOpenEvent event) {
+        LockGuard.failClosed(event, "a container open", () -> handleInventoryOpen(event));
+    }
+
+    private void handleInventoryOpen(InventoryOpenEvent event) {
         if (!(event.getPlayer() instanceof Player player)) return;
 
         InventoryHolder holder = event.getInventory().getHolder();
@@ -357,6 +450,11 @@ public class ContainerManager implements Listener {
             Location rightLoc = right.getBlock().getLocation();
             ContainerData rightData = containerDataManager.loadContainerData(rightLoc);
 
+            if (LockGuard.guarded()) {
+                openDuringGuard(event, player, mainData, rightData);
+                return;
+            }
+
             if (!canAccessLockedDoubleChest(player, mainData, rightData)) {
                 event.setCancelled(true);
                 LockDenial.send(player, LockDenial.deniedState(player, mainData, rightData),
@@ -364,39 +462,79 @@ public class ContainerManager implements Listener {
                 return;
             }
 
-            if (mainData.getOwner() == null) {
-                if (rightData.getOwner() != null) {
-                    mainData.setOwner(rightData.getOwner());
-                    mainData.setLockState(rightData.getLockState());
-                } else {
-                    mainData.setOwner(player.getUniqueId());
-                }
-            }
-
-            containerDataManager.saveContainerData(mainData);
-
-            rightData.setOwner(mainData.getOwner());
-            rightData.setLockState(mainData.getLockState());
-            containerDataManager.saveContainerData(rightData);
+            syncDoubleChest(player, mainData, rightData);
 
         } else if (holder instanceof Container container) {
             Location location = container.getBlock().getLocation();
             ContainerData data = containerDataManager.loadContainerData(location);
+            if (LockGuard.guarded()) {
+                openDuringGuard(event, player, data);
+                return;
+            }
             if (!canAccessLockedContainer(player, data)) {
                 event.setCancelled(true);
                 LockDenial.send(player, data.getLockState(), LockDenial.chestPickable(container.getBlock().getType()));
                 return;
             }
-            handleContainerAccess(location, player);
+            handleContainerAccess(data, player);
         }
     }
 
-    private void handleContainerAccess(Location location, Player player) {
-        ContainerData data = containerDataManager.loadContainerData(location);
+    // Guard mode: owned, non-PUBLIC containers stay shut to players and open read-only for staff. Nothing is claimed.
+    private void openDuringGuard(InventoryOpenEvent event, Player player, ContainerData... halves) {
+        if (!lockedDuringGuard(halves)) {
+            return;
+        }
+        event.setCancelled(true);
+        if (!player.hasPermission("thievery.admin")) {
+            sendStarting(player);
+            return;
+        }
+        Inventory view = GuardView.of(event.getInventory());
+        Bukkit.getScheduler().runTask(Thievery.getInstance(), () -> player.openInventory(view));
+    }
 
-        // Assign owner if not set
-        if (data.getOwner() == null) {
-            data.setOwner(player.getUniqueId());
+    /**
+     * The open sync fills only an unowned half from the owned one, or claims a wholly unowned chest for the
+     * opener's character. Halves with different owners are left alone and listed for staff.
+     */
+    private void syncDoubleChest(Player player, ContainerData left, ContainerData right) {
+        ChestOwners owners = ChestOwners.of(left, right);
+        if (owners.diverged()) {
+            LockQuarantine.noteDiverged(describe(left.getLocation()) + " / " + describe(right.getLocation()));
+            return;
+        }
+        if (owners.owner() == null) {
+            LockOwner claim = LockWriters.claimOwner(player);
+            if (claim == null) {
+                return;
+            }
+            left.setOwner(claim);
+            right.setOwner(claim);
+        } else if (!left.isOwned()) {
+            left.setOwner(right.getOwner());
+            left.setLockState(right.getLockState());
+        } else if (!right.isOwned()) {
+            right.setOwner(left.getOwner());
+            right.setLockState(left.getLockState());
+        }
+        containerDataManager.saveContainerData(left);
+        containerDataManager.saveContainerData(right);
+    }
+
+    static String describe(Location location) {
+        return location.getWorld().getName() + " " + location.getBlockX() + " " + location.getBlockY() + " "
+                + location.getBlockZ();
+    }
+
+    // First open of an unowned container claims it for the opener's character; without one it stays unowned.
+    private void handleContainerAccess(ContainerData data, Player player) {
+        if (data.isOwned()) {
+            return;
+        }
+        LockOwner claim = LockWriters.claimOwner(player);
+        if (claim != null) {
+            data.setOwner(claim);
             containerDataManager.saveContainerData(data);
         }
     }
@@ -405,29 +543,45 @@ public class ContainerManager implements Listener {
     @SuppressWarnings("deprecation")
     @EventHandler
     public void onBlockPlace(BlockPlaceEvent event) {
+        LockGuard.failClosed(event, "a container placement", () -> handlePlace(event));
+    }
+
+    @SuppressWarnings("deprecation")
+    private void handlePlace(BlockPlaceEvent event) {
         Block block = event.getBlockPlaced();
 
         if (!(block.getState() instanceof Container)) {
             return;
         }
-
-        if (wouldMergeWithUnownedSingleChest(block, event.getPlayer().getUniqueId())) {
+        Player player = event.getPlayer();
+        if (LockGuard.guarded()) {
             event.setCancelled(true);
-            event.getPlayer().sendMessage(ThieveryTexts.msg(
-                    ThieveryTexts.ERROR + "You cannot connect this to a chest you do not own."));
+            sendStarting(player);
             return;
         }
 
-        Location location = block.getLocation();
-        ContainerData data = new ContainerData(location, event.getPlayer().getUniqueId());
+        LockOwner owner = LockWriters.placementOwner(player);
+        if (wouldMergeWithUnownedSingleChest(block, owner)) {
+            event.setCancelled(true);
+            player.sendMessage(ThieveryTexts.msg(
+                    ThieveryTexts.ERROR + "You cannot connect this to a chest you do not own."));
+            return;
+        }
+        if (owner == null) {
+            // Without a current character the container is left unowned and no file is written.
+            return;
+        }
+
+        ContainerData data = new ContainerData(block.getLocation(), owner);
+        data.setLockState(LockWriters.initialState(owner));
         containerDataManager.saveContainerData(data);
         String displayState = formatLockState(data.getLockState());
-        event.getPlayer().sendTitle(
+        player.sendTitle(
                 ThieveryTexts.msg(ThieveryTexts.ACCENT + "Lock State"),
                 ThieveryTexts.msg(ThieveryTexts.WARN + displayState), 5, 30, 10);
     }
 
-    private boolean wouldMergeWithUnownedSingleChest(Block placed, UUID placer) {
+    private boolean wouldMergeWithUnownedSingleChest(Block placed, LockOwner placer) {
         if (!(placed.getState() instanceof Chest)) {
             return false;
         }
@@ -451,6 +605,10 @@ public class ContainerManager implements Listener {
 
     @EventHandler
     public void onShiftLeftClickContainer(PlayerInteractEvent event) {
+        LockGuard.failClosed(event, "a lock rotation", () -> handleRotate(event));
+    }
+
+    private void handleRotate(PlayerInteractEvent event) {
         if (event.getAction() != Action.LEFT_CLICK_BLOCK) return;
         if (!event.getPlayer().isSneaking()) return;
         if (event.getClickedBlock() == null) return;
@@ -459,9 +617,12 @@ public class ContainerManager implements Listener {
 
         Player player = event.getPlayer();
         event.setCancelled(true);
+        if (LockGuard.guarded()) {
+            sendStarting(player);
+            return;
+        }
 
         Inventory inventory = container.getInventory();
-        UUID playerId = player.getUniqueId();
 
         if (inventory instanceof DoubleChestInventory doubleChestInventory) {
             DoubleChest doubleChest = (DoubleChest) doubleChestInventory.getHolder();
@@ -472,13 +633,23 @@ public class ContainerManager implements Listener {
             ContainerData leftData = containerDataManager.loadContainerData(leftLoc);
             ContainerData rightData = containerDataManager.loadContainerData(rightLoc);
 
-            UUID leftOwner = leftData.getOwner();
-            UUID rightOwner = rightData.getOwner();
-            boolean ownsDoubleChest = playerId.equals(leftOwner) || playerId.equals(rightOwner);
-            boolean staffOverride = !ownsDoubleChest && (leftOwner != null || rightOwner != null)
-                    && player.hasPermission("thievery.admin");
+            ChestOwners owners = ChestOwners.of(leftData, rightData);
+            if (owners.diverged()) {
+                LockQuarantine.noteDiverged(describe(leftLoc) + " / " + describe(rightLoc));
+                player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + (player.hasPermission("thievery.admin")
+                        ? "The halves of this chest have different owners. Use /thievery locks setowner first."
+                        : LockDenial.NOT_OWNER)));
+                return;
+            }
+            LockOwner owner = owners.owner();
+            boolean ownsDoubleChest = LockAccess.isOwner(player, owner);
+            boolean staffOverride = !ownsDoubleChest && owner != null && player.hasPermission("thievery.admin");
             if (!ownsDoubleChest && !staffOverride) {
                 LockDenial.sendNotOwner(player);
+                return;
+            }
+            if (leftData.isUnreadable() || rightData.isUnreadable()) {
+                sendUnreadable(player);
                 return;
             }
 
@@ -490,7 +661,7 @@ public class ContainerManager implements Listener {
             LockStateLog.record(player, event.getClickedBlock().getLocation(), nextState, staffOverride);
 
             if (staffOverride) {
-                notifyStaffLockStateChange(player, leftOwner != null ? leftOwner : rightOwner, nextState);
+                notifyStaffLockStateChange(player, owner, nextState);
             } else {
                 notifyLockStateChange(player, nextState);
             }
@@ -500,10 +671,14 @@ public class ContainerManager implements Listener {
         Location location = container.getBlock().getLocation();
         ContainerData data = containerDataManager.loadContainerData(location);
 
-        boolean owns = playerId.equals(data.getOwner());
-        boolean staffOverride = !owns && data.getOwner() != null && player.hasPermission("thievery.admin");
+        boolean owns = LockAccess.isOwner(player, data.getOwner());
+        boolean staffOverride = !owns && data.isOwned() && player.hasPermission("thievery.admin");
         if (!owns && !staffOverride) {
             LockDenial.sendNotOwner(player);
+            return;
+        }
+        if (data.isUnreadable()) {
+            sendUnreadable(player);
             return;
         }
 
@@ -517,8 +692,17 @@ public class ContainerManager implements Listener {
         }
     }
 
+    static void sendUnreadable(Player player) {
+        player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR
+                + "This lock's record is unreadable. Use /thievery locks setowner to replace it."));
+    }
+
     @EventHandler
     public void onContainerRightClickAccessCheck(PlayerInteractEvent event) {
+        LockGuard.failClosed(event, "a container access check", () -> handleAccessCheck(event));
+    }
+
+    private void handleAccessCheck(PlayerInteractEvent event) {
         if (event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
         if (event.getClickedBlock() == null) return;
         if (GraveManager.get().isGrave(event.getClickedBlock())) return;
@@ -539,6 +723,10 @@ public class ContainerManager implements Listener {
             ContainerData leftData = containerDataManager.loadContainerData(leftLoc);
             ContainerData rightData = containerDataManager.loadContainerData(rightLoc);
 
+            if (LockGuard.guarded()) {
+                denyDuringGuard(event, player, leftData, rightData);
+                return;
+            }
             if (!canAccessLockedDoubleChest(player, leftData, rightData, false)) {
                 event.setCancelled(true);
                 LockDenial.send(player, LockDenial.deniedState(player, leftData, rightData),
@@ -549,9 +737,20 @@ public class ContainerManager implements Listener {
 
         Location location = container.getBlock().getLocation();
         ContainerData data = containerDataManager.loadContainerData(location);
+        if (LockGuard.guarded()) {
+            denyDuringGuard(event, player, data);
+            return;
+        }
         if (!canAccessLockedContainer(player, data, false)) {
             event.setCancelled(true);
             LockDenial.send(player, data.getLockState(), LockDenial.chestPickable(event.getClickedBlock().getType()));
+        }
+    }
+
+    private static void denyDuringGuard(PlayerInteractEvent event, Player player, ContainerData... halves) {
+        if (lockedDuringGuard(halves) && !player.hasPermission("thievery.admin")) {
+            event.setCancelled(true);
+            sendStarting(player);
         }
     }
 
@@ -569,14 +768,14 @@ public class ContainerManager implements Listener {
     // Staff keep the placer as owner, so guild and faction locks still follow the placer's
     // membership. Skip the faction tutorial because it describes the staff member's own faction.
     @SuppressWarnings("deprecation")
-    private void notifyStaffLockStateChange(Player player, UUID owner, LockState lockState) {
+    private void notifyStaffLockStateChange(Player player, LockOwner owner, LockState lockState) {
         String displayState = formatLockState(lockState);
         player.sendTitle(
                 ThieveryTexts.msg(ThieveryTexts.ACCENT + "Lock State"),
                 ThieveryTexts.msg(ThieveryTexts.WARN + displayState), 5, 30, 10);
         player.playSound(player.getLocation(), Sound.BLOCK_IRON_TRAPDOOR_OPEN, 1.0f, 1.0f);
         player.sendMessage(ThieveryTexts.msg(ThieveryTexts.WARN + "Staff override: lock owned by "
-                + LockAccess.ownerName(owner) + " is now " + displayState + "."));
+                + LockOwnerNames.staffLabel(owner) + " is now " + displayState + "."));
     }
 
     private String formatLockState(LockState lockState) {
@@ -673,6 +872,10 @@ public class ContainerManager implements Listener {
 
     @EventHandler
     public void onRightClickChest(PlayerInteractEvent event) {
+        LockGuard.failClosed(event, "a container lockpick", () -> handleLockpickClick(event));
+    }
+
+    private void handleLockpickClick(PlayerInteractEvent event) {
         if (event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
         if (event.getClickedBlock() == null) return;
         if (GraveManager.get().isGrave(event.getClickedBlock())) return;
@@ -686,6 +889,10 @@ public class ContainerManager implements Listener {
 
         // Prevent opening container normally
         event.setCancelled(true);
+        if (LockGuard.guarded()) {
+            sendStarting(player);
+            return;
+        }
 
         if (!TraitChecker.hasLockpickingTraits(player)) return;
 
@@ -712,8 +919,10 @@ public class ContainerManager implements Listener {
             }
         }
 
-        var ownerUUID = getOwnerFromInventory(blockInv);
-        GuildChecker.LockpickAccessResult access = GuildChecker.checkLockpickAccess(ownerUUID);
+        ChestOwners owners = ownersOf(blockInv);
+        GuildChecker.LockpickAccessResult access = owners.diverged()
+                ? GuildChecker.checkLockpickAccess(LockOwner.unreadable())
+                : GuildChecker.checkLockpickAccess(owners.owner());
         if (access.type == GuildChecker.LockpickAccessResult.Type.DENY) {
             player.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + access.message));
             return;
@@ -793,6 +1002,10 @@ public class ContainerManager implements Listener {
      * ownership and access checks, then opens the probe menu as a real pick would.
      */
     public void testPick(Player p, Block target) {
+        if (LockGuard.guarded()) {
+            sendStarting(p);
+            return;
+        }
         if (target == null || !(target.getState() instanceof Container)
                 || Parameters.excludedContainerMaterials.contains(target.getType())) {
             p.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "Look at a container within 5 blocks."));
@@ -834,7 +1047,8 @@ public class ContainerManager implements Listener {
         Inventory chestInv = container.getInventory();
 
         int dexterity = RiskCalculator.getDexterity(p);
-        String targetKey = TargetKeyResolver.resolve(getOwnerFromInventory(chestInv));
+        ChestOwners owners = ownersOf(chestInv);
+        String targetKey = TargetKeyResolver.forLockOwner(owners.diverged() ? LockOwner.unreadable() : owners.owner());
         LockTypeProfile lockType = Parameters.lockTypeProfile(data.getLockState());
         int seizedCount = ChestLockpickSession.computeSeizedCount(dexterity, lockpickDef.getStrength(), lockType,
                 chestInv.getSize(), slips);
