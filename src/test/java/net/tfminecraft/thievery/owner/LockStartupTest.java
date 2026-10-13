@@ -179,9 +179,9 @@ class LockStartupTest {
 
         assertTrue(Files.readString(chest).contains(heir.toString()));
         verify(service).report(deathId, "thievery", 2L,
-                Outcome.done(Map.of("containers", 1), List.of("data/0_0/5_64_5.json")));
+                Outcome.done(Map.of("locks", 1), List.of("data/0_0/5_64_5.json")));
         verify(log).info(contains("Estate " + deathId + " (revision 2): locks DONE, 1 moved in all, 0 still with the testator."));
-        assertEquals(Outcome.done(Map.of("containers", 1), List.of("data/0_0/5_64_5.json")),
+        assertEquals(Outcome.done(Map.of("locks", 1), List.of("data/0_0/5_64_5.json")),
                 ((EstateParticipant) EstateBridge.get()).settle(decision));
     }
 
@@ -195,18 +195,25 @@ class LockStartupTest {
     }
 
     @Test
-    void aFailedReportIsLoggedAndLocksStayFull() {
-        LockEstates.Estate estate = new LockEstates.Estate(java.util.UUID.randomUUID(), java.util.UUID.randomUUID(), 0, null, null);
+    void aFailedReportNeitherDropsTheOthersNorTouchesTheLockMode() {
+        LockEstates.Estate first = new LockEstates.Estate(java.util.UUID.randomUUID(), java.util.UUID.randomUUID(), 0, null, null);
+        LockEstates.Estate second = new LockEstates.Estate(java.util.UUID.randomUUID(), java.util.UUID.randomUUID(), 1, null, null);
         LockEstates estates = mock(LockEstates.class);
-        when(estates.decided()).thenReturn(List.of(estate));
-        when(estates.report(any())).thenThrow(new IllegalStateException("estate service gone"));
+        when(estates.decided()).thenReturn(List.of(first, second));
+        when(estates.report(argThat(report -> report != null && report.estate() == first)))
+                .thenThrow(new IllegalStateException("estate service gone"));
+        when(estates.report(argThat(report -> report != null && report.estate() == second))).thenReturn(false);
         try (MockedStatic<EstateBridge> bridge = mockStatic(EstateBridge.class)) {
             bridge.when(EstateBridge::probe).thenReturn(true);
             bridge.when(EstateBridge::get).thenReturn(estates);
             assertTrue(LockStartup.start(stores, log));
         }
         assertEquals(LockGuard.Mode.FULL, LockGuard.mode());
-        verify(log).log(eq(Level.WARNING), contains("Could not report estate locks"), any(IllegalStateException.class));
+        verify(estates, times(2)).report(any());
+        verify(log).log(eq(Level.WARNING), contains("Estate " + first.deathId() + " (revision 0): could not report"),
+                any(IllegalStateException.class));
+        verify(log).info(contains("Estate " + second.deathId() + " (revision 1): locks DONE, 0 moved in all, 0 still"
+                + " with the testator. No estate service received it"));
     }
 
     @Test

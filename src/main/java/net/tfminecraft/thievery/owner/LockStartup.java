@@ -55,17 +55,19 @@ public final class LockStartup {
         return true;
     }
 
-    // Reports each decided estate after the pass; a failure here never touches the lock mode.
+    // Reports each decided estate after the pass, each on its own, so one failure never drops the others; the
+    // participant keeps every report for settle() before it calls the estate service.
     private static void report(List<LockEstates.Report> reports, Logger log) {
-        try {
-            for (LockEstates.Report report : reports) {
-                EstateBridge.get().report(report);
-                log.info("Estate " + report.estate().deathId() + " (revision " + report.estate().revision()
-                        + "): locks " + report.kind() + ", " + report.moved().size() + " moved in all, "
-                        + (report.leftProperty() + report.leftGuild()) + " still with the testator.");
+        for (LockEstates.Report report : reports) {
+            String estate = "Estate " + report.estate().deathId() + " (revision " + report.estate().revision() + ")";
+            try {
+                boolean received = EstateBridge.get().report(report);
+                log.info(estate + ": locks " + report.kind() + ", " + report.moved().size() + " moved in all, "
+                        + (report.leftProperty() + report.leftGuild()) + " still with the testator."
+                        + (received ? "" : " No estate service received it; it asks again."));
+            } catch (RuntimeException | LinkageError e) {
+                log.log(Level.WARNING, estate + ": could not report its locks; the estate service asks again.", e);
             }
-        } catch (RuntimeException | LinkageError e) {
-            log.log(Level.WARNING, "Could not report estate locks; the estate service asks again.", e);
         }
     }
 
