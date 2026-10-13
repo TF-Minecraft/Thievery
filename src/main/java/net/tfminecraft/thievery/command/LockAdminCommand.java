@@ -41,6 +41,7 @@ import net.tfminecraft.thievery.steal.DisplayStealManager;
 import net.tfminecraft.thievery.steal.FurnitureLockHelper;
 import net.tfminecraft.thievery.utils.ThieveryTexts;
 import net.tfminecraft.tlibs.character.CharacterInfo;
+import net.tfminecraft.tlibs.character.CharacterStatus;
 
 /** {@code /thievery locks quarantine} and {@code /thievery locks setowner}, for {@code thievery.admin} only. */
 public final class LockAdminCommand {
@@ -175,8 +176,14 @@ public final class LockAdminCommand {
         }
         UUID id = parseUuid(spec);
         if (id != null) {
-            if (OwnerIdentity.info(id).isEmpty()) {
+            Optional<CharacterInfo> info = OwnerIdentity.info(id);
+            if (info.isEmpty()) {
                 msg(player, ThieveryTexts.ERROR + "No character has the ID " + spec + ".");
+                return null;
+            }
+            if (info.get().status() == CharacterStatus.DEAD) {
+                // A dead character's locks pass through their estate; staff give a lock to a living character.
+                msg(player, ThieveryTexts.ERROR + info.get().name() + " is dead. Give the lock to a living character.");
                 return null;
             }
             return LockOwner.character(id);
