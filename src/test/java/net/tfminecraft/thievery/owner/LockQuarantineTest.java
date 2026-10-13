@@ -55,6 +55,26 @@ class LockQuarantineTest {
         assertTrue(LockQuarantine.snapshot().quarantined().isEmpty());
     }
 
+    @Test void resolvingADoorKeepsAContainerListedAtTheSameCoordinates() throws Exception {
+        LockQuarantine.Contents contents = new LockQuarantine.Contents();
+        contents.quarantined.add(new LockQuarantine.Entry("data/0_0/1_64_1.json", "acct-a", "no reviewed heir"));
+        contents.unreadable.add(new LockQuarantine.Entry("data/0_0/2_64_1.json", null, "unreadable: not JSON"));
+        LockQuarantine.replace(temp.resolve("quarantine.json"), contents);
+
+        LockQuarantine.resolved("world 1 64 1", Path.of("plugins/Thievery/door-data/0_0/1_64_1.json"));
+        LockQuarantine.resolved("world 2 64 1", Path.of("plugins/Thievery/door-data/0_0/2_64_1.json"));
+        LockQuarantine.Snapshot snapshot = LockQuarantine.snapshot();
+        assertEquals(List.of("data/0_0/1_64_1.json"), snapshot.quarantined().stream().map(LockQuarantine.Entry::path).toList());
+        assertEquals(List.of("data/0_0/2_64_1.json"), snapshot.unreadable().stream().map(LockQuarantine.Entry::path).toList());
+
+        LockQuarantine.resolved("world 1 64 1", Path.of("plugins/Thievery/data/0_0/1_64_1.json"));
+        LockQuarantine.resolved("world 2 64 1", Path.of("plugins/Thievery/data/0_0/2_64_1.json"));
+        snapshot = LockQuarantine.snapshot();
+        assertTrue(snapshot.quarantined().isEmpty());
+        assertTrue(snapshot.unreadable().isEmpty());
+        LockQuarantine.reset();
+    }
+
     @Test void aMissingOrUnreadableFileReadsAsEmpty() throws Exception {
         assertTrue(LockQuarantine.read(temp.resolve("absent.json")).quarantined.isEmpty());
         Path broken = Files.writeString(temp.resolve("broken.json"), "{not json");

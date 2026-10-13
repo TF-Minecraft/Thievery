@@ -86,8 +86,10 @@ public final class LockQuarantine {
     }
 
     // Listings name store files relative to their store; the server sees them under plugins/Thievery.
+    // Match on a path boundary so door-data/... never matches a container's data/... listing.
     private static boolean matches(String listed, Path path) {
-        return path.toString().replace('\\', '/').endsWith(listed);
+        String full = path.toString().replace('\\', '/');
+        return full.equals(listed) || full.endsWith("/" + listed);
     }
 
     /** Replaces the listed records after a boot scan and writes the file durably. */
