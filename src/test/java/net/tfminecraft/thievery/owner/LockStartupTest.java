@@ -111,6 +111,19 @@ class LockStartupTest {
     }
 
     @Test
+    void aLinkageErrorDuringTheMigrationKeepsTheGuardWithoutRetrying() throws IOException {
+        NoSuchMethodError mismatch = new NoSuchMethodError("CharacterInfo.ref()");
+        identity.identity().when(() -> OwnerIdentity.info(any())).thenThrow(mismatch);
+        String before = Files.readString(legacy);
+        assertFalse(LockStartup.start(stores, log));
+        assertTrue(LockGuard.guarded());
+        assertEquals("lock migration failed; restart required", LockGuard.reason());
+        assertEquals(before, Files.readString(legacy));
+        verify(log).log(eq(Level.SEVERE), contains("the lock migration failed"), same(mismatch));
+        verify(log, never()).info(contains("Lock migration:"));
+    }
+
+    @Test
     void simpleFactionsWithLockGuildInstallsTheBridge() {
         when(plugins.getPlugin("SimpleFactions")).thenReturn(mock(Plugin.class));
         assertTrue(LockStartup.start(stores, log));

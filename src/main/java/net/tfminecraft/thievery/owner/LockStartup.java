@@ -36,7 +36,8 @@ public final class LockStartup {
                         + " ready when Thievery enabled. Restart the server once RPCharacters is loading normally.");
             }
             migration.run();
-        } catch (Exception e) {
+        } catch (Exception | LinkageError e) {
+            // A LinkageError means a mismatched TLibs or SimpleFactions jar; hold the guard rather than fail open.
             log.log(Level.SEVERE, "Locks stay frozen until a restart: the lock migration failed. The next restart"
                     + " replays it.", e);
             LockGuard.enter("lock migration failed; restart required");
