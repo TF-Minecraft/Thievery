@@ -1,18 +1,24 @@
 #!/usr/bin/env python3
-"""Roll Thievery's lock stores back from the character-lock migration (stage 6a).
+"""Roll Thievery's lock stores back from the character-lock migration (stage 6a) and estate moves (6b).
 
 Run it with the server stopped, against the plugin folder (plugins/Thievery):
 
-    python3 tools/thievery_rollback.py /path/to/plugins/Thievery            # dry run
-    python3 tools/thievery_rollback.py /path/to/plugins/Thievery --apply    # restore
+    python3 tools/thievery_rollback.py /path/to/plugins/Thievery                  # dry run
+    python3 tools/thievery_rollback.py /path/to/plugins/Thievery --apply          # restore
+    python3 tools/thievery_rollback.py /path/to/plugins/Thievery --estate-only    # estate moves only
 
 Every migrations/journal-NNNN.json is processed newest first. A file is restored from
 that journal's archive only if its current SHA-256 equals the journal's newHash, so files
-changed or deleted since the migration are listed and left alone. With --apply the tool
+changed or deleted since the pass are listed and left alone. With --apply the tool
 then deletes the journals, the data-version file in each store and
 migrations/quarantine.json, so a later upgrade starts clean. Archives are kept.
 Nothing is written without --apply, and nothing is written when a journal or archive
 cannot be read.
+
+With --estate-only only entries marked "kind": "estate" are restored and the 6a markers
+(journals, data-version, quarantine.json) are kept. An older Thievery that completes an
+estate journal rewrites it without "kind" and "deathId", and those entries can then only
+be undone by a full rollback. Entries skipped at replay moved nothing and are left out.
 """
 
 import argparse
@@ -67,7 +73,14 @@ def read_journal(path):
     return journal
 
 
-def plan(root):
+def selected(entry, estate_only):
+    """Whether a rollback undoes this entry: skipped estate entries moved nothing."""
+    if entry.get("skipped"):
+        return False
+    return not estate_only or entry.get("kind") == "estate"
+
+
+def plan(root, estate_only=False):
     """Decide every restore without writing anything. Later journals see earlier restores."""
     current = {}
     restores = []
@@ -79,14 +92,19 @@ def plan(root):
             archive = zipfile.ZipFile(archive_path)
         except (OSError, zipfile.BadZipFile) as error:
             raise RollbackError(f"archive {journal['archive']} for {path.name} cannot be read: {error}") from error
+        entries = []
+        for entry in journal["entries"]:
+            if not isinstance(entry, dict) or not isinstance(entry.get("path"), str):
+                raise RollbackError(f"{path.name} has an entry without a path")
+            store_path(root, entry["path"])
+            if selected(entry, estate_only):
+                entries.append(entry)
         result = {"journal": path.name, "completed": bool(journal.get("completed")),
-                  "entries": len(journal["entries"]), "restored": [], "changed": [], "missing": [],
+                  "entries": len(entries), "restored": [], "changed": [], "missing": [],
                   "archive_mismatch": []}
         with archive:
-            for entry in journal["entries"]:
-                name = entry.get("path")
-                if not isinstance(name, str):
-                    raise RollbackError(f"{path.name} has an entry without a path")
+            for entry in entries:
+                name = entry["path"]
                 target = store_path(root, name)
                 if target not in current:
                     current[target] = sha256(target.read_bytes()) if target.is_file() else None
@@ -129,10 +147,12 @@ def sync_directory(directory):
         os.close(descriptor)
 
 
-def apply(root, restores):
+def apply(root, restores, remove_markers=True):
     for target, original in restores:
         write_durably(target, original)
     removed = []
+    if not remove_markers:
+        return removed
     for path in journals(root):
         path.unlink()
         removed.append(str(path.relative_to(root)))
@@ -152,11 +172,13 @@ def main(argv=None, out=sys.stdout):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("plugin_dir", type=Path, help="the plugins/Thievery folder")
     parser.add_argument("--apply", action="store_true", help="restore files and remove the migration markers")
+    parser.add_argument("--estate-only", action="store_true",
+                        help="undo estate moves only and keep the 6a migration markers")
     parser.add_argument("--report", type=Path, help="also write the result as JSON to this file")
     args = parser.parse_args(argv)
     root = args.plugin_dir
     try:
-        restores, report = plan(root)
+        restores, report = plan(root, args.estate_only)
     except RollbackError as error:
         print(f"Nothing changed: {error}", file=out)
         return 2
@@ -169,14 +191,16 @@ def main(argv=None, out=sys.stdout):
                            ("archive_mismatch", "archive copy does not match")):
             for name in result[key]:
                 print(f"  {label}, left alone: {name}", file=out)
-    removed = apply(root, restores) if args.apply else []
-    if args.apply:
+    removed = apply(root, restores, not args.estate_only) if args.apply else []
+    if args.apply and args.estate_only:
+        print("Estate moves undone; migration markers and archives kept.", file=out)
+    elif args.apply:
         print(f"Removed {len(removed)} migration markers; archives kept.", file=out)
     else:
         print("Dry run: nothing was written. Re-run with --apply, with the server stopped.", file=out)
     if args.report:
-        args.report.write_text(json.dumps({"apply": args.apply, "journals": report, "removed": removed}, indent=2),
-                               encoding="utf-8")
+        args.report.write_text(json.dumps({"apply": args.apply, "estate_only": args.estate_only, "journals": report,
+                                           "removed": removed}, indent=2), encoding="utf-8")
     return 0
 
 
