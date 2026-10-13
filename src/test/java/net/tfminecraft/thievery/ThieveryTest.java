@@ -170,6 +170,12 @@ class ThieveryTest {
             load();
             assertFalse(net.tfminecraft.thievery.owner.LockGuard.guarded());
             assertTrue(new File(plugin.getDataFolder(), "migrations/quarantine.json").exists());
+            // With the locks loaded, Thievery joins estates as a participant that settles at restart.
+            var participants = server.getServicesManager()
+                    .getRegistrations(net.tfminecraft.tlibs.character.estate.EstateParticipant.class);
+            assertEquals(1, participants.size());
+            assertEquals("thievery", participants.getFirst().getProvider().id());
+            assertSame(plugin, participants.getFirst().getPlugin());
         }
     }
 
