@@ -66,7 +66,7 @@ class TLibsLockEstatesTest {
     }
 
     Report report(Report.Kind kind, int leftProperty, int leftGuild) {
-        return new Report(new Estate(deathId, dead, 2, heir, leader), kind, Map.of("containers", 2),
+        return new Report(new Estate(deathId, dead, 2, heir, leader), kind, Map.of("locks", 2),
                 List.of("data/0_0/1_64_1.json", "data/0_0/2_64_1.json"), kind == Report.Kind.RETRY ? "failed" : null,
                 leftProperty, leftGuild);
     }
@@ -114,7 +114,7 @@ class TLibsLockEstatesTest {
         estates.when(() -> Estates.report(any(), any(), anyLong(), any())).thenReturn(true);
         assertTrue(source.report(report(Report.Kind.DONE, 0, 0)));
         estates.verify(() -> Estates.report(deathId, "thievery", 2L,
-                Outcome.done(Map.of("containers", 2), List.of("data/0_0/1_64_1.json", "data/0_0/2_64_1.json"))));
+                Outcome.done(Map.of("locks", 2), List.of("data/0_0/1_64_1.json", "data/0_0/2_64_1.json"))));
         assertEquals(Outcome.retry("failed"), TLibsLockEstates.outcome(report(Report.Kind.RETRY, 0, 0)));
         assertEquals(Outcome.AT_RESTART, TLibsLockEstates.outcome(report(Report.Kind.AT_RESTART, 1, 0)));
         assertEquals("thievery", source.id());
@@ -122,6 +122,7 @@ class TLibsLockEstatesTest {
 
     @Test
     void settleAtRuntimeAnswersFromTheBootPassOrAtRestart() {
+        estates.when(() -> Estates.guardHolds(any())).thenReturn(true);
         // Nothing seen at boot: a part going to a character waits for a restart; frozen and waiting parts are done.
         assertEquals(Outcome.AT_RESTART, source.settle(decision(deathId, to(heir), Recipient.FROZEN, 0)));
         assertEquals(Outcome.AT_RESTART, source.settle(decision(deathId, Recipient.WAITING, to(leader), 0)));
@@ -130,7 +131,7 @@ class TLibsLockEstatesTest {
         estates.when(() -> Estates.report(any(), any(), anyLong(), any())).thenReturn(false);
         // Boot moved the property and left two guild locks for a waiting part.
         assertFalse(source.report(report(Report.Kind.DONE, 0, 2)), "no estate service received it");
-        Outcome done = Outcome.done(Map.of("containers", 2), List.of("data/0_0/1_64_1.json", "data/0_0/2_64_1.json"));
+        Outcome done = Outcome.done(Map.of("locks", 2), List.of("data/0_0/1_64_1.json", "data/0_0/2_64_1.json"));
         assertEquals(done, source.settle(decision(deathId, to(heir), Recipient.WAITING, 2)));
         // A later revision gives those guild locks to a leader: they move at the next restart.
         assertEquals(Outcome.AT_RESTART, source.settle(decision(deathId, to(heir), to(leader), 3)));
@@ -145,6 +146,19 @@ class TLibsLockEstatesTest {
         assertEquals(Outcome.AT_RESTART, source.settle(decision(deathId, Recipient.FROZEN, to(leader), 2)));
         assertEquals(Outcome.AT_RESTART, source.settle(decision(deathId, to(heir), Recipient.FROZEN, 2)));
         assertEquals(done, source.settle(decision(deathId, Recipient.FROZEN, Recipient.FROZEN, 2)));
+    }
+
+    @Test
+    void settleNeverAnswersDoneForADecisionWhoseGuardFails() {
+        estates.when(() -> Estates.report(any(), any(), anyLong(), any())).thenReturn(true);
+        source.report(report(Report.Kind.DONE, 0, 0));
+        EstateDecision reverted = decision(deathId, to(heir), to(leader), 2);
+        estates.when(() -> Estates.guardHolds(reverted)).thenReturn(false);
+        Outcome outcome = source.settle(reverted);
+        assertEquals(Outcome.Kind.RETRY, outcome.kind());
+        assertTrue(((Outcome.Retry) outcome).reason().contains("revived, reverted"));
+        estates.when(() -> Estates.guardHolds(reverted)).thenReturn(true);
+        assertEquals(Outcome.Kind.DONE, source.settle(reverted).kind());
     }
 
     @Test

@@ -75,10 +75,13 @@ final class TLibsLockEstates implements LockEstates, EstateParticipant {
     /**
      * DONE when no part going to a character still holds a record of the testator's, as this boot's pass observed
      * it. A dead testator gains no locks, so that answer also holds for a later revision. Otherwise the records
-     * move at the next restart.
+     * move at the next restart. A decision whose guard fails (revived, reverted or stale) gets RETRY.
      */
     @Override
     public Outcome settle(EstateDecision decision) {
+        if (!Estates.guardHolds(decision)) {
+            return Outcome.retry("the estate does not apply now: revived, reverted or a newer revision");
+        }
         Report boot = reports.get(decision.deathId());
         boolean retried = boot == null || boot.kind() == Report.Kind.RETRY;
         boolean property = decision.property().isCharacter() && (retried || boot.leftProperty() > 0);
