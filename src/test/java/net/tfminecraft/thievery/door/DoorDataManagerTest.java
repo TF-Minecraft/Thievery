@@ -72,6 +72,23 @@ class DoorDataManagerTest {
     }
 
     @Test
+    void theOwnerIndexFollowsTheDiskWhenADirectorySyncFails() {
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+        manager.saveDoorData(new DoorData(location, "copper", 0.75, LockOwner.character(first)));
+        try (MockedStatic<DurableFiles> durable = mockStatic(DurableFiles.class, CALLS_REAL_METHODS)) {
+            durable.when(() -> DurableFiles.syncDirectory(any())).thenThrow(new java.io.IOException("fsync failed"));
+            manager.saveDoorData(new DoorData(location, "copper", 0.75, LockOwner.character(second)));
+            assertEquals(java.util.List.of(), OwnedLocks.of(first));
+            assertEquals(1, OwnedLocks.of(second).size());
+            assertFalse(manager.deleteDoorData(location));
+            assertEquals(java.util.List.of(), OwnedLocks.of(second));
+        }
+        verify(logger).warning(contains("Failed to save door data"));
+        verify(logger).warning(contains("Failed to delete door data"));
+    }
+
+    @Test
     void missingDoorIsUnlockedAndCannotBeDeleted() {
         assertNull(manager.loadDoorData(location));
         assertFalse(manager.deleteDoorData(location));

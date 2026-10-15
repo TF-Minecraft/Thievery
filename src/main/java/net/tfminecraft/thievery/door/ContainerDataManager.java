@@ -80,12 +80,12 @@ public class ContainerDataManager {
         }
         OWNER_CACHE.remove(BlockKey.of(location));
         try {
-            boolean deleted = DurableFiles.delete(file.toPath());
-            OwnedLocks.remove(file.toPath());
-            return deleted;
+            return DurableFiles.delete(file.toPath());
         } catch (IOException e) {
             Bukkit.getLogger().warning("Failed to delete container data for " + location + ": " + e.getMessage());
             return false;
+        } finally {
+            OwnedLocks.refresh(LockStores.Store.CONTAINERS, file.toPath(), OwnedLocks.world(location));
         }
     }
 
@@ -142,8 +142,6 @@ public class ContainerDataManager {
             boolean ownership = previous == null || !Objects.equals(previous.owner(), next.owner())
                     || previous.state() != next.state();
             DurableFiles.write(file.toPath(), LockRecords.encodeContainer(next), ownership);
-            OwnedLocks.put(LockStores.Store.CONTAINERS, file.toPath(), next.owner(), next.state(),
-                    OwnedLocks.world(data.getLocation()));
             if (data.isProvisional()) {
                 OWNER_CACHE.remove(BlockKey.of(data.getLocation()));
             } else {
@@ -152,6 +150,8 @@ public class ContainerDataManager {
         } catch (IOException e) {
             OWNER_CACHE.remove(BlockKey.of(data.getLocation()));
             Bukkit.getLogger().warning("Failed to save container data for " + data.getLocation() + ": " + e.getMessage());
+        } finally {
+            OwnedLocks.refresh(LockStores.Store.CONTAINERS, file.toPath(), OwnedLocks.world(data.getLocation()));
         }
     }
 

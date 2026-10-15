@@ -75,6 +75,24 @@ class EntityLockDataManagerTest {
         assertTrue(manager.delete(id));
         assertEquals(java.util.List.of(), OwnedLocks.of(owner));
     }
+    @Test void theOwnerIndexFollowsTheDiskWhenADirectorySyncFails() {
+        UUID id = UUID.randomUUID(), first = UUID.randomUUID(), second = UUID.randomUUID();
+        var data = new EntityLockData(id, LockOwner.character(first));
+        manager.save(data);
+        try (MockedStatic<net.tfminecraft.thievery.owner.DurableFiles> durable = mockStatic(
+                net.tfminecraft.thievery.owner.DurableFiles.class, CALLS_REAL_METHODS)) {
+            durable.when(() -> net.tfminecraft.thievery.owner.DurableFiles.syncDirectory(org.mockito.ArgumentMatchers.any()))
+                    .thenThrow(new java.io.IOException("fsync failed"));
+            data.setOwner(LockOwner.character(second));
+            manager.save(data);
+            assertEquals(java.util.List.of(), OwnedLocks.of(first));
+            assertEquals(1, OwnedLocks.of(second).size());
+            assertFalse(manager.delete(id));
+            assertEquals(java.util.List.of(), OwnedLocks.of(second));
+        }
+        verify(logger).warning(org.mockito.ArgumentMatchers.contains("Failed to save entity lock data"));
+        verify(logger).warning(org.mockito.ArgumentMatchers.contains("Failed to delete entity lock data"));
+    }
     @Test void missingAndUnownedRecordsAreUnclaimedButBrokenOnesStayLocked() throws Exception {
         UUID id = UUID.randomUUID();
         assertEquals(id, manager.load(id).getEntityId());

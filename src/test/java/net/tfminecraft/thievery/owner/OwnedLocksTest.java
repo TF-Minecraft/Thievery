@@ -1,6 +1,7 @@
 package net.tfminecraft.thievery.owner;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import java.nio.file.Files;
@@ -106,6 +107,89 @@ class OwnedLocksTest {
         LockGuard.lift(() -> {});
         assertFalse(Files.exists(door));
         assertEquals(List.of(), OwnedLocks.of(alice));
+    }
+
+    @Test
+    void anUnchangedRecordKeepsWhatWasSeenOfItsBlock() {
+        Path chest = temp.resolve("data/0_0/1_64_1.json");
+        OwnedLocks.put(Store.CONTAINERS, chest, marked(alice), LockState.PRIVATE, "world");
+        Lock seen = OwnedLocks.seen(OwnedLocks.of(alice).get(0), "world", "Chest", "2_64_1.json");
+        OwnedLocks.put(Store.CONTAINERS, chest, marked(alice), LockState.PRIVATE, null);
+        OwnedLocks.put(Store.CONTAINERS, chest, marked(alice), LockState.PRIVATE, "world");
+        assertEquals(List.of(seen), OwnedLocks.of(alice), "a save that changes nothing keeps the look");
+        OwnedLocks.put(Store.CONTAINERS, chest, marked(alice), LockState.PRIVATE, "world_nether");
+        assertEquals(new Lock(chest, Store.CONTAINERS, alice, LockState.PRIVATE, "world_nether", null, null),
+                OwnedLocks.of(alice).get(0), "written in another world: looked at again");
+        OwnedLocks.put(Store.CONTAINERS, chest, marked(alice), null, null);
+        OwnedLocks.put(Store.DOORS, chest, marked(alice), null, null);
+        assertEquals(Store.DOORS, OwnedLocks.of(alice).get(0).store());
+    }
+
+    @Test
+    void refreshIndexesEachFileAsItStandsOnDisk() throws Exception {
+        UUID entity = UUID.randomUUID();
+        Path chest = write("data/0_0/1_64_1.json",
+                "{\"owner\":\"" + alice + "\",\"ownerKind\":\"CHARACTER\",\"lockState\":\"FACTION\"}");
+        Path door = write("door-data/0_0/1_64_1.json",
+                "{\"key\":\"k\",\"strength\":0.5,\"ownerUUID\":\"" + alice + "\",\"ownerKind\":\"CHARACTER\"}");
+        Path stand = write("entities/" + entity + ".json",
+                "{\"owner\":\"" + alice + "\",\"ownerKind\":\"CHARACTER\",\"lockState\":\"PUBLIC\"}");
+        OwnedLocks.refresh(Store.CONTAINERS, chest, "world");
+        OwnedLocks.refresh(Store.DOORS, door, null);
+        OwnedLocks.refresh(Store.ENTITIES, stand, null);
+        assertEquals(List.of(new Lock(chest, Store.CONTAINERS, alice, LockState.FACTION, "world", null, null),
+                new Lock(door, Store.DOORS, alice, null, null, null, null),
+                new Lock(stand, Store.ENTITIES, alice, LockState.PUBLIC, null, null, null)), OwnedLocks.of(alice));
+
+        Files.writeString(chest, "{\"owner\":");
+        OwnedLocks.refresh(Store.CONTAINERS, chest, "world");
+        Files.delete(door);
+        OwnedLocks.refresh(Store.DOORS, door, null);
+        assertEquals(List.of(stand), OwnedLocks.of(alice).stream().map(Lock::path).toList(),
+                "unreadable and missing files hold no lock");
+    }
+
+    @Test
+    void forgetIfGoneDropsOnlyMissingFiles() throws Exception {
+        Path door = write("door-data/0_0/1_64_1.json", "{}");
+        OwnedLocks.put(Store.DOORS, door, marked(alice), null, null);
+        OwnedLocks.forgetIfGone(door);
+        assertEquals(1, OwnedLocks.of(alice).size(), "a deletion that failed leaves the lock");
+        Files.delete(door);
+        OwnedLocks.forgetIfGone(door);
+        assertEquals(List.of(), OwnedLocks.of(alice));
+    }
+
+    @Test
+    void queuedDeletionsLeaveTheIndexOnceTheFileIsGoneEvenIfTheSyncFails() throws Exception {
+        Path gone = temp.resolve("door-data/0_0/1_64_1.json");
+        Path kept = temp.resolve("door-data/0_0/2_64_1.json");
+        java.util.logging.Logger log = mock(java.util.logging.Logger.class);
+        try (var bukkit = mockStatic(org.bukkit.Bukkit.class);
+                var durable = mockStatic(DurableFiles.class, CALLS_REAL_METHODS)) {
+            bukkit.when(org.bukkit.Bukkit::getLogger).thenReturn(log);
+            // Stubbing calls the real methods, so the files are written afterwards.
+            durable.when(() -> DurableFiles.syncDirectory(any())).thenThrow(new java.io.IOException("fsync failed"));
+            durable.when(() -> DurableFiles.delete(kept)).thenThrow(new java.io.IOException("busy"));
+            write("door-data/0_0/1_64_1.json", "{}");
+            write("door-data/0_0/2_64_1.json", "{}");
+            OwnedLocks.put(Store.DOORS, gone, marked(alice), null, null);
+            OwnedLocks.put(Store.DOORS, kept, marked(alice), null, null);
+            LockGuard.enter("starting up");
+            LockGuard.queueDeletion(gone);
+            LockGuard.queueDeletion(kept);
+            LockGuard.lift(() -> {});
+        }
+        assertFalse(Files.exists(gone));
+        assertEquals(List.of(kept), OwnedLocks.of(alice).stream().map(Lock::path).toList());
+        verify(log, times(2)).warning(contains("Could not delete queued lock file"));
+    }
+
+    Path write(String name, String json) throws Exception {
+        Path path = temp.resolve(name);
+        Files.createDirectories(path.getParent());
+        Files.writeString(path, json);
+        return path;
     }
 
     @Test

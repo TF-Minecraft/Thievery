@@ -71,9 +71,10 @@ public class DoorDataManager {
             boolean ownership = previous == null || !Objects.equals(previous.owner(), next.owner())
                     || !Objects.equals(previous.key(), next.key());
             DurableFiles.write(path, LockRecords.encodeDoor(next), ownership);
-            OwnedLocks.put(LockStores.Store.DOORS, path, next.owner(), null, OwnedLocks.world(data.getLocation()));
         } catch (IOException e) {
             Bukkit.getLogger().warning("Failed to save door data for " + data.getLocation() + ": " + e.getMessage());
+        } finally {
+            OwnedLocks.refresh(LockStores.Store.DOORS, path, OwnedLocks.world(data.getLocation()));
         }
     }
 
@@ -84,12 +85,12 @@ public class DoorDataManager {
             return false;
         }
         try {
-            boolean deleted = DurableFiles.delete(path);
-            OwnedLocks.remove(path);
-            return deleted;
+            return DurableFiles.delete(path);
         } catch (IOException e) {
             Bukkit.getLogger().warning("Failed to delete door data for " + location + ": " + e.getMessage());
             return false;
+        } finally {
+            OwnedLocks.refresh(LockStores.Store.DOORS, path, OwnedLocks.world(location));
         }
     }
 

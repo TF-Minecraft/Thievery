@@ -1,5 +1,7 @@
 package net.tfminecraft.thievery.owner;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -51,19 +53,47 @@ public final class OwnedLocks {
 
     /**
      * Records what a file now holds: kept when its stored owner is marked as a character, dropped otherwise.
-     * {@code owner} is null for an unreadable record; {@code world} is where it was written, or null.
+     * {@code owner} is null for an unreadable record; {@code world} is where it was written, or null. A record whose
+     * owner and state are unchanged keeps what was seen of its block, unless it was written in another world.
      */
     public static synchronized void put(LockStores.Store store, Path path, OwnerCodec.Stored owner, LockState state,
             String world) {
         Path key = key(path);
-        remove(key);
+        Lock previous = LOCKS.get(key);
         Pattern names = store == LockStores.Store.ENTITIES ? ENTITY : BLOCK;
         if (owner == null || owner.marker() != LockOwner.Kind.CHARACTER
                 || !names.matcher(key.getFileName().toString()).matches()) {
+            remove(key);
             return;
         }
+        if (previous != null && previous.store() == store && previous.owner().equals(owner.id())
+                && previous.state() == state && (world == null || world.equals(previous.world()))) {
+            return;
+        }
+        remove(key);
         LOCKS.put(key, new Lock(key, store, owner.id(), state, world, null, null));
         BY_OWNER.computeIfAbsent(owner.id(), id -> new TreeSet<>()).add(key);
+    }
+
+    /**
+     * Indexes a file as it stands on disk after a save or delete, so a write or deletion that took effect before its
+     * directory sync failed is still reflected, and a no-op save repairs a stale entry. A missing or unreadable file
+     * is dropped, as it holds no character's lock.
+     */
+    public static void refresh(LockStores.Store store, Path path, String world) {
+        try {
+            LockMigration.Decoded record = LockMigration.decode(store, Files.readAllBytes(path));
+            put(store, path, record.owner(), record.state(), world);
+        } catch (IOException | IllegalArgumentException e) {
+            remove(path);
+        }
+    }
+
+    /** Drops a file the guard tried to delete, once it is gone, whether or not its directory sync failed. */
+    public static void forgetIfGone(Path path) {
+        if (!Files.exists(path)) {
+            remove(path);
+        }
     }
 
     public static synchronized void remove(Path path) {

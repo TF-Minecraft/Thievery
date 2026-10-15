@@ -372,6 +372,30 @@ class ContainerDataManagerTest {
         assertEquals(java.util.List.of(), OwnedLocks.of(character));
     }
 
+    @Test
+    void theOwnerIndexFollowsTheDiskWhenADirectorySyncFailsAndNoOpSavesRepairIt() throws Exception {
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+        ContainerData data = new ContainerData(location, LockOwner.character(first));
+        manager.saveContainerData(data);
+        try (MockedStatic<DurableFiles> durable = mockStatic(DurableFiles.class, CALLS_REAL_METHODS)) {
+            durable.when(() -> DurableFiles.syncDirectory(any())).thenThrow(new java.io.IOException("fsync failed"));
+            data.setOwner(LockOwner.character(second));
+            manager.saveContainerData(data);
+            verify(logger).warning(contains("Failed to save container data"));
+            assertEquals(java.util.List.of(), OwnedLocks.of(first), "the new owner is on disk");
+            assertEquals(1, OwnedLocks.of(second).size());
+            assertFalse(manager.deleteContainerData(location));
+            verify(logger).warning(contains("Failed to delete container data"));
+            assertFalse(Files.exists(file));
+            assertEquals(java.util.List.of(), OwnedLocks.of(second), "the deleted lock is gone");
+        }
+        manager.saveContainerData(data);
+        OwnedLocks.clear();
+        manager.saveContainerData(data);
+        assertEquals(1, OwnedLocks.of(second).size(), "an unchanged save repairs the index");
+    }
+
     static ContainerDataManager managerAt(Path root) throws Exception {
         ContainerDataManager manager = new ContainerDataManager();
         Field folder = ContainerDataManager.class.getDeclaredField("dataFolder");

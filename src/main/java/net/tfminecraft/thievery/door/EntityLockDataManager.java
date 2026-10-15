@@ -60,9 +60,10 @@ public class EntityLockDataManager {
                 return;
             }
             DurableFiles.write(path, LockRecords.encodeEntity(next), true);
-            OwnedLocks.put(LockStores.Store.ENTITIES, path, next.owner(), next.state(), null);
         } catch (IOException e) {
             Bukkit.getLogger().warning("Failed to save entity lock data for " + data.getEntityId() + ": " + e.getMessage());
+        } finally {
+            OwnedLocks.refresh(LockStores.Store.ENTITIES, path, null);
         }
     }
 
@@ -77,12 +78,12 @@ public class EntityLockDataManager {
             return false;
         }
         try {
-            boolean deleted = DurableFiles.delete(path);
-            OwnedLocks.remove(path);
-            return deleted;
+            return DurableFiles.delete(path);
         } catch (IOException e) {
             Bukkit.getLogger().warning("Failed to delete entity lock data for " + entityId + ": " + e.getMessage());
             return false;
+        } finally {
+            OwnedLocks.refresh(LockStores.Store.ENTITIES, path, null);
         }
     }
 

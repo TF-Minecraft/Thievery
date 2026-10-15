@@ -211,6 +211,24 @@ class LockHoldingsTest {
     }
 
     @Test
+    void halvesInDifferentEstatePartsAreListedAndCountedApart() {
+        // A chest placed beside a guild chest starts public; the halves go to different recipients.
+        block(main, 10, 64, 20, Material.CHEST, true, chest(Chest.Type.LEFT, BlockFace.NORTH));
+        block(main, 11, 64, 20, Material.CHEST, true, chest(Chest.Type.RIGHT, BlockFace.NORTH));
+        own(Store.CONTAINERS, "10_64_20.json", LockState.GUILD, null);
+        own(Store.CONTAINERS, "11_64_20.json", LockState.PUBLIC, null);
+        LockHoldings.Summary split = LockHoldings.describe(alice);
+        assertEquals(List.of("Chest at 10 64 20 (guild)", "Chest at 11 64 20"), split.labels());
+        assertEquals(Map.of("locks", 1, "guild-locks", 1), split.counts());
+
+        // Guild and faction halves are both in the guild part: one chest.
+        own(Store.CONTAINERS, "11_64_20.json", LockState.FACTION, null);
+        LockHoldings.Summary joined = LockHoldings.describe(alice);
+        assertEquals(List.of("Chest at 10 64 20 (guild)"), joined.labels());
+        assertEquals(Map.of("guild-locks", 1), joined.counts());
+    }
+
+    @Test
     void nothingOwnedDescribesNothingAndAMissingMainWorldNamesEveryWorld() {
         assertEquals(new LockHoldings.Summary(Map.of(), List.of()), LockHoldings.describe(alice));
         bukkit.when(Bukkit::getWorlds).thenReturn(List.of());

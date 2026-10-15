@@ -2,6 +2,7 @@ package net.tfminecraft.thievery.estate;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -91,7 +92,7 @@ public final class LockHoldings {
         Map<String, Integer> counts = new TreeMap<>();
         List<String> labels = new ArrayList<>();
         for (Item item : items) {
-            boolean guild = item.state() == LockState.GUILD || item.state() == LockState.FACTION;
+            boolean guild = guild(item.state());
             counts.merge(guild ? GUILD : PROPERTY, 1, Integer::sum);
             labels.add(item.kind() + (item.at() == null ? " (not loaded)"
                     : " at " + item.at().x() + " " + item.at().y() + " " + item.at().z())
@@ -141,21 +142,27 @@ public final class LockHoldings {
         return (at.x() - side * facing.getModZ()) + "_" + at.y() + "_" + (at.z() + side * facing.getModX()) + ".json";
     }
 
-    // A double chest is listed once, by the first half seen to name the other; the named half is left out.
+    // A double chest is listed once, by the first half seen to name the other; the named half is left out. Halves in
+    // different estate parts go to different recipients, so both are listed.
     private static Set<String> secondHalves(List<OwnedLocks.Lock> locks) {
-        Set<String> containers = new HashSet<>();
+        Map<String, OwnedLocks.Lock> containers = new HashMap<>();
         for (OwnedLocks.Lock lock : locks) {
             if (lock.store() == LockStores.Store.CONTAINERS) {
-                containers.add(lock.name());
+                containers.put(lock.name(), lock);
             }
         }
         Set<String> second = new HashSet<>();
         for (OwnedLocks.Lock lock : locks) {
-            if (lock.partner() != null && containers.contains(lock.partner()) && !second.contains(lock.name())) {
-                second.add(lock.partner());
+            OwnedLocks.Lock other = containers.get(lock.partner());
+            if (other != null && guild(other.state()) == guild(lock.state()) && !second.contains(lock.name())) {
+                second.add(other.name());
             }
         }
         return second;
+    }
+
+    private static boolean guild(LockState state) {
+        return state == LockState.GUILD || state == LockState.FACTION;
     }
 
     private static Item entity(OwnedLocks.Lock lock, String main) {

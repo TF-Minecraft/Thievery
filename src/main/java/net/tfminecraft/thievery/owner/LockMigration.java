@@ -101,7 +101,7 @@ public final class LockMigration {
     /** A planned owner rewrite; {@code deathId} is set for estate moves. */
     record Planned(Scanned scanned, LockOwner owner, UUID deathId) {}
 
-    private record Decoded(OwnerCodec.Stored owner, LockState state) {}
+    record Decoded(OwnerCodec.Stored owner, LockState state) {}
 
     private final LockStores stores;
     private final Logger log;
@@ -432,7 +432,7 @@ public final class LockMigration {
         return journals;
     }
 
-    private static Decoded decode(LockStores.Store store, byte[] bytes) {
+    static Decoded decode(LockStores.Store store, byte[] bytes) {
         return switch (store) {
             case CONTAINERS -> {
                 LockRecords.Container container = LockRecords.decodeContainer(bytes);
