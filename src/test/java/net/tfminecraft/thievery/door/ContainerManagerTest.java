@@ -450,7 +450,7 @@ class ContainerManagerTest {
     void lockpickingStartsHiddenSessionRecordsNearbyAccessAndRejectsConcurrentAttempt(int nearbyRadius, boolean debugOwnChest) {
         int radius=net.tfminecraft.thievery.cache.Cache.radius; boolean own=net.tfminecraft.thievery.cache.Cache.debugAllowOwnChest, online=net.tfminecraft.thievery.cache.Cache.requireOwnerOnline; var traits=net.tfminecraft.thievery.cache.Cache.traits;
         net.tfminecraft.thievery.cache.Cache.radius=nearbyRadius; net.tfminecraft.thievery.cache.Cache.debugAllowOwnChest=debugOwnChest; net.tfminecraft.thievery.cache.Cache.requireOwnerOnline=false; net.tfminecraft.thievery.cache.Cache.traits=List.of();
-        var barrel=lockpickBlock(); var locked=lock(barrel,debugOwnChest ? player.getUniqueId() : UUID.randomUUID()); var pick=mock(net.tfminecraft.thievery.player.LockpickDefinition.class); when(pick.getCapacity()).thenReturn(10); when(pick.getStrength()).thenReturn(.5);
+        var barrel=lockpickBlock(); var locked=lock(barrel,UUID.randomUUID()); var pick=mock(net.tfminecraft.thievery.player.LockpickDefinition.class); when(pick.getCapacity()).thenReturn(10); when(pick.getStrength()).thenReturn(.5);
         tools.when(()->ToolResolver.isLockpick(any())).thenReturn(true); tools.when(()->ToolResolver.resolveLockpick(any())).thenReturn(pick);
         var stealManager=mock(net.tfminecraft.thievery.steal.StealManager.class); var gui=mock(Inventory.class);
         try(var clues=mockStatic(net.tfminecraft.thievery.clue.ClueChecker.class); var cooldown=mockStatic(net.tfminecraft.thievery.player.GuildAccessCooldown.class); var risk=mockStatic(net.tfminecraft.thievery.player.RiskCalculator.class); var targets=mockStatic(net.tfminecraft.thievery.player.TargetKeyResolver.class); var evil=mockStatic(net.tfminecraft.thievery.utils.EvilRpPlays.class); var sessions=mockStatic(net.tfminecraft.thievery.steal.StealManager.class); var menus=mockStatic(net.tfminecraft.thievery.steal.StealGui.class); var references=mockConstruction(net.tfminecraft.thievery.steal.ChestStealReference.class,(ref,context)->when(ref.buildTitle(any())).thenReturn("Search"))) {
@@ -556,6 +556,59 @@ class ContainerManagerTest {
             assertEquals("2026-10-02",locked.getLastAccess(player.getUniqueId()));
         } finally { net.tfminecraft.thievery.cache.Cache.traits=traits; net.tfminecraft.thievery.cache.Parameters.excludedContainerMaterials=saved; }
     }
+    static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> accessibleContainerCases() {
+        return java.util.stream.Stream.of("owner", "unowned", "public", "guild", "faction", "staff")
+                .flatMap(access -> java.util.stream.Stream.of(false, true)
+                        .flatMap(doubleChest -> java.util.stream.Stream.of(false, true)
+                                .map(debug -> org.junit.jupiter.params.provider.Arguments.of(access, doubleChest, debug))));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.MethodSource("accessibleContainerCases")
+    void normalLockpickingRejectsAccessibleContainers(String access, boolean doubleChest, boolean debug) {
+        var traits = net.tfminecraft.thievery.cache.Cache.traits;
+        boolean oldDebug = net.tfminecraft.thievery.cache.Cache.debugAllowOwnChest;
+        net.tfminecraft.thievery.cache.Cache.traits = List.of();
+        net.tfminecraft.thievery.cache.Cache.debugAllowOwnChest = debug;
+        var pair = doubleChest ? doubleChest() : null;
+        Block target = pair == null ? lockpickBlock() : pair.block();
+        UUID owner = switch (access) {
+            case "owner" -> player.getUniqueId();
+            case "unowned" -> null;
+            default -> UUID.randomUUID();
+        };
+        LockState state = switch (access) {
+            case "public" -> LockState.PUBLIC;
+            case "guild" -> LockState.GUILD;
+            case "faction" -> LockState.FACTION;
+            default -> LockState.PRIVATE;
+        };
+        lock(target, owner).setLockState(state);
+        if (pair != null) lock(pair.right().getBlock(), owner).setLockState(state);
+        stage5Factions.guild(owner, "owner-guild", "realm");
+        stage5Factions.guild(player.getUniqueId(), access.equals("faction") ? "other-guild" : "owner-guild", "realm");
+        when(player.hasPermission("thievery.admin")).thenReturn(access.equals("staff"));
+        tools.when(() -> ToolResolver.isLockpick(any())).thenReturn(true);
+        var event = interact(target, Action.RIGHT_CLICK_BLOCK);
+        try (var clues = mockStatic(net.tfminecraft.thievery.clue.ClueChecker.class);
+                var guilds = mockStatic(net.tfminecraft.thievery.utils.GuildChecker.class, CALLS_REAL_METHODS);
+                var evil = mockStatic(net.tfminecraft.thievery.utils.EvilRpPlays.class)) {
+            manager.onRightClickChest(event);
+
+            verify(event).setCancelled(true);
+            verify(player).sendMessage("§cNo need for picks, it's already open to you.");
+            verify(player, never()).sendMessage("§cBypassing lock due to staff");
+            clues.verifyNoInteractions();
+            guilds.verifyNoInteractions();
+            evil.verifyNoInteractions();
+            verifyNoInteractions(minigames);
+            verify(storage, never()).saveContainerData(any());
+        } finally {
+            net.tfminecraft.thievery.cache.Cache.traits = traits;
+            net.tfminecraft.thievery.cache.Cache.debugAllowOwnChest = oldDebug;
+        }
+    }
+
     @Test void lockpickingRejectsOwnedTargetsMissingCluesAndCooldownBeforeOpeningMenu() {
         boolean online=net.tfminecraft.thievery.cache.Cache.requireOwnerOnline; var traits=net.tfminecraft.thievery.cache.Cache.traits; net.tfminecraft.thievery.cache.Cache.requireOwnerOnline=false; net.tfminecraft.thievery.cache.Cache.traits=List.of();
         var barrel=lockpickBlock(); var locked=lock(barrel,player.getUniqueId()); var event=interact(barrel,Action.RIGHT_CLICK_BLOCK); tools.when(()->ToolResolver.isLockpick(any())).thenReturn(true);

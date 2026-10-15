@@ -895,23 +895,21 @@ public class ContainerManager implements Listener {
         // Only allow lockpicking containers the player cannot already access
         Block clickedBlock = event.getClickedBlock();
         Inventory blockInv = container.getInventory();
-        if (!Cache.debugAllowOwnChest) {
-            if (blockInv instanceof DoubleChestInventory doubleInv) {
-                DoubleChest doubleChest = (DoubleChest) doubleInv.getHolder();
-                Location leftLoc = ((Chest) doubleChest.getLeftSide()).getLocation();
-                Location rightLoc = ((Chest) doubleChest.getRightSide()).getLocation();
-                ContainerData leftData = containerDataManager.loadContainerData(leftLoc);
-                ContainerData rightData = containerDataManager.loadContainerData(rightLoc);
-                if (leftData.canAccess(player) && rightData.canAccess(player)) {
-                    LockDenial.sendAlreadyOpen(player);
-                    return;
-                }
-            } else {
-                ContainerData data = containerDataManager.loadContainerData(clickedBlock.getLocation());
-                if (data.canAccess(player)) {
-                    LockDenial.sendAlreadyOpen(player);
-                    return;
-                }
+        if (blockInv instanceof DoubleChestInventory doubleInv) {
+            DoubleChest doubleChest = (DoubleChest) doubleInv.getHolder();
+            Location leftLoc = ((Chest) doubleChest.getLeftSide()).getLocation();
+            Location rightLoc = ((Chest) doubleChest.getRightSide()).getLocation();
+            ContainerData leftData = containerDataManager.loadContainerData(leftLoc);
+            ContainerData rightData = containerDataManager.loadContainerData(rightLoc);
+            if (canAccessLockedDoubleChest(player, leftData, rightData, false)) {
+                LockDenial.sendAlreadyOpen(player);
+                return;
+            }
+        } else {
+            ContainerData data = containerDataManager.loadContainerData(clickedBlock.getLocation());
+            if (canAccessLockedContainer(player, data, false)) {
+                LockDenial.sendAlreadyOpen(player);
+                return;
             }
         }
 
