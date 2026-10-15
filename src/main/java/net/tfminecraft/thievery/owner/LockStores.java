@@ -75,6 +75,12 @@ public final class LockStores {
         throw new IllegalArgumentException("Not a lock store file: " + name);
     }
 
+    /** The name {@link #files()} gives a file inside a store, such as {@code data/0_0/1_64_2.json}. */
+    public String name(Store store, Path file) {
+        Path inner = root(store).toAbsolutePath().normalize().relativize(file.toAbsolutePath().normalize());
+        return store.prefix + "/" + inner.toString().replace(File.separatorChar, '/');
+    }
+
     /** Every lock record, in a stable order. */
     public List<StoreFile> files() throws IOException {
         List<StoreFile> files = new ArrayList<>();

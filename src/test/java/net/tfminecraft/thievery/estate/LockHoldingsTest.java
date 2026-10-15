@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.logging.Logger;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -26,6 +27,7 @@ import org.bukkit.entity.EntityType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.MockedStatic;
 
 import net.tfminecraft.interactiblefurniture.InteractibleFurniture;
@@ -33,7 +35,9 @@ import net.tfminecraft.interactiblefurniture.furniture.Furniture;
 import net.tfminecraft.thievery.cache.Cache;
 import net.tfminecraft.thievery.cache.Parameters;
 import net.tfminecraft.thievery.door.LockState;
+import net.tfminecraft.thievery.owner.LockKindFile;
 import net.tfminecraft.thievery.owner.LockOwner;
+import net.tfminecraft.thievery.owner.LockStores;
 import net.tfminecraft.thievery.owner.LockStores.Store;
 import net.tfminecraft.thievery.owner.OwnedLocks;
 import net.tfminecraft.thievery.owner.OwnerCodec;
@@ -229,6 +233,72 @@ class LockHoldingsTest {
     }
 
     @Test
+    void aNamedHalfSeenAsAnotherLockIsListedToo() {
+        own(Store.CONTAINERS, "15_64_20.json", LockState.PRIVATE, null);
+        own(Store.CONTAINERS, "16_64_20.json", LockState.PRIVATE, null);
+        OwnedLocks.seen(OwnedLocks.of(alice).get(1), "world", "Chest", "15_64_20.json");
+        String[][] others = {{"world", "Barrel", null}, {"world_nether", "Chest", null},
+                {"world", "Chest", "14_64_20.json"}};
+        for (String[] other : others) {
+            OwnedLocks.seen(OwnedLocks.of(alice).get(0), other[0], other[1], other[2]);
+            assertEquals(2, LockHoldings.describe(alice).labels().size(), String.join("/", other));
+        }
+        OwnedLocks.seen(OwnedLocks.of(alice).get(0), "world", "Chest", "16_64_20.json");
+        assertEquals(List.of("Chest at 15 64 20"), LockHoldings.describe(alice).labels());
+    }
+
+    @Test
+    void aReplacedHalfIsNotHiddenByItsOldPartnerAfterARestart(@TempDir Path temp) {
+        LockStores stores = new LockStores(temp.resolve("data"), temp.resolve("door-data"), temp.resolve("entities"),
+                temp.resolve("migrations"));
+        Path a = temp.resolve("data/0_1/15_64_20.json");
+        Path b = temp.resolve("data/1_1/16_64_20.json");
+        OwnerCodec.Stored marked = new OwnerCodec.Stored(alice, LockOwner.Kind.CHARACTER);
+        OwnedLocks.put(Store.CONTAINERS, a, marked, LockState.PRIVATE, "world");
+        OwnedLocks.put(Store.CONTAINERS, b, marked, LockState.PRIVATE, "world");
+        for (OwnedLocks.Lock lock : OwnedLocks.of(alice)) {
+            OwnedLocks.seen(lock, "world", "Chest", lock.path().equals(a) ? "16_64_20.json" : "15_64_20.json");
+        }
+        // The chest half at A is broken and a barrel placed there.
+        OwnedLocks.remove(a);
+        OwnedLocks.put(Store.CONTAINERS, a, marked, LockState.PRIVATE, "world");
+        LockKindFile kinds = new LockKindFile(stores, temp.resolve(LockKindFile.FILE), mock(Logger.class),
+                Runnable::run);
+        kinds.saveNow();
+        OwnedLocks.clear();
+        OwnedLocks.put(Store.CONTAINERS, a, marked, LockState.PRIVATE, null);
+        OwnedLocks.put(Store.CONTAINERS, b, marked, LockState.PRIVATE, null);
+        kinds.load();
+        LockHoldingsTest.block(main, 15, 64, 20, Material.BARREL, true, mock(BlockData.class));
+        assertEquals(List.of("Barrel at 15 64 20", "Chest at 16 64 20"), LockHoldings.describe(alice).labels());
+    }
+
+    @Test
+    void aDoubleChestSeenFromOneSideIsStillOneChestAfterARestart(@TempDir Path temp) {
+        LockStores stores = new LockStores(temp.resolve("data"), temp.resolve("door-data"), temp.resolve("entities"),
+                temp.resolve("migrations"));
+        Path west = temp.resolve("data/0_1/15_64_20.json");
+        Path east = temp.resolve("data/1_1/16_64_20.json");
+        OwnerCodec.Stored marked = new OwnerCodec.Stored(alice, LockOwner.Kind.CHARACTER);
+        OwnedLocks.put(Store.CONTAINERS, west, marked, LockState.PRIVATE, "world");
+        OwnedLocks.put(Store.CONTAINERS, east, marked, LockState.PRIVATE, "world");
+        // Only the western chunk is loaded: the east half stays bound but unseen, and sorts after the west.
+        block(main, 15, 64, 20, Material.CHEST, true, chest(Chest.Type.LEFT, BlockFace.NORTH));
+        assertEquals(List.of("Chest at 15 64 20"), LockHoldings.describe(alice).labels());
+        LockKindFile kinds = new LockKindFile(stores, temp.resolve(LockKindFile.FILE), mock(Logger.class),
+                Runnable::run);
+        kinds.saveNow();
+
+        OwnedLocks.clear();
+        OwnedLocks.put(Store.CONTAINERS, west, marked, LockState.PRIVATE, null);
+        OwnedLocks.put(Store.CONTAINERS, east, marked, LockState.PRIVATE, null);
+        kinds.load();
+        when(main.isChunkLoaded(anyInt(), anyInt())).thenReturn(false);
+        assertEquals(List.of("Chest at 15 64 20"), LockHoldings.describe(alice).labels());
+        assertEquals(Map.of("locks", 1), LockHoldings.describe(alice).counts());
+    }
+
+    @Test
     void nothingOwnedDescribesNothingAndAMissingMainWorldNamesEveryWorld() {
         assertEquals(new LockHoldings.Summary(Map.of(), List.of()), LockHoldings.describe(alice));
         bukkit.when(Bukkit::getWorlds).thenReturn(List.of());
@@ -239,12 +309,12 @@ class LockHoldingsTest {
 
     @Test
     void kindsReadAsPlainBritishWords() {
-        assertEquals("Armour stand", LockHoldings.words("ARMOR_STAND"));
-        assertEquals("Blast furnace", LockHoldings.words("BLAST_FURNACE"));
-        assertEquals("Pedestal", LockHoldings.words("pedestal"));
+        assertEquals("Armour stand", LockBlocks.words("ARMOR_STAND"));
+        assertEquals("Blast furnace", LockBlocks.words("BLAST_FURNACE"));
+        assertEquals("Pedestal", LockBlocks.words("pedestal"));
         Block hopper = block(main, 0, 0, 0, Material.HOPPER, true, mock(BlockData.class));
-        assertEquals("Hopper", LockHoldings.kind(Store.CONTAINERS, hopper));
-        assertNull(LockHoldings.kind(Store.DOORS, hopper));
-        assertNull(LockHoldings.kind(Store.CONTAINERS, block(main, 0, 1, 0, Material.AIR, false, null)));
+        assertEquals("Hopper", LockBlocks.kind(Store.CONTAINERS, hopper));
+        assertNull(LockBlocks.kind(Store.DOORS, hopper));
+        assertNull(LockBlocks.kind(Store.CONTAINERS, block(main, 0, 1, 0, Material.AIR, false, null)));
     }
 }

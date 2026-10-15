@@ -66,7 +66,7 @@ class DoorDataManagerTest {
         UUID owner = UUID.randomUUID();
         manager.saveDoorData(new DoorData(location, "copper", 0.75, LockOwner.character(owner)));
         assertEquals(java.util.List.of(new OwnedLocks.Lock(file.toAbsolutePath().normalize(), LockStores.Store.DOORS,
-                owner, null, null, null, null)), OwnedLocks.of(owner));
+                owner, null, null, false, null, null)), OwnedLocks.of(owner));
         assertTrue(manager.deleteDoorData(location));
         assertEquals(java.util.List.of(), OwnedLocks.of(owner));
     }

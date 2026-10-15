@@ -362,7 +362,7 @@ class ContainerDataManagerTest {
         data.setLockState(LockState.GUILD);
         manager.saveContainerData(data);
         assertEquals(java.util.List.of(new OwnedLocks.Lock(file.toAbsolutePath().normalize(), LockStores.Store.CONTAINERS,
-                character, LockState.GUILD, "world_nether", null, null)), OwnedLocks.of(character));
+                character, LockState.GUILD, "world_nether", true, null, null)), OwnedLocks.of(character));
         data.setOwner(LockOwner.server());
         manager.saveContainerData(data);
         assertEquals(java.util.List.of(), OwnedLocks.of(character));
