@@ -130,7 +130,7 @@ class LockAdminCommandTest {
 
     @Test void ownerCompletionIncludesLivingOnlineIdsAndOnlyUniqueSingleTokenNames() {
         var online = MockBukkit.getMock().addPlayer("Online");
-        UUID id = UUID.randomUUID();
+        UUID id = UUID.fromString("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
         identity.plays(online, id);
         var alive = new net.tfminecraft.tlibs.character.CharacterInfo(
                 new net.tfminecraft.tlibs.character.CharacterRef(online.getUniqueId(), id), "Alice",
@@ -143,7 +143,7 @@ class LockAdminCommandTest {
             assertEquals(List.of("Alice"), LockAdminCommand.complete(new String[]{"setowner", "aL"}));
             assertEquals(List.of(id.toString()), LockAdminCommand.complete(new String[]{"setowner", id.toString().substring(0, 8).toUpperCase()}));
             names.when(() -> CharacterNames.find("Alice")).thenReturn(List.of(alive, alive));
-            assertTrue(LockAdminCommand.complete(new String[]{"setowner", "A"}).isEmpty());
+            assertEquals(List.of(id.toString()), LockAdminCommand.complete(new String[]{"setowner", "A"}));
             names.when(CharacterNames::available).thenReturn(false);
             assertEquals(List.of("server", id.toString()), LockAdminCommand.complete(new String[]{"setowner", ""}));
             for (CharacterStatus status : List.of(CharacterStatus.DEAD, CharacterStatus.MISSING)) {
