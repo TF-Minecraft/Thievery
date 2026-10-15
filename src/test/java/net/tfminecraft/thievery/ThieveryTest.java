@@ -170,7 +170,7 @@ class ThieveryTest {
     }
 
     @Test
-    void locksMigrateAndLeaveGuardModeWhenHeirsAreReadyAtEnable() {
+    void locksMigrateAndLeaveGuardModeWhenHeirsAreReadyAtEnable() throws Exception {
         try (var identity = new net.tfminecraft.thievery.testsupport.FactionFixture()) {
             load();
             assertFalse(net.tfminecraft.thievery.owner.LockGuard.guarded());
@@ -189,9 +189,14 @@ class ThieveryTest {
                     chest, new net.tfminecraft.thievery.owner.OwnerCodec.Stored(UUID.randomUUID(),
                             net.tfminecraft.thievery.owner.LockOwner.Kind.CHARACTER), null, null);
             var lock = net.tfminecraft.thievery.owner.OwnedLocks.inChunk(0, 0).getFirst();
-            net.tfminecraft.thievery.owner.OwnedLocks.seen(lock, "world", "Chest", null);
+            lock = net.tfminecraft.thievery.owner.OwnedLocks.seen(lock, "world", "Chest", null);
+            File kinds = new File(plugin.getDataFolder(), "owned-lock-kinds.json");
+            server.getScheduler().performTicks(1200);
+            server.getScheduler().waitAsyncTasksFinished();
+            assertTrue(kinds.exists(), "the minute's save runs in the background");
+            net.tfminecraft.thievery.owner.OwnedLocks.seen(lock, "world", "Barrel", null);
             plugin.onDisable();
-            assertTrue(new File(plugin.getDataFolder(), "owned-lock-kinds.json").exists());
+            assertTrue(Files.readString(kinds.toPath()).contains("Barrel"), "disable saves at once");
         }
     }
 

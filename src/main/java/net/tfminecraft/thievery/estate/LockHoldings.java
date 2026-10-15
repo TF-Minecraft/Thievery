@@ -89,7 +89,8 @@ public final class LockHoldings {
     }
 
     // A double chest is listed once, by the first half seen to name the other; the named half is left out. Halves in
-    // different estate parts go to different recipients, so both are listed.
+    // different estate parts go to different recipients, so both are listed. A named half seen as another kind, in
+    // another world or naming another partner is a different lock, so it is listed too.
     private static Set<String> secondHalves(List<OwnedLocks.Lock> locks) {
         Map<String, OwnedLocks.Lock> containers = new HashMap<>();
         for (OwnedLocks.Lock lock : locks) {
@@ -100,7 +101,10 @@ public final class LockHoldings {
         Set<String> second = new HashSet<>();
         for (OwnedLocks.Lock lock : locks) {
             OwnedLocks.Lock other = containers.get(lock.partner());
-            if (other != null && guild(other.state()) == guild(lock.state()) && !second.contains(lock.name())) {
+            if (other != null && guild(other.state()) == guild(lock.state()) && !second.contains(lock.name())
+                    && (other.kind() == null || other.kind().equals(lock.kind()))
+                    && (other.world() == null || other.world().equals(lock.world()))
+                    && (other.partner() == null || other.partner().equals(lock.name()))) {
                 second.add(other.name());
             }
         }

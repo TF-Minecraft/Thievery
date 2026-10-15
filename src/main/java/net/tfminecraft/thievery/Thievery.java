@@ -139,8 +139,10 @@ public class Thievery extends JavaPlugin {
         // main thread before anyone can join; a failed gate keeps the guard on until a restart.
         LockStores stores = LockStores.defaults(getDataFolder());
         if (LockStartup.start(stores, getLogger())) {
-            // What was seen of locked blocks before the restart; chunk loads add to it, saved at most once a minute.
-            lockKinds = new LockKindFile(stores, getDataFolder().toPath().resolve(LockKindFile.FILE), getLogger());
+            // What was seen of locked blocks before the restart; chunk loads add to it, saved at most once a minute
+            // off the main thread.
+            lockKinds = new LockKindFile(stores, getDataFolder().toPath().resolve(LockKindFile.FILE), getLogger(),
+                    task -> Bukkit.getScheduler().runTaskAsynchronously(this, task));
             lockKinds.load();
             getServer().getPluginManager().registerEvents(new LockBlocks(), this);
             Bukkit.getScheduler().runTaskTimer(this, lockKinds::saveIfChanged, 1200L, 1200L);
@@ -174,7 +176,7 @@ public class Thievery extends JavaPlugin {
         playerManager.unloadAll();
         playerManager.stop();
         if (lockKinds != null) {
-            lockKinds.saveIfChanged();
+            lockKinds.saveNow();
         }
     }
 

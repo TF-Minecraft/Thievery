@@ -3,6 +3,7 @@ package net.tfminecraft.thievery.estate;
 import java.util.List;
 import java.util.Locale;
 
+import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -20,9 +21,12 @@ import net.tfminecraft.thievery.owner.OwnedLocks;
 
 /**
  * Looks at the blocks of held lock files to learn their world, kind and double-chest partner, which the stores do not
- * keep. A file has no world, so a block counts only when it is the kind its store locks: a container for a container
- * record, a door, trapdoor or gate for a door record. A record seen in one world is looked for only there. Blocks are
- * looked at when their chunk loads and when the will screen lists them, never by loading a chunk.
+ * keep. A block counts only when it is the kind its store locks: a container for a container record, a door, trapdoor
+ * or gate for a door record. A lock file has no world, so where a save bound a record to a world only that world is
+ * looked at; otherwise worlds are tried in server order and the first whose loaded block fits wins, the same rule the
+ * will screen has always used. Such a world is only a sighting: an earlier world overrides it as soon as its chunk is
+ * loaded with a fitting block, and it is forgotten once its own block no longer fits and no other world's does. Blocks
+ * are looked at when a chunk loads and when the will screen lists them, never by loading a chunk.
  */
 public final class LockBlocks implements Listener {
 
@@ -42,32 +46,44 @@ public final class LockBlocks implements Listener {
     @EventHandler(priority = EventPriority.MONITOR)
     public void onChunkLoad(ChunkLoadEvent event) {
         Chunk chunk = event.getChunk();
-        for (OwnedLocks.Lock lock : OwnedLocks.inChunk(chunk.getX(), chunk.getZ())) {
-            sight(lock, chunk.getWorld());
+        List<OwnedLocks.Lock> locks = OwnedLocks.inChunk(chunk.getX(), chunk.getZ());
+        if (!locks.isEmpty()) {
+            List<World> worlds = Bukkit.getWorlds();
+            for (OwnedLocks.Lock lock : locks) {
+                look(lock, worlds);
+            }
         }
     }
 
-    /** The record as seen in the first world, in order, whose loaded chunk holds a block of its kind. */
+    /**
+     * The record as seen in the first world, in order, whose loaded chunk holds a block of its kind. The world it was
+     * last seen in stops the search while that chunk is unloaded, so a later world never displaces it untested.
+     */
     static OwnedLocks.Lock look(OwnedLocks.Lock lock, List<World> worlds) {
         Position at = Position.parse(lock.name());
+        boolean disproved = false;
         for (World world : worlds) {
+            boolean own = world.getName().equals(lock.world());
             if (world.isChunkLoaded(at.x() >> 4, at.z() >> 4)) {
-                OwnedLocks.Lock seen = sight(lock, world);
+                OwnedLocks.Lock seen = sight(lock, world, at);
                 if (seen != null) {
                     return seen;
                 }
+                disproved |= own;
+            } else if (own) {
+                return lock;
             }
         }
-        return lock;
+        // A sighting whose block no longer fits, with no other world to take it, is forgotten; a bound world stays.
+        return disproved && !lock.bound() ? OwnedLocks.seen(lock, null, null, null) : lock;
     }
 
-    // The record as seen in this world, whose chunk is loaded; null when it is another world's or the block does not
-    // fit its store.
-    static OwnedLocks.Lock sight(OwnedLocks.Lock lock, World world) {
-        if (lock.world() != null && !lock.world().equals(world.getName())) {
+    // The record as seen in this world, whose chunk is loaded; null when it is bound to another world or the block
+    // does not fit its store.
+    private static OwnedLocks.Lock sight(OwnedLocks.Lock lock, World world, Position at) {
+        if (lock.bound() && !lock.world().equals(world.getName())) {
             return null;
         }
-        Position at = Position.parse(lock.name());
         Block block = world.getBlockAt(at.x(), at.y(), at.z());
         String kind = kind(lock.store(), block);
         return kind == null ? null : OwnedLocks.seen(lock, world.getName(), kind, partner(block, at));

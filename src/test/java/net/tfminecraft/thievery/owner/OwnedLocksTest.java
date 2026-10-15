@@ -51,7 +51,7 @@ class OwnedLocksTest {
         OwnedLocks.put(Store.CONTAINERS, temp.resolve("data/0_0/notes.json"), marked(alice), LockState.PRIVATE, null);
         OwnedLocks.put(Store.ENTITIES, temp.resolve("entities/1_64_2.json"), marked(alice), LockState.PRIVATE, null);
 
-        assertEquals(List.of(new Lock(chest, Store.CONTAINERS, alice, LockState.GUILD, "world", null, null)),
+        assertEquals(List.of(new Lock(chest, Store.CONTAINERS, alice, LockState.GUILD, "world", true, null, null)),
                 OwnedLocks.of(alice).subList(0, 1));
         assertEquals(List.of("1_64_-2.json", "1_64_-2.json", entity + ".json"), names(alice), "in file order");
         assertEquals(List.of(Store.CONTAINERS, Store.DOORS, Store.ENTITIES),
@@ -86,13 +86,13 @@ class OwnedLocksTest {
         OwnedLocks.put(Store.CONTAINERS, chest, marked(alice), LockState.PRIVATE, null);
         Lock held = OwnedLocks.of(alice).get(0);
         Lock seen = OwnedLocks.seen(held, "world", "Chest", "2_64_1.json");
-        assertEquals(new Lock(chest, Store.CONTAINERS, alice, LockState.PRIVATE, "world", "Chest", "2_64_1.json"), seen);
+        assertEquals(new Lock(chest, Store.CONTAINERS, alice, LockState.PRIVATE, "world", false, "Chest", "2_64_1.json"), seen);
         assertEquals(List.of(seen), OwnedLocks.of(alice));
 
         OwnedLocks.put(Store.CONTAINERS, chest, marked(bob), LockState.GUILD, null);
         Lock stale = OwnedLocks.seen(seen, "world", "Barrel", null);
         assertEquals("Barrel", stale.kind());
-        assertEquals(new Lock(chest, Store.CONTAINERS, bob, LockState.GUILD, "world", "Chest", "2_64_1.json"),
+        assertEquals(new Lock(chest, Store.CONTAINERS, bob, LockState.GUILD, "world", false, "Chest", "2_64_1.json"),
                 OwnedLocks.of(bob).get(0), "a new owner or state keeps the block; an older look is not applied");
     }
 
@@ -118,11 +118,11 @@ class OwnedLocksTest {
         OwnedLocks.put(Store.CONTAINERS, chest, marked(alice), LockState.PRIVATE, "world");
         assertEquals(List.of(seen), OwnedLocks.of(alice), "a save in the same or an unknown world keeps the look");
         OwnedLocks.put(Store.CONTAINERS, chest, marked(alice), LockState.PRIVATE, "world_nether");
-        assertEquals(new Lock(chest, Store.CONTAINERS, alice, LockState.PRIVATE, "world_nether", null, null),
+        assertEquals(new Lock(chest, Store.CONTAINERS, alice, LockState.PRIVATE, "world_nether", true, null, null),
                 OwnedLocks.of(alice).get(0), "written in another world: looked at again");
         OwnedLocks.seen(OwnedLocks.of(alice).get(0), "world_nether", "Barrel", null);
         OwnedLocks.put(Store.DOORS, chest, marked(alice), null, null);
-        assertEquals(new Lock(chest, Store.DOORS, alice, null, null, null, null), OwnedLocks.of(alice).get(0),
+        assertEquals(new Lock(chest, Store.DOORS, alice, null, null, false, null, null), OwnedLocks.of(alice).get(0),
                 "another store's record is another block");
     }
 
@@ -138,9 +138,9 @@ class OwnedLocksTest {
         OwnedLocks.refresh(Store.CONTAINERS, chest, "world");
         OwnedLocks.refresh(Store.DOORS, door, null);
         OwnedLocks.refresh(Store.ENTITIES, stand, null);
-        assertEquals(List.of(new Lock(chest, Store.CONTAINERS, alice, LockState.FACTION, "world", null, null),
-                new Lock(door, Store.DOORS, alice, null, null, null, null),
-                new Lock(stand, Store.ENTITIES, alice, LockState.PUBLIC, null, null, null)), OwnedLocks.of(alice));
+        assertEquals(List.of(new Lock(chest, Store.CONTAINERS, alice, LockState.FACTION, "world", true, null, null),
+                new Lock(door, Store.DOORS, alice, null, null, false, null, null),
+                new Lock(stand, Store.ENTITIES, alice, LockState.PUBLIC, null, false, null, null)), OwnedLocks.of(alice));
 
         Files.writeString(chest, "{\"owner\":");
         OwnedLocks.refresh(Store.CONTAINERS, chest, "world");
@@ -243,11 +243,58 @@ class OwnedLocksTest {
         Path door = temp.resolve("door-data/0_0/2_64_1.json");
         OwnedLocks.put(Store.CONTAINERS, chest, marked(alice), LockState.PUBLIC, null);
         OwnedLocks.put(Store.DOORS, door, marked(alice), null, null);
-        OwnedLocks.remember(Store.CONTAINERS, chest, "world", "Chest", "2_64_1.json");
-        OwnedLocks.remember(Store.CONTAINERS, door, "world", "Chest", null);
-        OwnedLocks.remember(Store.CONTAINERS, temp.resolve("data/0_0/9_64_1.json"), "world", "Chest", null);
-        assertEquals(List.of(new Lock(chest, Store.CONTAINERS, alice, LockState.PUBLIC, "world", "Chest", "2_64_1.json"),
-                new Lock(door, Store.DOORS, alice, null, null, null, null)), OwnedLocks.of(alice));
+        OwnedLocks.remember(Store.CONTAINERS, chest, "world", false, "Chest", "2_64_1.json");
+        OwnedLocks.remember(Store.CONTAINERS, door, "world", true, "Chest", null);
+        OwnedLocks.remember(Store.CONTAINERS, temp.resolve("data/0_0/9_64_1.json"), "world", true, "Chest",
+                null);
+        assertEquals(List.of(new Lock(chest, Store.CONTAINERS, alice, LockState.PUBLIC, "world", false, "Chest", "2_64_1.json"),
+                new Lock(door, Store.DOORS, alice, null, null, false, null, null)), OwnedLocks.of(alice));
+    }
+
+    @Test
+    void onlyASaveAtTheBlockBindsItsWorld() {
+        Path chest = temp.resolve("data/0_0/1_64_1.json");
+        OwnedLocks.put(Store.CONTAINERS, chest, marked(alice), LockState.PUBLIC, null);
+        Lock sighted = OwnedLocks.seen(OwnedLocks.of(alice).get(0), "world_nether", "Barrel", null);
+        assertFalse(sighted.bound(), "a sighting is not a binding");
+        OwnedLocks.put(Store.CONTAINERS, chest, marked(alice), LockState.GUILD, null);
+        assertFalse(OwnedLocks.of(alice).get(0).bound());
+        OwnedLocks.put(Store.CONTAINERS, chest, marked(alice), LockState.GUILD, "world_nether");
+        assertEquals(new Lock(chest, Store.CONTAINERS, alice, LockState.GUILD, "world_nether", true, "Barrel", null),
+                OwnedLocks.of(alice).get(0), "a save in the sighted world binds it and keeps the look");
+        OwnedLocks.put(Store.CONTAINERS, chest, marked(alice), LockState.PRIVATE, null);
+        assertTrue(OwnedLocks.of(alice).get(0).bound());
+        OwnedLocks.remember(Store.CONTAINERS, chest, "world", false, "Chest", null);
+        assertFalse(OwnedLocks.of(alice).get(0).bound());
+    }
+
+    @Test
+    void aRemovedOrReplacedHalfIsNoLongerAnyonesPartner() {
+        // Halves across a chunk border, a half with another partner and a lone chest beside them.
+        Path left = temp.resolve("data/0_1/15_64_20.json");
+        Path right = temp.resolve("data/1_1/16_64_20.json");
+        Path other = temp.resolve("data/0_1/15_64_21.json");
+        Path lone = temp.resolve("data/0_1/14_64_20.json");
+        for (Path path : List.of(left, right, other, lone)) {
+            OwnedLocks.put(Store.CONTAINERS, path, marked(alice), LockState.PUBLIC, "world");
+        }
+        for (Lock lock : OwnedLocks.of(alice)) {
+            String partner = lock.path().equals(left) ? "16_64_20.json" : lock.path().equals(right) ? "15_64_20.json"
+                    : lock.path().equals(other) ? "15_64_22.json" : null;
+            OwnedLocks.seen(lock, "world", "Chest", partner);
+        }
+        long before = OwnedLocks.revision();
+        OwnedLocks.remove(left);
+        assertNull(OwnedLocks.inChunk(1, 1).getFirst().partner(), "the right half is single again");
+        assertNotEquals(before, OwnedLocks.revision());
+        assertEquals("15_64_22.json", OwnedLocks.inChunk(0, 1).get(1).partner(), "other pairs are left alone");
+
+        // Written from another world, the right half is a fresh record: the left half's look is forgotten.
+        OwnedLocks.put(Store.CONTAINERS, left, marked(alice), LockState.PUBLIC, "world");
+        OwnedLocks.seen(OwnedLocks.inChunk(1, 1).getFirst(), "world", "Chest", "15_64_20.json");
+        OwnedLocks.seen(OwnedLocks.inChunk(0, 1).get(1), "world", "Chest", "16_64_20.json");
+        OwnedLocks.put(Store.CONTAINERS, right, marked(alice), LockState.PUBLIC, "world_nether");
+        assertNull(OwnedLocks.inChunk(0, 1).get(1).partner());
     }
 
     @Test

@@ -71,7 +71,7 @@ class EntityLockDataManagerTest {
         data.setLockState(LockState.FACTION);
         manager.save(data);
         assertEquals(java.util.List.of(new OwnedLocks.Lock(path(id).toAbsolutePath().normalize(), LockStores.Store.ENTITIES,
-                owner, LockState.FACTION, null, null, null)), OwnedLocks.of(owner));
+                owner, LockState.FACTION, null, false, null, null)), OwnedLocks.of(owner));
         assertTrue(manager.delete(id));
         assertEquals(java.util.List.of(), OwnedLocks.of(owner));
     }

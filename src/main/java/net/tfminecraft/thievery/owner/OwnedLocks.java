@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -37,10 +36,11 @@ public final class OwnedLocks {
     /**
      * A held record, named by its file ({@code 1_64_-2.json} or {@code <entity>.json}). {@code state} is null for
      * doors. {@code world}, {@code kind} and {@code partner} (the file of a double chest's other half) are null until
-     * the block is seen.
+     * the block is seen. A lock file has no world: {@code bound} says the world came from a save or delete at the
+     * block, so only that world can hold it; otherwise {@code world} is only where the block was last seen to fit.
      */
-    public record Lock(Path path, LockStores.Store store, UUID owner, LockState state, String world, String kind,
-            String partner) {
+    public record Lock(Path path, LockStores.Store store, UUID owner, LockState state, String world, boolean bound,
+            String kind, String partner) {
 
         public String name() {
             return path.getFileName().toString();
@@ -80,8 +80,9 @@ public final class OwnedLocks {
         boolean sameBlock = previous != null && previous.store() == store
                 && (world == null || world.equals(previous.world()));
         replace(key, sameBlock
-                ? new Lock(key, store, owner.id(), state, previous.world(), previous.kind(), previous.partner())
-                : new Lock(key, store, owner.id(), state, world, null, null));
+                ? new Lock(key, store, owner.id(), state, previous.world(), previous.bound() || world != null,
+                        previous.kind(), previous.partner())
+                : new Lock(key, store, owner.id(), state, world, world != null, null, null));
     }
 
     /**
@@ -127,6 +128,29 @@ public final class OwnedLocks {
         if (!Objects.equals(sighting(previous), sighting(next))) {
             revision++;
         }
+        if (previous != null && previous.store() == LockStores.Store.CONTAINERS
+                && (next == null || next.kind() == null)) {
+            forgetPartner(previous);
+        }
+    }
+
+    // A half that named a removed or replaced record as its partner is single again, so a lock later placed there is
+    // never taken for its other half.
+    private static void forgetPartner(Lock gone) {
+        String[] at = gone.name().substring(0, gone.name().length() - ".json".length()).split("_");
+        int x = Integer.parseInt(at[0]);
+        int z = Integer.parseInt(at[2]);
+        Path store = gone.path().getParent().getParent();
+        for (int[] side : new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+            int nx = x + side[0];
+            int nz = z + side[1];
+            Path key = store.resolve((nx >> 4) + "_" + (nz >> 4)).resolve(nx + "_" + at[1] + "_" + nz + ".json");
+            Lock half = LOCKS.get(key);
+            if (half != null && gone.name().equals(half.partner())) {
+                replace(key, new Lock(key, half.store(), half.owner(), half.state(), half.world(), half.bound(),
+                        half.kind(), null));
+            }
+        }
     }
 
     private static <K> void unlink(Map<K, Set<Path>> index, K group, Path key) {
@@ -140,7 +164,7 @@ public final class OwnedLocks {
     // What the kind file keeps of a record, or null when nothing has been seen of its block.
     private static List<Object> sighting(Lock lock) {
         return lock == null || lock.kind() == null ? null
-                : Arrays.asList(lock.store(), lock.world(), lock.kind(), lock.partner());
+                : Arrays.asList(lock.store(), lock.world(), lock.bound(), lock.kind(), lock.partner());
     }
 
     // A block file's chunk, from its x_y_z name; its folder is named the same way.
@@ -166,10 +190,10 @@ public final class OwnedLocks {
         return locks;
     }
 
-    /** Every record whose block has been seen, in file order. */
+    /** Every record whose block has been seen, unordered; a cheap copy of immutable records. */
     public static synchronized List<Lock> sighted() {
         List<Lock> locks = new ArrayList<>();
-        for (Lock lock : new TreeMap<>(LOCKS).values()) {
+        for (Lock lock : LOCKS.values()) {
             if (lock.kind() != null) {
                 locks.add(lock);
             }
@@ -183,11 +207,11 @@ public final class OwnedLocks {
     }
 
     /** Applies a remembered sighting to a record the index still holds in the same store; others are ignored. */
-    public static synchronized void remember(LockStores.Store store, Path path, String world, String kind,
-            String partner) {
+    public static synchronized void remember(LockStores.Store store, Path path, String world, boolean bound,
+            String kind, String partner) {
         Lock lock = LOCKS.get(key(path));
         if (lock != null && lock.store() == store) {
-            seen(lock, world, kind, partner);
+            replace(lock.path(), new Lock(lock.path(), store, lock.owner(), lock.state(), world, bound, kind, partner));
         }
     }
 
@@ -202,7 +226,8 @@ public final class OwnedLocks {
 
     /** Remembers where a block was seen, unless the record has changed since; returns the record as now held. */
     public static synchronized Lock seen(Lock lock, String world, String kind, String partner) {
-        Lock seen = new Lock(lock.path(), lock.store(), lock.owner(), lock.state(), world, kind, partner);
+        Lock seen = new Lock(lock.path(), lock.store(), lock.owner(), lock.state(), world, lock.bound(), kind,
+                partner);
         if (lock.equals(LOCKS.get(lock.path()))) {
             replace(lock.path(), seen);
         }

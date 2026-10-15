@@ -41,7 +41,7 @@ class LockKindFileTest {
     }
 
     LockKindFile kinds() {
-        return new LockKindFile(stores, file, log);
+        return new LockKindFile(stores, file, log, Runnable::run);
     }
 
     @Test
@@ -84,16 +84,61 @@ class LockKindFileTest {
         hold(Store.CONTAINERS, "data/0_0/1_64_1.json", LockState.PRIVATE);
         hold(Store.DOORS, "door-data/0_0/9_64_1.json", null);
         Files.writeString(file, Files.readString(file).replace("\"data/0_0/1_64_1.json\"",
-                "\"door-data/0_0/9_64_1.json\": {\"world\": \"world\", \"kind\": \"Door\"}, \"data/0_0/1_64_1.json\""));
+                "\"door-data/0_0/9_64_1.json\": {\"world\": \"world\", \"bound\": false, \"kind\": \"Door\"},"
+                        + " \"data/0_0/1_64_1.json\""));
         LockKindFile restarted = kinds();
         restarted.load();
-        assertEquals(List.of(new Lock(chest, Store.CONTAINERS, alice, LockState.PRIVATE, "world", "Chest", "2_64_1.json"),
+        assertEquals(List.of(new Lock(chest, Store.CONTAINERS, alice, LockState.PRIVATE, "world", false, "Chest", "2_64_1.json"),
                 new Lock(stores.resolve("door-data/0_0/9_64_1.json").path().toAbsolutePath().normalize(), Store.DOORS,
-                        alice, null, "world", "Door", null)), OwnedLocks.of(alice));
+                        alice, null, "world", false, "Door", null)), OwnedLocks.of(alice));
         Files.delete(file);
         restarted.saveIfChanged();
         assertFalse(Files.exists(file), "loading is not a change");
         verifyNoInteractions(log);
+    }
+
+    @Test
+    void boundWorldsAreKeptApartFromSightings() throws Exception {
+        Path chest = hold(Store.CONTAINERS, "data/0_0/1_64_1.json", LockState.PRIVATE);
+        Path barrel = hold(Store.CONTAINERS, "data/0_0/3_64_1.json", LockState.PRIVATE);
+        LockKindFile kinds = kinds();
+        kinds.load();
+        OwnedLocks.put(Store.CONTAINERS, chest, new OwnerCodec.Stored(alice, LockOwner.Kind.CHARACTER),
+                LockState.PRIVATE, "world");
+        for (Lock lock : OwnedLocks.of(alice)) {
+            OwnedLocks.seen(lock, lock.path().equals(chest) ? "world" : "world_nether",
+                    lock.path().equals(chest) ? "Chest" : "Barrel", null);
+        }
+        kinds.saveNow();
+        String json = Files.readString(file);
+        assertEquals(1, json.split("\"bound\": true", -1).length - 1, json);
+
+        OwnedLocks.clear();
+        hold(Store.CONTAINERS, "data/0_0/1_64_1.json", LockState.PRIVATE);
+        hold(Store.CONTAINERS, "data/0_0/3_64_1.json", LockState.PRIVATE);
+        kinds().load();
+        assertEquals(List.of(true, false), OwnedLocks.of(alice).stream().map(Lock::bound).toList());
+        assertEquals(barrel, OwnedLocks.of(alice).get(1).path());
+    }
+
+    @Test
+    void writesRunInTheBackgroundOneAtATimeAndAnOlderOneIsDropped() throws Exception {
+        hold(Store.CONTAINERS, "data/0_0/1_64_1.json", LockState.PRIVATE);
+        List<Runnable> pending = new java.util.ArrayList<>();
+        LockKindFile kinds = new LockKindFile(stores, file, log, pending::add);
+        kinds.load();
+        OwnedLocks.seen(OwnedLocks.of(alice).get(0), "world", "Chest", null);
+        kinds.saveIfChanged();
+        kinds.saveIfChanged();
+        assertEquals(1, pending.size(), "one snapshot per change");
+        assertFalse(Files.exists(file), "nothing is written on the calling thread");
+        OwnedLocks.seen(OwnedLocks.of(alice).get(0), "world", "Barrel", null);
+        kinds.saveNow();
+        assertTrue(Files.readString(file).contains("Barrel"));
+        pending.getFirst().run();
+        assertTrue(Files.readString(file).contains("Barrel"), "the older snapshot does not overwrite the newer");
+        kinds.saveNow();
+        assertEquals(1, pending.size(), "nothing new to write");
     }
 
     @Test
@@ -106,7 +151,7 @@ class LockKindFileTest {
             kinds().load();
         }
         verify(log, times(5)).warning(contains("could not be read"));
-        assertEquals(List.of(new Lock(chest, Store.CONTAINERS, alice, LockState.PRIVATE, null, null, null)),
+        assertEquals(List.of(new Lock(chest, Store.CONTAINERS, alice, LockState.PRIVATE, null, false, null, null)),
                 OwnedLocks.of(alice), "ownership is untouched");
     }
 
