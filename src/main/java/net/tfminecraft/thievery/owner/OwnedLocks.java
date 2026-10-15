@@ -161,10 +161,14 @@ public final class OwnedLocks {
         }
     }
 
-    // What the kind file keeps of a record, or null when nothing has been seen of its block.
+    // What the kind file keeps of a record, or null when its block has not been seen and its world is not bound.
     private static List<Object> sighting(Lock lock) {
-        return lock == null || lock.kind() == null ? null
+        return lock == null || !known(lock) ? null
                 : Arrays.asList(lock.store(), lock.world(), lock.bound(), lock.kind(), lock.partner());
+    }
+
+    private static boolean known(Lock lock) {
+        return lock.kind() != null || lock.bound();
     }
 
     // A block file's chunk, from its x_y_z name; its folder is named the same way.
@@ -190,11 +194,13 @@ public final class OwnedLocks {
         return locks;
     }
 
-    /** Every record whose block has been seen, unordered; a cheap copy of immutable records. */
+    /**
+     * Every record whose block has been seen or whose world is bound, unordered; a cheap copy of immutable records.
+     */
     public static synchronized List<Lock> sighted() {
         List<Lock> locks = new ArrayList<>();
         for (Lock lock : LOCKS.values()) {
-            if (lock.kind() != null) {
+            if (known(lock)) {
                 locks.add(lock);
             }
         }

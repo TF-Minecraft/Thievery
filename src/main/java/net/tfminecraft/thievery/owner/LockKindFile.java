@@ -19,9 +19,9 @@ import com.google.gson.JsonParser;
  * Carries what {@link OwnedLocks} has seen of locked blocks across restarts, so the will screen names a chest as a
  * chest before its chunk loads again. The lock stores keep no block kind or world, so this sidecar is only a cache:
  * entries are keyed by store file name ({@code data/0_0/1_64_2.json}), applied only to records the boot pass indexed
- * in the same store, and never touch ownership. {@code bound} marks a world that came from a save at the block; any
- * other world is a sighting that later looks may correct. A missing file is a first start; an unreadable one is
- * logged once and ignored.
+ * in the same store, and never touch ownership. {@code bound} marks a world that came from a save at the block, kept
+ * even before the block's kind is known; any other world is a sighting that later looks may correct. A missing file
+ * is a first start; an unreadable one is logged once and ignored.
  *
  * <pre>{"version":1,"locks":{"data/0_0/1_64_2.json":{"world":"world","kind":"Chest","partner":"2_64_2.json"}}}</pre>
  *
@@ -63,10 +63,8 @@ public final class LockKindFile {
                     LockStores.StoreFile store = stores.resolve(entry.getKey());
                     JsonObject seen = entry.getValue().getAsJsonObject();
                     JsonElement bound = seen.get("bound");
-                    JsonElement partner = seen.get("partner");
                     OwnedLocks.remember(store.store(), store.path(), seen.get("world").getAsString(),
-                            bound != null && bound.getAsBoolean(), seen.get("kind").getAsString(),
-                            partner == null ? null : partner.getAsString());
+                            bound != null && bound.getAsBoolean(), text(seen, "kind"), text(seen, "partner"));
                 }
             }
         } catch (IOException | RuntimeException e) {
@@ -85,12 +83,21 @@ public final class LockKindFile {
         }
     }
 
-    /** On disable: writes any change now, after a background write still running. */
-    public void saveNow() {
-        Snapshot snapshot = snapshot();
-        if (snapshot != null) {
-            write(snapshot);
+    /**
+     * On disable: waits for a background write still running, then writes the index unless exactly it is on disk. A
+     * snapshot queued but not yet run counts as unwritten, as the scheduler drops it at disable.
+     */
+    public synchronized void saveNow() {
+        long revision = OwnedLocks.revision();
+        if (revision != written) {
+            queued = revision;
+            write(new Snapshot(revision, OwnedLocks.sighted()));
         }
+    }
+
+    private static String text(JsonObject json, String field) {
+        JsonElement value = json.get(field);
+        return value == null ? null : value.getAsString();
     }
 
     private Snapshot snapshot() {
@@ -115,7 +122,9 @@ public final class LockKindFile {
             if (lock.bound()) {
                 seen.addProperty("bound", true);
             }
-            seen.addProperty("kind", lock.kind());
+            if (lock.kind() != null) {
+                seen.addProperty("kind", lock.kind());
+            }
             if (lock.partner() != null) {
                 seen.addProperty("partner", lock.partner());
             }

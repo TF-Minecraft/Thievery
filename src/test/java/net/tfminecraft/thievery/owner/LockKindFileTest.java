@@ -8,11 +8,18 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.logging.Logger;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.MockedStatic;
 
 import net.tfminecraft.thievery.door.LockState;
 import net.tfminecraft.thievery.owner.LockStores.Store;
@@ -139,6 +146,79 @@ class LockKindFileTest {
         assertTrue(Files.readString(file).contains("Barrel"), "the older snapshot does not overwrite the newer");
         kinds.saveNow();
         assertEquals(1, pending.size(), "nothing new to write");
+    }
+
+    @Test
+    void disableWritesASnapshotThatIsQueuedButNotYetRun() throws Exception {
+        hold(Store.CONTAINERS, "data/0_0/1_64_1.json", LockState.PRIVATE);
+        List<Runnable> pending = new java.util.ArrayList<>();
+        LockKindFile kinds = new LockKindFile(stores, file, log, pending::add);
+        kinds.load();
+        OwnedLocks.seen(OwnedLocks.of(alice).get(0), "world", "Chest", null);
+        kinds.saveIfChanged();
+        kinds.saveNow();
+        pending.clear(); // the scheduler drops the queued job at disable
+        assertTrue(Files.readString(file).contains("Chest"));
+    }
+
+    @Test
+    void disableWaitsForARunningWriteOfTheSameRevision() throws Exception {
+        hold(Store.CONTAINERS, "data/0_0/1_64_1.json", LockState.PRIVATE);
+        List<Runnable> pending = new java.util.ArrayList<>();
+        LockKindFile kinds = new LockKindFile(stores, file, log, pending::add);
+        kinds.load();
+        OwnedLocks.seen(OwnedLocks.of(alice).get(0), "world", "Chest", null);
+        kinds.saveIfChanged();
+        CountDownLatch writing = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        try (ExecutorService workers = Executors.newFixedThreadPool(2)) {
+            // Static mocks are per thread, so the background write holds itself open on its own thread.
+            Future<?> writer = workers.submit(() -> {
+                try (MockedStatic<DurableFiles> durable = mockStatic(DurableFiles.class, CALLS_REAL_METHODS)) {
+                    durable.when(() -> DurableFiles.write(eq(file), any(byte[].class), eq(false))).thenAnswer(call -> {
+                        writing.countDown();
+                        assertTrue(release.await(5, TimeUnit.SECONDS));
+                        return call.callRealMethod();
+                    });
+                    pending.getFirst().run();
+                }
+            });
+            assertTrue(writing.await(5, TimeUnit.SECONDS));
+            Future<?> flush = workers.submit(kinds::saveNow);
+            try {
+                assertThrows(TimeoutException.class, () -> flush.get(200, TimeUnit.MILLISECONDS),
+                        "disable waits for the running write");
+            } finally {
+                release.countDown();
+                writer.get(5, TimeUnit.SECONDS);
+                flush.get(5, TimeUnit.SECONDS);
+            }
+        }
+        assertTrue(Files.readString(file).contains("Chest"));
+    }
+
+    @Test
+    void aBoundWorldIsKeptBeforeTheKindIsSeen() throws Exception {
+        LockKindFile kinds = kinds();
+        kinds.load();
+        Path chest = hold(Store.CONTAINERS, "data/0_0/1_64_1.json", LockState.PRIVATE);
+        Path guessed = hold(Store.CONTAINERS, "data/0_0/3_64_1.json", LockState.PRIVATE);
+        OwnerCodec.Stored marked = new OwnerCodec.Stored(alice, LockOwner.Kind.CHARACTER);
+        OwnedLocks.seen(OwnedLocks.of(alice).get(1), "world_nether", "Barrel", null);
+        // Saves bind both; the guessed one moves to the main world and its old look is dropped.
+        OwnedLocks.put(Store.CONTAINERS, chest, marked, LockState.PRIVATE, "world");
+        OwnedLocks.put(Store.CONTAINERS, guessed, marked, LockState.PRIVATE, "world");
+        kinds.saveIfChanged();
+        String json = Files.readString(file);
+        assertFalse(json.contains("\"kind\""), json);
+
+        OwnedLocks.clear();
+        hold(Store.CONTAINERS, "data/0_0/1_64_1.json", LockState.PRIVATE);
+        hold(Store.CONTAINERS, "data/0_0/3_64_1.json", LockState.PRIVATE);
+        kinds().load();
+        assertEquals(List.of("world/true/null", "world/true/null"), OwnedLocks.of(alice).stream()
+                .map(lock -> lock.world() + "/" + lock.bound() + "/" + lock.kind()).toList());
+        verifyNoInteractions(log);
     }
 
     @Test
