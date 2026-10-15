@@ -128,6 +128,54 @@ class LockAdminCommandTest {
         assertEquals(List.of(), LockAdminCommand.complete(new String[] { "setowner", "x", "y" }));
     }
 
+    @Test void ownerCompletionIncludesLivingOnlineIdsAndOnlyUniqueSingleTokenNames() {
+        var online = MockBukkit.getMock().addPlayer("Online");
+        UUID id = UUID.randomUUID();
+        identity.plays(online, id);
+        var alive = new net.tfminecraft.tlibs.character.CharacterInfo(
+                new net.tfminecraft.tlibs.character.CharacterRef(online.getUniqueId(), id), "Alice",
+                CharacterStatus.ALIVE, null, java.util.Set.of(), 0, java.time.Instant.EPOCH);
+        identity.identity().when(() -> OwnerIdentity.info(id)).thenReturn(Optional.of(alive));
+        try (var names = mockStatic(CharacterNames.class)) {
+            names.when(CharacterNames::available).thenReturn(true);
+            names.when(() -> CharacterNames.find("Alice")).thenReturn(List.of(alive));
+            assertEquals(List.of("server", id.toString(), "Alice"), LockAdminCommand.complete(new String[]{"setowner", ""}));
+            assertEquals(List.of("Alice"), LockAdminCommand.complete(new String[]{"setowner", "aL"}));
+            assertEquals(List.of(id.toString()), LockAdminCommand.complete(new String[]{"setowner", id.toString().substring(0, 8).toUpperCase()}));
+            names.when(() -> CharacterNames.find("Alice")).thenReturn(List.of(alive, alive));
+            assertTrue(LockAdminCommand.complete(new String[]{"setowner", "A"}).isEmpty());
+            names.when(CharacterNames::available).thenReturn(false);
+            assertEquals(List.of("server", id.toString()), LockAdminCommand.complete(new String[]{"setowner", ""}));
+            for (CharacterStatus status : List.of(CharacterStatus.DEAD, CharacterStatus.MISSING)) {
+                identity.identity().when(() -> OwnerIdentity.info(id)).thenReturn(Optional.of(FactionFixture.info(id, online.getUniqueId(), status)));
+                assertEquals(List.of("server"), LockAdminCommand.complete(new String[]{"setowner", ""}));
+            }
+            identity.identity().when(OwnerIdentity::available).thenReturn(false);
+            assertEquals(List.of("server"), LockAdminCommand.complete(new String[]{"setowner", ""}));
+        }
+    }
+
+    @Test void ownerNamesMustRoundTripThroughTheSingleTokenParser() {
+        var online = MockBukkit.getMock().addPlayer("Online");
+        UUID id = UUID.randomUUID(); identity.plays(online, id);
+        try (var names = mockStatic(CharacterNames.class)) {
+            names.when(CharacterNames::available).thenReturn(true);
+            for (String name : List.of("", " ", "Two Words", "server", UUID.randomUUID().toString(), "Unique")) {
+                var info = new net.tfminecraft.tlibs.character.CharacterInfo(
+                        new net.tfminecraft.tlibs.character.CharacterRef(online.getUniqueId(), id), name,
+                        CharacterStatus.ALIVE, null, java.util.Set.of(), 0, java.time.Instant.EPOCH);
+                identity.identity().when(() -> OwnerIdentity.info(id)).thenReturn(Optional.of(info));
+                names.when(() -> CharacterNames.find(name)).thenReturn(List.of());
+                assertEquals(List.of("server", id.toString()), LockAdminCommand.complete(new String[]{"setowner", ""}));
+            }
+            var different = FactionFixture.info(UUID.randomUUID(), online.getUniqueId(), CharacterStatus.ALIVE);
+            names.when(() -> CharacterNames.find("Unique")).thenReturn(List.of(different));
+            assertEquals(List.of("server", id.toString()), LockAdminCommand.complete(new String[]{"setowner", ""}));
+            identity.plays(online, null);
+            assertEquals(List.of("server"), LockAdminCommand.complete(new String[]{"setowner", ""}));
+        }
+    }
+
     @Test
     void quarantineListsEverySectionWithPerOwnerCountsAndIsAudited() throws Exception {
         UUID account = UUID.randomUUID();

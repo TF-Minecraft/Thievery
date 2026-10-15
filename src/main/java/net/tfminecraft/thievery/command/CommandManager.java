@@ -271,7 +271,8 @@ public class CommandManager implements CommandExecutor, TabCompleter {
                 options.add("testpick");
                 options.add("locks");
             }
-            return options;
+            String prefix = args[0].toLowerCase(Locale.ROOT);
+            return options.stream().filter(option -> option.toLowerCase(Locale.ROOT).startsWith(prefix)).toList();
         }
 
         if (args.length >= 2 && args[0].equalsIgnoreCase("locks") && sender.hasPermission("thievery.admin")) {
