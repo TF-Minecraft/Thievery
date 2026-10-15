@@ -20,6 +20,8 @@ import org.mockito.MockedStatic;
 import net.tfminecraft.thievery.owner.DurableFiles;
 import net.tfminecraft.thievery.owner.LockGuard;
 import net.tfminecraft.thievery.owner.LockOwner;
+import net.tfminecraft.thievery.owner.LockStores;
+import net.tfminecraft.thievery.owner.OwnedLocks;
 import net.tfminecraft.thievery.testsupport.FactionFixture;
 
 class DoorDataManagerTest {
@@ -57,6 +59,33 @@ class DoorDataManagerTest {
     private void write(String json) throws Exception {
         Files.createDirectories(file.getParent());
         Files.writeString(file, json);
+    }
+
+    @Test
+    void savesAndDeletesKeepTheOwnerIndex() {
+        UUID owner = UUID.randomUUID();
+        manager.saveDoorData(new DoorData(location, "copper", 0.75, LockOwner.character(owner)));
+        assertEquals(java.util.List.of(new OwnedLocks.Lock(file.toAbsolutePath().normalize(), LockStores.Store.DOORS,
+                owner, null, null, null, null)), OwnedLocks.of(owner));
+        assertTrue(manager.deleteDoorData(location));
+        assertEquals(java.util.List.of(), OwnedLocks.of(owner));
+    }
+
+    @Test
+    void theOwnerIndexFollowsTheDiskWhenADirectorySyncFails() {
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+        manager.saveDoorData(new DoorData(location, "copper", 0.75, LockOwner.character(first)));
+        try (MockedStatic<DurableFiles> durable = mockStatic(DurableFiles.class, CALLS_REAL_METHODS)) {
+            durable.when(() -> DurableFiles.syncDirectory(any())).thenThrow(new java.io.IOException("fsync failed"));
+            manager.saveDoorData(new DoorData(location, "copper", 0.75, LockOwner.character(second)));
+            assertEquals(java.util.List.of(), OwnedLocks.of(first));
+            assertEquals(1, OwnedLocks.of(second).size());
+            assertFalse(manager.deleteDoorData(location));
+            assertEquals(java.util.List.of(), OwnedLocks.of(second));
+        }
+        verify(logger).warning(contains("Failed to save door data"));
+        verify(logger).warning(contains("Failed to delete door data"));
     }
 
     @Test

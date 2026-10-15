@@ -68,6 +68,8 @@ public final class LockGuard {
                 DurableFiles.delete(path);
             } catch (IOException e) {
                 logger().warning("Could not delete queued lock file " + path + ": " + e.getMessage());
+            } finally {
+                OwnedLocks.forgetIfGone(path);
             }
         }
         pendingDeletions.clear();

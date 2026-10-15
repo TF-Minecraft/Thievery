@@ -9,10 +9,11 @@ import net.tfminecraft.thievery.owner.LockGuard;
 import net.tfminecraft.thievery.owner.LockGuildBridge;
 import net.tfminecraft.thievery.owner.LockGuilds;
 import net.tfminecraft.thievery.owner.LockQuarantine;
+import net.tfminecraft.thievery.owner.OwnedLocks;
 
 /**
- * Every test starts with locks in FULL mode, no guild source, no estates and an empty quarantine; guard tests opt
- * in.
+ * Every test starts with locks in FULL mode, no guild source, no estates, an empty quarantine and an empty owner
+ * index; guard tests opt in.
  */
 public final class LockModeExtension implements BeforeEachCallback {
     @Override
@@ -20,6 +21,7 @@ public final class LockModeExtension implements BeforeEachCallback {
         LockGuard.forceFull();
         LockGuildBridge.set(LockGuilds.UNAVAILABLE);
         LockQuarantine.reset();
+        OwnedLocks.clear();
         EstateBridge.set(LockEstates.NONE);
     }
 }

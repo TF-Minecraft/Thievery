@@ -24,6 +24,8 @@ import net.tfminecraft.thievery.owner.LockGuard;
 import net.tfminecraft.thievery.owner.LockOwner;
 import net.tfminecraft.thievery.owner.LockQuarantine;
 import net.tfminecraft.thievery.owner.OwnerIdentity;
+import net.tfminecraft.thievery.owner.LockStores;
+import net.tfminecraft.thievery.owner.OwnedLocks;
 import net.tfminecraft.thievery.testsupport.FactionFixture;
 
 class ContainerDataManagerTest {
@@ -348,6 +350,50 @@ class ContainerDataManagerTest {
     private Path fileAt(Location loc) {
         return temp.resolve((loc.getBlockX() >> 4) + "_" + (loc.getBlockZ() >> 4))
                 .resolve(loc.getBlockX() + "_" + loc.getBlockY() + "_" + loc.getBlockZ() + ".json");
+    }
+
+    @Test
+    void savesAndDeletesKeepTheOwnerIndex() throws Exception {
+        UUID character = UUID.randomUUID();
+        org.bukkit.World world = mock(org.bukkit.World.class);
+        when(world.getName()).thenReturn("world_nether");
+        when(location.getWorld()).thenReturn(world);
+        ContainerData data = new ContainerData(location, LockOwner.character(character));
+        data.setLockState(LockState.GUILD);
+        manager.saveContainerData(data);
+        assertEquals(java.util.List.of(new OwnedLocks.Lock(file.toAbsolutePath().normalize(), LockStores.Store.CONTAINERS,
+                character, LockState.GUILD, "world_nether", null, null)), OwnedLocks.of(character));
+        data.setOwner(LockOwner.server());
+        manager.saveContainerData(data);
+        assertEquals(java.util.List.of(), OwnedLocks.of(character));
+        data.setOwner(LockOwner.character(character));
+        manager.saveContainerData(data);
+        assertTrue(manager.deleteContainerData(location));
+        assertEquals(java.util.List.of(), OwnedLocks.of(character));
+    }
+
+    @Test
+    void theOwnerIndexFollowsTheDiskWhenADirectorySyncFailsAndNoOpSavesRepairIt() throws Exception {
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+        ContainerData data = new ContainerData(location, LockOwner.character(first));
+        manager.saveContainerData(data);
+        try (MockedStatic<DurableFiles> durable = mockStatic(DurableFiles.class, CALLS_REAL_METHODS)) {
+            durable.when(() -> DurableFiles.syncDirectory(any())).thenThrow(new java.io.IOException("fsync failed"));
+            data.setOwner(LockOwner.character(second));
+            manager.saveContainerData(data);
+            verify(logger).warning(contains("Failed to save container data"));
+            assertEquals(java.util.List.of(), OwnedLocks.of(first), "the new owner is on disk");
+            assertEquals(1, OwnedLocks.of(second).size());
+            assertFalse(manager.deleteContainerData(location));
+            verify(logger).warning(contains("Failed to delete container data"));
+            assertFalse(Files.exists(file));
+            assertEquals(java.util.List.of(), OwnedLocks.of(second), "the deleted lock is gone");
+        }
+        manager.saveContainerData(data);
+        OwnedLocks.clear();
+        manager.saveContainerData(data);
+        assertEquals(1, OwnedLocks.of(second).size(), "an unchanged save repairs the index");
     }
 
     static ContainerDataManager managerAt(Path root) throws Exception {

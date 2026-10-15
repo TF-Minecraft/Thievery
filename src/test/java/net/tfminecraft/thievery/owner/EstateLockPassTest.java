@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.MockedStatic;
 
+import net.tfminecraft.thievery.door.LockState;
 import net.tfminecraft.thievery.estate.LockEstates;
 import net.tfminecraft.thievery.estate.LockEstates.Estate;
 import net.tfminecraft.thievery.estate.LockEstates.Report;
@@ -129,6 +130,33 @@ class EstateLockPassTest {
     Report only(LockMigration.Outcome outcome) {
         assertEquals(1, outcome.estates().size());
         return outcome.estates().getFirst();
+    }
+
+    List<Path> held(UUID owner) {
+        return OwnedLocks.of(owner).stream().map(OwnedLocks.Lock::path).toList();
+    }
+
+    @Test
+    void thePassLeavesTheOwnerIndexAsItsFilesNowStand() throws Exception {
+        estates.add(estate(heir, leader));
+        Path chest = container("1_64_1.json", marked(dead, "PRIVATE"));
+        Path guild = container("3_64_1.json", marked(dead, "GUILD"));
+        Path bare = container("5_64_1.json", "{\"owner\":\"" + other + "\",\"lockState\":\"PUBLIC\"}");
+        container("7_64_1.json", "{\"owner\":");
+        container("9_64_1.json", "{\"owner\":\"00000000-0000-0000-0000-000000000000\",\"lockState\":\"PRIVATE\"}");
+        Path door = LockMigrationTest.write(temp.resolve("door-data/0_0/9_64_1.json"),
+                "{\"key\":\"k\",\"strength\":0.5,\"ownerUUID\":\"" + other + "\",\"ownerKind\":\"CHARACTER\"}");
+        OwnedLocks.put(LockStores.Store.CONTAINERS, temp.resolve("data/0_0/11_64_1.json"),
+                new OwnerCodec.Stored(other, LockOwner.Kind.CHARACTER), LockState.PUBLIC, null);
+
+        migration().run();
+
+        assertEquals(List.of(chest), held(heir), "estate moves count for their recipient");
+        assertEquals(List.of(guild), held(leader));
+        assertEquals(LockState.GUILD, OwnedLocks.of(leader).getFirst().state());
+        assertEquals(List.of(bare, door), held(other), "a bare character owner gains its marker; older entries go");
+        assertEquals(List.of(), held(dead));
+        assertEquals(List.of(), held(LockOwner.NIL), "server and unreadable records are not held");
     }
 
     @Test

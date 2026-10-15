@@ -20,6 +20,8 @@ import net.tfminecraft.thievery.owner.LockGuard;
 import net.tfminecraft.thievery.owner.LockOwner;
 import net.tfminecraft.thievery.owner.LockQuarantine;
 import net.tfminecraft.thievery.owner.LockRecords;
+import net.tfminecraft.thievery.owner.LockStores;
+import net.tfminecraft.thievery.owner.OwnedLocks;
 import net.tfminecraft.thievery.owner.OwnerCodec;
 
 public class ContainerDataManager {
@@ -82,6 +84,8 @@ public class ContainerDataManager {
         } catch (IOException e) {
             Bukkit.getLogger().warning("Failed to delete container data for " + location + ": " + e.getMessage());
             return false;
+        } finally {
+            OwnedLocks.refresh(LockStores.Store.CONTAINERS, file.toPath(), OwnedLocks.world(location));
         }
     }
 
@@ -146,6 +150,8 @@ public class ContainerDataManager {
         } catch (IOException e) {
             OWNER_CACHE.remove(BlockKey.of(data.getLocation()));
             Bukkit.getLogger().warning("Failed to save container data for " + data.getLocation() + ": " + e.getMessage());
+        } finally {
+            OwnedLocks.refresh(LockStores.Store.CONTAINERS, file.toPath(), OwnedLocks.world(data.getLocation()));
         }
     }
 

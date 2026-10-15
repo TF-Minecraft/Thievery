@@ -17,6 +17,7 @@ import net.tfminecraft.tlibs.character.estate.EstateDecision;
 import net.tfminecraft.tlibs.character.estate.EstateParticipant;
 import net.tfminecraft.tlibs.character.estate.EstateState;
 import net.tfminecraft.tlibs.character.estate.Estates;
+import net.tfminecraft.tlibs.character.estate.Holdings;
 import net.tfminecraft.tlibs.character.estate.Outcome;
 import net.tfminecraft.tlibs.character.estate.Recipient;
 
@@ -70,6 +71,13 @@ final class TLibsLockEstates implements LockEstates, EstateParticipant {
     @Override
     public void register(Plugin plugin) {
         Bukkit.getServicesManager().register(EstateParticipant.class, this, plugin, ServicePriority.Normal);
+    }
+
+    /** The locks the character owns now, for the will screen; see {@link LockHoldings}. */
+    @Override
+    public Holdings describe(UUID characterId) {
+        LockHoldings.Summary summary = LockHoldings.describe(characterId);
+        return summary.labels().isEmpty() ? Holdings.NONE : new Holdings(summary.counts(), summary.labels());
     }
 
     /**
