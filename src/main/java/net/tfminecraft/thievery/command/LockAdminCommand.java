@@ -81,14 +81,32 @@ public final class LockAdminCommand {
             return filter(List.of("quarantine", "setowner"), args[0]);
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("setowner")) {
-            return filter(List.of("server"), args[1]);
+            var options = new java.util.LinkedHashSet<String>();
+            options.add("server");
+            if (OwnerIdentity.available()) {
+                for (Player online : org.bukkit.Bukkit.getOnlinePlayers()) {
+                    OwnerIdentity.currentCharacter(online).flatMap(OwnerIdentity::info)
+                            .filter(info -> info.status() == CharacterStatus.ALIVE)
+                            .ifPresent(info -> {
+                                UUID id = info.ref().characterId();
+                                options.add(id.toString());
+                                String name = info.name();
+                                if (name.isBlank() || name.chars().anyMatch(Character::isWhitespace)
+                                        || name.equalsIgnoreCase("server") || parseUuid(name) != null
+                                        || !CharacterNames.available()) return;
+                                List<CharacterInfo> matches = CharacterNames.find(name);
+                                if (matches.size() == 1 && matches.getFirst().ref().characterId().equals(id)) options.add(name);
+                            });
+                }
+            }
+            return filter(new ArrayList<>(options), args[1]);
         }
         return List.of();
     }
 
     private static List<String> filter(List<String> options, String prefix) {
         String lower = prefix.toLowerCase(Locale.ROOT);
-        return options.stream().filter(option -> option.startsWith(lower)).toList();
+        return options.stream().filter(option -> option.toLowerCase(Locale.ROOT).startsWith(lower)).toList();
     }
 
     private void quarantine(CommandSender sender) {

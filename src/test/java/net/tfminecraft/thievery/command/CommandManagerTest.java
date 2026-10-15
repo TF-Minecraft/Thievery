@@ -227,6 +227,9 @@ class CommandManagerTest {
         assertTrue(complete(player, "locks", "").isEmpty());
         when(player.hasPermission("thievery.admin")).thenReturn(true);
         assertEquals(List.of("loadout", "clearclues", "feedback", "reload", "resetcooldowns", "setrisk", "itemvalue", "keychain", "testpick", "locks"), complete(player, ""));
+        assertEquals(List.of("reload", "resetcooldowns"), complete(player, "re"));
+        assertEquals(List.of("setrisk"), complete(player, "SET"));
+        assertTrue(complete(player, "nonsense").isEmpty());
         assertEquals(List.of("quarantine", "setowner"), complete(player, "locks", ""));
         assertEquals(List.of("server"), complete(player, "locks", "setowner", "S"));
         assertEquals(List.of("pocket"), complete(player, "testpick", ""));
