@@ -13,6 +13,8 @@ import net.tfminecraft.thievery.owner.DurableFiles;
 import net.tfminecraft.thievery.owner.LockGuard;
 import net.tfminecraft.thievery.owner.LockQuarantine;
 import net.tfminecraft.thievery.owner.LockRecords;
+import net.tfminecraft.thievery.owner.LockStores;
+import net.tfminecraft.thievery.owner.OwnedLocks;
 import net.tfminecraft.thievery.owner.OwnerCodec;
 
 public class EntityLockDataManager {
@@ -58,6 +60,7 @@ public class EntityLockDataManager {
                 return;
             }
             DurableFiles.write(path, LockRecords.encodeEntity(next), true);
+            OwnedLocks.put(LockStores.Store.ENTITIES, path, next.owner(), next.state(), null);
         } catch (IOException e) {
             Bukkit.getLogger().warning("Failed to save entity lock data for " + data.getEntityId() + ": " + e.getMessage());
         }
@@ -74,7 +77,9 @@ public class EntityLockDataManager {
             return false;
         }
         try {
-            return DurableFiles.delete(path);
+            boolean deleted = DurableFiles.delete(path);
+            OwnedLocks.remove(path);
+            return deleted;
         } catch (IOException e) {
             Bukkit.getLogger().warning("Failed to delete entity lock data for " + entityId + ": " + e.getMessage());
             return false;

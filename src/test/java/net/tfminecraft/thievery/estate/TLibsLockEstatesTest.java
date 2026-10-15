@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +22,10 @@ import org.mockito.MockedStatic;
 
 import net.tfminecraft.thievery.door.LockState;
 import net.tfminecraft.thievery.estate.LockEstates.Estate;
+import net.tfminecraft.thievery.owner.LockOwner;
+import net.tfminecraft.thievery.owner.LockStores;
+import net.tfminecraft.thievery.owner.OwnedLocks;
+import net.tfminecraft.thievery.owner.OwnerCodec;
 import net.tfminecraft.thievery.estate.LockEstates.Report;
 import net.tfminecraft.tlibs.character.CharacterRef;
 import net.tfminecraft.tlibs.character.Characters;
@@ -28,6 +33,7 @@ import net.tfminecraft.tlibs.character.estate.EstateDecision;
 import net.tfminecraft.tlibs.character.estate.EstateParticipant;
 import net.tfminecraft.tlibs.character.estate.EstateState;
 import net.tfminecraft.tlibs.character.estate.Estates;
+import net.tfminecraft.tlibs.character.estate.Holdings;
 import net.tfminecraft.tlibs.character.estate.Outcome;
 import net.tfminecraft.tlibs.character.estate.Recipient;
 
@@ -159,6 +165,17 @@ class TLibsLockEstatesTest {
         assertTrue(((Outcome.Retry) outcome).reason().contains("revived, reverted"));
         estates.when(() -> Estates.guardHolds(reverted)).thenReturn(true);
         assertEquals(Outcome.Kind.DONE, source.settle(reverted).kind());
+    }
+
+    @Test
+    void describeListsTheLocksTheCharacterOwnsNow() {
+        try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
+            assertSame(Holdings.NONE, source.describe(heir));
+            OwnedLocks.put(LockStores.Store.CONTAINERS, Path.of("plugins/Thievery/data/0_0/1_64_1.json"),
+                    new OwnerCodec.Stored(heir, LockOwner.Kind.CHARACTER), LockState.FACTION, null);
+            assertEquals(new Holdings(Map.of("guild-locks", 1), List.of("Container at 1 64 1 (faction)")),
+                    source.describe(heir));
+        }
     }
 
     @Test

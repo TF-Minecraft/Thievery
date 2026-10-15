@@ -13,6 +13,8 @@ import net.tfminecraft.thievery.owner.DurableFiles;
 import net.tfminecraft.thievery.owner.LockGuard;
 import net.tfminecraft.thievery.owner.LockQuarantine;
 import net.tfminecraft.thievery.owner.LockRecords;
+import net.tfminecraft.thievery.owner.LockStores;
+import net.tfminecraft.thievery.owner.OwnedLocks;
 import net.tfminecraft.thievery.owner.OwnerCodec;
 
 public class DoorDataManager {
@@ -69,6 +71,7 @@ public class DoorDataManager {
             boolean ownership = previous == null || !Objects.equals(previous.owner(), next.owner())
                     || !Objects.equals(previous.key(), next.key());
             DurableFiles.write(path, LockRecords.encodeDoor(next), ownership);
+            OwnedLocks.put(LockStores.Store.DOORS, path, next.owner(), null, OwnedLocks.world(data.getLocation()));
         } catch (IOException e) {
             Bukkit.getLogger().warning("Failed to save door data for " + data.getLocation() + ": " + e.getMessage());
         }
@@ -81,7 +84,9 @@ public class DoorDataManager {
             return false;
         }
         try {
-            return DurableFiles.delete(path);
+            boolean deleted = DurableFiles.delete(path);
+            OwnedLocks.remove(path);
+            return deleted;
         } catch (IOException e) {
             Bukkit.getLogger().warning("Failed to delete door data for " + location + ": " + e.getMessage());
             return false;

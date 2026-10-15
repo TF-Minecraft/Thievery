@@ -176,6 +176,40 @@ class FurnitureLockHelperTest {
         }
     }
 
+    @Test void ownedByListsLockablePiecesMarkedAsTheCharacters() {
+        UUID alice = UUID.randomUUID();
+        Furniture mine = piece("pedestal", alice.toString().toUpperCase(Locale.ROOT), "CHARACTER", "guild");
+        Map<UUID, Furniture> placed = new LinkedHashMap<>();
+        placed.put(UUID.randomUUID(), piece("chair", alice.toString(), "CHARACTER", "PRIVATE"));
+        placed.put(UUID.randomUUID(), piece("pedestal", null, null, null));
+        placed.put(UUID.randomUUID(), piece("pedestal", UUID.randomUUID().toString(), "CHARACTER", "PRIVATE"));
+        placed.put(UUID.randomUUID(), piece("pedestal", alice.toString(), null, "PRIVATE"));
+        placed.put(UUID.randomUUID(), piece("pedestal", alice.toString(), "CHARACTER", null));
+        placed.put(UUID.randomUUID(), mine);
+        when(plugin.getFurnitureManager().getPlacedFurniture()).thenReturn(placed);
+        Set<String> saved = Parameters.lockableFurnitureIds;
+        try {
+            Parameters.lockableFurnitureIds = Set.of("pedestal");
+            assertEquals(List.of(new FurnitureLockHelper.Owned("pedestal", mine.getLoc(), LockState.GUILD)),
+                FurnitureLockHelper.ownedBy(alice), "unlockable, unowned, other, bare and unreadable pieces are left out");
+        } finally {
+            Parameters.lockableFurnitureIds = saved;
+        }
+        assertEquals(List.of(), LockQuarantine.snapshot().unreadable(), "listing notes nothing");
+    }
+
+    private static Furniture piece(String id, String owner, String kind, String state) {
+        Furniture piece = mock(Furniture.class);
+        Map<String, Object> values = new HashMap<>();
+        if (owner != null) values.put(FurnitureLockHelper.OWNER_KEY, owner);
+        if (kind != null) values.put(FurnitureLockHelper.OWNER_KIND_KEY, kind);
+        if (state != null) values.put(FurnitureLockHelper.LOCK_STATE_KEY, state);
+        when(piece.getId()).thenReturn(id);
+        when(piece.getVariables()).thenReturn(values);
+        when(piece.getLoc()).thenReturn(new Location(null, 4, 5, 6));
+        return piece;
+    }
+
     @Test void configuredFurnitureIsLockable() {
         when(furniture.getId()).thenReturn("cabinet");
         try (var parameters = mockStatic(Parameters.class)) {

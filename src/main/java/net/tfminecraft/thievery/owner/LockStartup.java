@@ -20,6 +20,7 @@ public final class LockStartup {
     public static boolean start(LockStores stores, Logger log) {
         LockGuard.enter("starting up");
         LockQuarantine.reset();
+        OwnedLocks.clear();
         if (!EstateBridge.probe()) {
             log.warning("TLibs is older than 2.6.0, so locks take no part in estates: a dead owner keeps them.");
         }

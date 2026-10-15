@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -209,6 +210,8 @@ public final class LockMigration {
             writeDataVersion();
         }
 
+        index(scanned, plan, estatePlan.moves());
+
         LockQuarantine.Contents next = new LockQuarantine.Contents();
         next.quarantined = quarantined;
         next.unreadable = unreadable;
@@ -236,6 +239,23 @@ public final class LockMigration {
             case LEGACY -> LockOwner.character(classification.heir());
             case UNRESOLVED -> null;
         };
+    }
+
+    // The will screen's index, from the files as this pass left them.
+    private static void index(List<Scanned> scanned, List<Planned> plan, List<Planned> estateMoves) {
+        OwnedLocks.clear();
+        Map<Scanned, LockOwner> rewritten = new IdentityHashMap<>();
+        for (Planned planned : plan) {
+            rewritten.put(planned.scanned(), planned.owner());
+        }
+        for (Planned planned : estateMoves) {
+            rewritten.put(planned.scanned(), planned.owner());
+        }
+        for (Scanned file : scanned) {
+            LockOwner owner = rewritten.get(file);
+            OwnedLocks.put(file.file().store(), file.file().path(),
+                    owner == null ? file.owner() : OwnerCodec.store(owner), file.state(), null);
+        }
     }
 
     // The estate entries a journal applied; skipped ones moved nothing.

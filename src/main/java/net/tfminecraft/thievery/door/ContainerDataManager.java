@@ -20,6 +20,8 @@ import net.tfminecraft.thievery.owner.LockGuard;
 import net.tfminecraft.thievery.owner.LockOwner;
 import net.tfminecraft.thievery.owner.LockQuarantine;
 import net.tfminecraft.thievery.owner.LockRecords;
+import net.tfminecraft.thievery.owner.LockStores;
+import net.tfminecraft.thievery.owner.OwnedLocks;
 import net.tfminecraft.thievery.owner.OwnerCodec;
 
 public class ContainerDataManager {
@@ -78,7 +80,9 @@ public class ContainerDataManager {
         }
         OWNER_CACHE.remove(BlockKey.of(location));
         try {
-            return DurableFiles.delete(file.toPath());
+            boolean deleted = DurableFiles.delete(file.toPath());
+            OwnedLocks.remove(file.toPath());
+            return deleted;
         } catch (IOException e) {
             Bukkit.getLogger().warning("Failed to delete container data for " + location + ": " + e.getMessage());
             return false;
@@ -138,6 +142,8 @@ public class ContainerDataManager {
             boolean ownership = previous == null || !Objects.equals(previous.owner(), next.owner())
                     || previous.state() != next.state();
             DurableFiles.write(file.toPath(), LockRecords.encodeContainer(next), ownership);
+            OwnedLocks.put(LockStores.Store.CONTAINERS, file.toPath(), next.owner(), next.state(),
+                    OwnedLocks.world(data.getLocation()));
             if (data.isProvisional()) {
                 OWNER_CACHE.remove(BlockKey.of(data.getLocation()));
             } else {

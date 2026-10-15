@@ -1,5 +1,7 @@
 package net.tfminecraft.thievery.steal;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
@@ -69,6 +71,32 @@ public final class FurnitureLockHelper {
             }
         }
         return null;
+    }
+
+    /** A placed piece locked to a character, for the will screen. */
+    public record Owned(String id, Location location, LockState state) {}
+
+    /**
+     * The lockable pieces whose owner is marked as this character, the ones an estate moves. Pieces with
+     * unreadable variables are left out; nothing is classified or written.
+     */
+    public static List<Owned> ownedBy(UUID characterId) {
+        String owner = characterId.toString();
+        List<Owned> owned = new ArrayList<>();
+        for (Furniture furniture : InteractibleFurniture.getInstance().getFurnitureManager().getPlacedFurniture().values()) {
+            Map<String, Object> variables = furniture.getVariables();
+            if (!isLockable(furniture) || !owner.equalsIgnoreCase(text(variables.get(OWNER_KEY)))
+                    || !LockOwner.Kind.CHARACTER.name().equals(text(variables.get(OWNER_KIND_KEY)))) {
+                continue;
+            }
+            try {
+                LockState state = LockState.valueOf(String.valueOf(variables.get(LOCK_STATE_KEY)).toUpperCase(Locale.ROOT));
+                owned.add(new Owned(furniture.getId(), furniture.getLoc(), state));
+            } catch (IllegalArgumentException e) {
+                // Unreadable: it loads locked with an unresolved owner, so no estate moves it.
+            }
+        }
+        return owned;
     }
 
     private static String text(Object raw) {

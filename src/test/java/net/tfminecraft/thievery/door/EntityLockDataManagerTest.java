@@ -9,6 +9,8 @@ import java.util.logging.Logger;
 import net.tfminecraft.thievery.Thievery;
 import net.tfminecraft.thievery.owner.LockGuard;
 import net.tfminecraft.thievery.owner.LockOwner;
+import net.tfminecraft.thievery.owner.LockStores;
+import net.tfminecraft.thievery.owner.OwnedLocks;
 import net.tfminecraft.thievery.testsupport.FactionFixture;
 import org.bukkit.Bukkit;
 import org.junit.jupiter.api.*;
@@ -62,6 +64,16 @@ class EntityLockDataManagerTest {
         assertNull(restarted.load(id).getOwner());
         assertEquals(LockState.DEFAULT, restarted.load(id).getLockState());
         verifyNoInteractions(logger);
+    }
+    @Test void savesAndDeletesKeepTheOwnerIndex() {
+        UUID id = UUID.randomUUID(), owner = UUID.randomUUID();
+        var data = new EntityLockData(id, LockOwner.character(owner));
+        data.setLockState(LockState.FACTION);
+        manager.save(data);
+        assertEquals(java.util.List.of(new OwnedLocks.Lock(path(id).toAbsolutePath().normalize(), LockStores.Store.ENTITIES,
+                owner, LockState.FACTION, null, null, null)), OwnedLocks.of(owner));
+        assertTrue(manager.delete(id));
+        assertEquals(java.util.List.of(), OwnedLocks.of(owner));
     }
     @Test void missingAndUnownedRecordsAreUnclaimedButBrokenOnesStayLocked() throws Exception {
         UUID id = UUID.randomUUID();

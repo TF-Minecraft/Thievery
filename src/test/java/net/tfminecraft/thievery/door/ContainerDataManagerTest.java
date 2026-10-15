@@ -24,6 +24,8 @@ import net.tfminecraft.thievery.owner.LockGuard;
 import net.tfminecraft.thievery.owner.LockOwner;
 import net.tfminecraft.thievery.owner.LockQuarantine;
 import net.tfminecraft.thievery.owner.OwnerIdentity;
+import net.tfminecraft.thievery.owner.LockStores;
+import net.tfminecraft.thievery.owner.OwnedLocks;
 import net.tfminecraft.thievery.testsupport.FactionFixture;
 
 class ContainerDataManagerTest {
@@ -348,6 +350,26 @@ class ContainerDataManagerTest {
     private Path fileAt(Location loc) {
         return temp.resolve((loc.getBlockX() >> 4) + "_" + (loc.getBlockZ() >> 4))
                 .resolve(loc.getBlockX() + "_" + loc.getBlockY() + "_" + loc.getBlockZ() + ".json");
+    }
+
+    @Test
+    void savesAndDeletesKeepTheOwnerIndex() throws Exception {
+        UUID character = UUID.randomUUID();
+        org.bukkit.World world = mock(org.bukkit.World.class);
+        when(world.getName()).thenReturn("world_nether");
+        when(location.getWorld()).thenReturn(world);
+        ContainerData data = new ContainerData(location, LockOwner.character(character));
+        data.setLockState(LockState.GUILD);
+        manager.saveContainerData(data);
+        assertEquals(java.util.List.of(new OwnedLocks.Lock(file.toAbsolutePath().normalize(), LockStores.Store.CONTAINERS,
+                character, LockState.GUILD, "world_nether", null, null)), OwnedLocks.of(character));
+        data.setOwner(LockOwner.server());
+        manager.saveContainerData(data);
+        assertEquals(java.util.List.of(), OwnedLocks.of(character));
+        data.setOwner(LockOwner.character(character));
+        manager.saveContainerData(data);
+        assertTrue(manager.deleteContainerData(location));
+        assertEquals(java.util.List.of(), OwnedLocks.of(character));
     }
 
     static ContainerDataManager managerAt(Path root) throws Exception {
