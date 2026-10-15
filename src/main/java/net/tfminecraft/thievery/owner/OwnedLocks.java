@@ -128,8 +128,10 @@ public final class OwnedLocks {
         if (!Objects.equals(sighting(previous), sighting(next))) {
             revision++;
         }
+        // Only a removed record, or one whose seen block is gone or replaced, invalidates its neighbours' references;
+        // restoring or rewriting a record whose kind was never seen leaves them alone.
         if (previous != null && previous.store() == LockStores.Store.CONTAINERS
-                && (next == null || next.kind() == null)) {
+                && (next == null || previous.kind() != null && next.kind() == null)) {
             forgetPartner(previous);
         }
     }

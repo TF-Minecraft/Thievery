@@ -298,6 +298,25 @@ class OwnedLocksTest {
     }
 
     @Test
+    void anUnseenHalfRewrittenOrRestoredLeavesItsPartnerNamed() {
+        Path left = temp.resolve("data/0_1/15_64_20.json");
+        Path right = temp.resolve("data/1_1/16_64_20.json");
+        OwnedLocks.put(Store.CONTAINERS, left, marked(alice), LockState.PUBLIC, "world");
+        OwnedLocks.put(Store.CONTAINERS, right, marked(alice), LockState.PUBLIC, "world");
+        OwnedLocks.seen(OwnedLocks.inChunk(0, 1).getFirst(), "world", "Chest", "16_64_20.json");
+
+        OwnedLocks.put(Store.CONTAINERS, right, marked(alice), LockState.PUBLIC, "world");
+        OwnedLocks.put(Store.CONTAINERS, right, marked(alice), LockState.GUILD, null);
+        OwnedLocks.remember(Store.CONTAINERS, right, "world", true, null, null);
+        OwnedLocks.seen(OwnedLocks.inChunk(1, 1).getFirst(), null, null, null);
+        assertEquals("16_64_20.json", OwnedLocks.inChunk(0, 1).getFirst().partner(),
+                "an unchanged save, a state change, a restore and a look that saw nothing are not a removal");
+
+        OwnedLocks.remove(right);
+        assertNull(OwnedLocks.inChunk(0, 1).getFirst().partner());
+    }
+
+    @Test
     void worldNamesALocationsWorldWhenItHasOne() {
         World world = mock(World.class);
         when(world.getName()).thenReturn("world_nether");

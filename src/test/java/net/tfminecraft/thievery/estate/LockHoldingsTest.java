@@ -274,6 +274,31 @@ class LockHoldingsTest {
     }
 
     @Test
+    void aDoubleChestSeenFromOneSideIsStillOneChestAfterARestart(@TempDir Path temp) {
+        LockStores stores = new LockStores(temp.resolve("data"), temp.resolve("door-data"), temp.resolve("entities"),
+                temp.resolve("migrations"));
+        Path west = temp.resolve("data/0_1/15_64_20.json");
+        Path east = temp.resolve("data/1_1/16_64_20.json");
+        OwnerCodec.Stored marked = new OwnerCodec.Stored(alice, LockOwner.Kind.CHARACTER);
+        OwnedLocks.put(Store.CONTAINERS, west, marked, LockState.PRIVATE, "world");
+        OwnedLocks.put(Store.CONTAINERS, east, marked, LockState.PRIVATE, "world");
+        // Only the western chunk is loaded: the east half stays bound but unseen, and sorts after the west.
+        block(main, 15, 64, 20, Material.CHEST, true, chest(Chest.Type.LEFT, BlockFace.NORTH));
+        assertEquals(List.of("Chest at 15 64 20"), LockHoldings.describe(alice).labels());
+        LockKindFile kinds = new LockKindFile(stores, temp.resolve(LockKindFile.FILE), mock(Logger.class),
+                Runnable::run);
+        kinds.saveNow();
+
+        OwnedLocks.clear();
+        OwnedLocks.put(Store.CONTAINERS, west, marked, LockState.PRIVATE, null);
+        OwnedLocks.put(Store.CONTAINERS, east, marked, LockState.PRIVATE, null);
+        kinds.load();
+        when(main.isChunkLoaded(anyInt(), anyInt())).thenReturn(false);
+        assertEquals(List.of("Chest at 15 64 20"), LockHoldings.describe(alice).labels());
+        assertEquals(Map.of("locks", 1), LockHoldings.describe(alice).counts());
+    }
+
+    @Test
     void nothingOwnedDescribesNothingAndAMissingMainWorldNamesEveryWorld() {
         assertEquals(new LockHoldings.Summary(Map.of(), List.of()), LockHoldings.describe(alice));
         bukkit.when(Bukkit::getWorlds).thenReturn(List.of());
