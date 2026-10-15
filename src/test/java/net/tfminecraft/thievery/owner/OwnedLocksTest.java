@@ -89,11 +89,11 @@ class OwnedLocksTest {
         assertEquals(new Lock(chest, Store.CONTAINERS, alice, LockState.PRIVATE, "world", "Chest", "2_64_1.json"), seen);
         assertEquals(List.of(seen), OwnedLocks.of(alice));
 
-        OwnedLocks.put(Store.CONTAINERS, chest, marked(alice), LockState.GUILD, null);
+        OwnedLocks.put(Store.CONTAINERS, chest, marked(bob), LockState.GUILD, null);
         Lock stale = OwnedLocks.seen(seen, "world", "Barrel", null);
         assertEquals("Barrel", stale.kind());
-        assertEquals(new Lock(chest, Store.CONTAINERS, alice, LockState.GUILD, null, null, null),
-                OwnedLocks.of(alice).get(0), "a rewritten record is not overwritten by an older look");
+        assertEquals(new Lock(chest, Store.CONTAINERS, bob, LockState.GUILD, "world", "Chest", "2_64_1.json"),
+                OwnedLocks.of(bob).get(0), "a new owner or state keeps the block; an older look is not applied");
     }
 
     @Test
@@ -110,19 +110,20 @@ class OwnedLocksTest {
     }
 
     @Test
-    void anUnchangedRecordKeepsWhatWasSeenOfItsBlock() {
+    void theSameBlockKeepsWhatWasSeenOfIt() {
         Path chest = temp.resolve("data/0_0/1_64_1.json");
         OwnedLocks.put(Store.CONTAINERS, chest, marked(alice), LockState.PRIVATE, "world");
         Lock seen = OwnedLocks.seen(OwnedLocks.of(alice).get(0), "world", "Chest", "2_64_1.json");
         OwnedLocks.put(Store.CONTAINERS, chest, marked(alice), LockState.PRIVATE, null);
         OwnedLocks.put(Store.CONTAINERS, chest, marked(alice), LockState.PRIVATE, "world");
-        assertEquals(List.of(seen), OwnedLocks.of(alice), "a save that changes nothing keeps the look");
+        assertEquals(List.of(seen), OwnedLocks.of(alice), "a save in the same or an unknown world keeps the look");
         OwnedLocks.put(Store.CONTAINERS, chest, marked(alice), LockState.PRIVATE, "world_nether");
         assertEquals(new Lock(chest, Store.CONTAINERS, alice, LockState.PRIVATE, "world_nether", null, null),
                 OwnedLocks.of(alice).get(0), "written in another world: looked at again");
-        OwnedLocks.put(Store.CONTAINERS, chest, marked(alice), null, null);
+        OwnedLocks.seen(OwnedLocks.of(alice).get(0), "world_nether", "Barrel", null);
         OwnedLocks.put(Store.DOORS, chest, marked(alice), null, null);
-        assertEquals(Store.DOORS, OwnedLocks.of(alice).get(0).store());
+        assertEquals(new Lock(chest, Store.DOORS, alice, null, null, null, null), OwnedLocks.of(alice).get(0),
+                "another store's record is another block");
     }
 
     @Test
@@ -190,6 +191,63 @@ class OwnedLocksTest {
         Files.createDirectories(path.getParent());
         Files.writeString(path, json);
         return path;
+    }
+
+    @Test
+    void blockRecordsAreFoundByTheirChunk() {
+        Path chest = temp.resolve("data/-1_-2/-1_64_-17.json");
+        Path door = temp.resolve("door-data/-1_-2/-16_70_-32.json");
+        OwnedLocks.put(Store.CONTAINERS, chest, marked(alice), LockState.PUBLIC, null);
+        OwnedLocks.put(Store.DOORS, door, marked(bob), null, null);
+        OwnedLocks.put(Store.CONTAINERS, temp.resolve("data/0_0/1_64_1.json"), marked(alice), LockState.PUBLIC, null);
+        OwnedLocks.put(Store.ENTITIES, temp.resolve("entities/" + UUID.randomUUID() + ".json"), marked(alice),
+                LockState.PUBLIC, null);
+        assertEquals(List.of(chest, door), OwnedLocks.inChunk(-1, -2).stream().map(Lock::path).toList());
+        assertEquals(List.of(), OwnedLocks.inChunk(5, 5));
+
+        OwnedLocks.put(Store.CONTAINERS, chest, marked(bob), LockState.GUILD, null);
+        assertEquals(List.of(bob, bob), OwnedLocks.inChunk(-1, -2).stream().map(Lock::owner).toList());
+        OwnedLocks.remove(chest);
+        OwnedLocks.remove(door);
+        assertEquals(List.of(), OwnedLocks.inChunk(-1, -2));
+        assertEquals(1, OwnedLocks.inChunk(0, 0).size());
+    }
+
+    @Test
+    void theRevisionMovesOnlyWhenWhatWasSeenChanges() {
+        Path chest = temp.resolve("data/0_0/1_64_1.json");
+        Path barrel = temp.resolve("data/0_0/3_64_1.json");
+        long start = OwnedLocks.revision();
+        OwnedLocks.put(Store.CONTAINERS, chest, marked(alice), LockState.PUBLIC, null);
+        OwnedLocks.put(Store.CONTAINERS, barrel, marked(alice), LockState.PUBLIC, null);
+        assertEquals(start, OwnedLocks.revision(), "nothing seen yet");
+        Lock seen = OwnedLocks.seen(OwnedLocks.of(alice).get(0), "world", "Chest", null);
+        long afterSeen = OwnedLocks.revision();
+        assertNotEquals(start, afterSeen);
+        OwnedLocks.seen(seen, "world", "Chest", null);
+        OwnedLocks.put(Store.CONTAINERS, chest, marked(bob), LockState.GUILD, null);
+        OwnedLocks.remove(barrel);
+        assertEquals(afterSeen, OwnedLocks.revision(), "the same look, a new owner and an unseen record");
+        assertEquals(List.of(chest), OwnedLocks.sighted().stream().map(Lock::path).toList());
+        OwnedLocks.remove(chest);
+        assertNotEquals(afterSeen, OwnedLocks.revision());
+        long removed = OwnedLocks.revision();
+        OwnedLocks.clear();
+        assertNotEquals(removed, OwnedLocks.revision());
+        assertEquals(List.of(), OwnedLocks.sighted());
+    }
+
+    @Test
+    void rememberAppliesOnlyToHeldRecordsOfTheSameStore() {
+        Path chest = temp.resolve("data/0_0/1_64_1.json");
+        Path door = temp.resolve("door-data/0_0/2_64_1.json");
+        OwnedLocks.put(Store.CONTAINERS, chest, marked(alice), LockState.PUBLIC, null);
+        OwnedLocks.put(Store.DOORS, door, marked(alice), null, null);
+        OwnedLocks.remember(Store.CONTAINERS, chest, "world", "Chest", "2_64_1.json");
+        OwnedLocks.remember(Store.CONTAINERS, door, "world", "Chest", null);
+        OwnedLocks.remember(Store.CONTAINERS, temp.resolve("data/0_0/9_64_1.json"), "world", "Chest", null);
+        assertEquals(List.of(new Lock(chest, Store.CONTAINERS, alice, LockState.PUBLIC, "world", "Chest", "2_64_1.json"),
+                new Lock(door, Store.DOORS, alice, null, null, null, null)), OwnedLocks.of(alice));
     }
 
     @Test

@@ -162,6 +162,11 @@ class ThieveryTest {
         assertTrue(HandlerList.getRegisteredListeners(plugin).stream()
                 .anyMatch(listener -> listener.getListener() instanceof DoorManager));
         assertFalse(new File(plugin.getDataFolder(), "migrations").exists());
+        assertFalse(HandlerList.getRegisteredListeners(plugin).stream()
+                .anyMatch(listener -> listener.getListener() instanceof net.tfminecraft.thievery.estate.LockBlocks),
+                "no lock kinds are learnt or saved while the index is empty");
+        plugin.onDisable();
+        assertFalse(new File(plugin.getDataFolder(), "owned-lock-kinds.json").exists());
     }
 
     @Test
@@ -176,6 +181,17 @@ class ThieveryTest {
             assertEquals(1, participants.size());
             assertEquals("thievery", participants.getFirst().getProvider().id());
             assertSame(plugin, participants.getFirst().getPlugin());
+            // Chunk loads teach the index block kinds, which are saved on disable.
+            assertTrue(HandlerList.getRegisteredListeners(plugin).stream()
+                    .anyMatch(listener -> listener.getListener() instanceof net.tfminecraft.thievery.estate.LockBlocks));
+            java.nio.file.Path chest = java.nio.file.Path.of("plugins/Thievery/data/0_0/1_64_1.json");
+            net.tfminecraft.thievery.owner.OwnedLocks.put(net.tfminecraft.thievery.owner.LockStores.Store.CONTAINERS,
+                    chest, new net.tfminecraft.thievery.owner.OwnerCodec.Stored(UUID.randomUUID(),
+                            net.tfminecraft.thievery.owner.LockOwner.Kind.CHARACTER), null, null);
+            var lock = net.tfminecraft.thievery.owner.OwnedLocks.inChunk(0, 0).getFirst();
+            net.tfminecraft.thievery.owner.OwnedLocks.seen(lock, "world", "Chest", null);
+            plugin.onDisable();
+            assertTrue(new File(plugin.getDataFolder(), "owned-lock-kinds.json").exists());
         }
     }
 

@@ -14,10 +14,6 @@ import java.util.UUID;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
-import org.bukkit.block.Block;
-import org.bukkit.block.BlockFace;
-import org.bukkit.block.Container;
-import org.bukkit.block.data.type.Chest;
 import org.bukkit.entity.Entity;
 
 import net.tfminecraft.thievery.cache.Cache;
@@ -29,8 +25,9 @@ import net.tfminecraft.thievery.steal.FurnitureLockHelper;
 /**
  * A character's locks as the will screen lists them, in Thievery and Bukkit types only so the lock code never loads
  * a TLibs estate class. Lock files come from {@link OwnedLocks} and furniture from its placed pieces, so nothing is
- * read from disk. The stores keep no block kind or world: a block is looked at only where its chunk is loaded, and
- * remembered once seen. Until then it reads as a container or a door, and a double chest as two.
+ * read from disk. The stores keep no block kind or world: {@link LockBlocks} looks at a block where its chunk is
+ * loaded, and what it sees is remembered across restarts. Until a block is first seen it reads as a container or a
+ * door, and a double chest as two.
  */
 public final class LockHoldings {
 
@@ -41,25 +38,13 @@ public final class LockHoldings {
 
     public record Summary(Map<String, Integer> counts, List<String> labels) {}
 
-    record Position(int x, int y, int z) {
-        static Position of(Location location) {
-            return new Position(location.getBlockX(), location.getBlockY(), location.getBlockZ());
-        }
-
-        // Index names are always x_y_z.json.
-        static Position parse(String name) {
-            String[] parts = name.substring(0, name.length() - ".json".length()).split("_");
-            return new Position(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]), Integer.parseInt(parts[2]));
-        }
-    }
-
     // One line; world is null in the main world, at is null for a display whose entity is not loaded.
-    private record Item(String kind, String world, Position at, LockState state) {}
+    private record Item(String kind, String world, LockBlocks.Position at, LockState state) {}
 
     private static final Comparator<Item> ORDER = Comparator.comparing(Item::kind)
             .thenComparing(Item::world, Comparator.nullsFirst(Comparator.naturalOrder()))
-            .thenComparing(Item::at, Comparator.nullsLast(Comparator.comparingInt(Position::x)
-                    .thenComparingInt(Position::y).thenComparingInt(Position::z)));
+            .thenComparing(Item::at, Comparator.nullsLast(Comparator.comparingInt(LockBlocks.Position::x)
+                    .thenComparingInt(LockBlocks.Position::y).thenComparingInt(LockBlocks.Position::z)));
 
     private LockHoldings() {}
 
@@ -69,7 +54,7 @@ public final class LockHoldings {
         String main = worlds.isEmpty() ? null : worlds.get(0).getName();
         List<OwnedLocks.Lock> locks = new ArrayList<>();
         for (OwnedLocks.Lock lock : OwnedLocks.of(characterId)) {
-            locks.add(lock.store() == LockStores.Store.ENTITIES ? lock : look(lock, worlds));
+            locks.add(lock.store() == LockStores.Store.ENTITIES ? lock : LockBlocks.look(lock, worlds));
         }
         Set<String> secondHalves = secondHalves(locks);
         List<Item> items = new ArrayList<>();
@@ -79,13 +64,14 @@ public final class LockHoldings {
             } else if (lock.store() == LockStores.Store.DOORS || !secondHalves.contains(lock.name())) {
                 String kind = lock.kind() != null ? lock.kind()
                         : lock.store() == LockStores.Store.DOORS ? "Door" : "Container";
-                items.add(new Item(kind, shown(lock.world(), main), Position.parse(lock.name()), lock.state()));
+                items.add(new Item(kind, shown(lock.world(), main), LockBlocks.Position.parse(lock.name()),
+                        lock.state()));
             }
         }
         if (Cache.interactibleFurniture) {
             for (FurnitureLockHelper.Owned piece : FurnitureLockHelper.ownedBy(characterId)) {
-                items.add(new Item(words(piece.id()), shown(OwnedLocks.world(piece.location()), main),
-                        Position.of(piece.location()), piece.state()));
+                items.add(new Item(LockBlocks.words(piece.id()), shown(OwnedLocks.world(piece.location()), main),
+                        LockBlocks.Position.of(piece.location()), piece.state()));
             }
         }
         items.sort(ORDER);
@@ -100,46 +86,6 @@ public final class LockHoldings {
                     + (guild ? " (" + item.state().name().toLowerCase(Locale.ROOT) + ")" : ""));
         }
         return new Summary(counts, labels);
-    }
-
-    // Looks at the block in its own world, or in the first world where it fits, while that chunk is loaded.
-    private static OwnedLocks.Lock look(OwnedLocks.Lock lock, List<World> worlds) {
-        Position at = Position.parse(lock.name());
-        for (World world : worlds) {
-            if ((lock.world() == null || lock.world().equals(world.getName()))
-                    && world.isChunkLoaded(at.x() >> 4, at.z() >> 4)) {
-                Block block = world.getBlockAt(at.x(), at.y(), at.z());
-                String kind = kind(lock.store(), block);
-                if (kind != null) {
-                    return OwnedLocks.seen(lock, world.getName(), kind, partner(block, at));
-                }
-            }
-        }
-        return lock;
-    }
-
-    /** The block's kind in plain words, or null when it is not the kind of block this store locks. */
-    static String kind(LockStores.Store store, Block block) {
-        String type = block.getType().name();
-        if (store == LockStores.Store.DOORS) {
-            return type.endsWith("_TRAPDOOR") ? "Trapdoor" : type.endsWith("_FENCE_GATE") ? "Gate"
-                    : type.endsWith("_DOOR") ? "Door" : null;
-        }
-        if (!(block.getState(false) instanceof Container)) {
-            return null;
-        }
-        return type.endsWith("SHULKER_BOX") ? "Shulker box" : words(type);
-    }
-
-    // The file of a double chest's other half: Minecraft joins a left half clockwise of its facing, a right half
-    // anticlockwise.
-    private static String partner(Block block, Position at) {
-        if (!(block.getBlockData() instanceof Chest chest) || chest.getType() == Chest.Type.SINGLE) {
-            return null;
-        }
-        BlockFace facing = chest.getFacing();
-        int side = chest.getType() == Chest.Type.LEFT ? 1 : -1;
-        return (at.x() - side * facing.getModZ()) + "_" + at.y() + "_" + (at.z() + side * facing.getModX()) + ".json";
     }
 
     // A double chest is listed once, by the first half seen to name the other; the named half is left out. Halves in
@@ -172,18 +118,12 @@ public final class LockHoldings {
             return new Item("Display", null, null, lock.state());
         }
         Location location = entity.getLocation();
-        return new Item(words(entity.getType().name()), shown(OwnedLocks.world(location), main),
-                Position.of(location), lock.state());
+        return new Item(LockBlocks.words(entity.getType().name()), shown(OwnedLocks.world(location), main),
+                LockBlocks.Position.of(location), lock.state());
     }
 
     // The world named on a line: none for the main world or an unknown one.
     private static String shown(String world, String main) {
         return world == null || world.equals(main) ? null : world;
-    }
-
-    /** {@code TRAPPED_CHEST} as "Trapped chest", in British spelling. */
-    static String words(String name) {
-        String words = name.toLowerCase(Locale.ROOT).replace('_', ' ').replace("armor", "armour");
-        return Character.toUpperCase(words.charAt(0)) + words.substring(1);
     }
 }

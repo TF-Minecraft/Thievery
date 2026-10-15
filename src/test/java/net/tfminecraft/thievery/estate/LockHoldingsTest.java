@@ -239,12 +239,12 @@ class LockHoldingsTest {
 
     @Test
     void kindsReadAsPlainBritishWords() {
-        assertEquals("Armour stand", LockHoldings.words("ARMOR_STAND"));
-        assertEquals("Blast furnace", LockHoldings.words("BLAST_FURNACE"));
-        assertEquals("Pedestal", LockHoldings.words("pedestal"));
+        assertEquals("Armour stand", LockBlocks.words("ARMOR_STAND"));
+        assertEquals("Blast furnace", LockBlocks.words("BLAST_FURNACE"));
+        assertEquals("Pedestal", LockBlocks.words("pedestal"));
         Block hopper = block(main, 0, 0, 0, Material.HOPPER, true, mock(BlockData.class));
-        assertEquals("Hopper", LockHoldings.kind(Store.CONTAINERS, hopper));
-        assertNull(LockHoldings.kind(Store.DOORS, hopper));
-        assertNull(LockHoldings.kind(Store.CONTAINERS, block(main, 0, 1, 0, Material.AIR, false, null)));
+        assertEquals("Hopper", LockBlocks.kind(Store.CONTAINERS, hopper));
+        assertNull(LockBlocks.kind(Store.DOORS, hopper));
+        assertNull(LockBlocks.kind(Store.CONTAINERS, block(main, 0, 1, 0, Material.AIR, false, null)));
     }
 }
