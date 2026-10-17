@@ -262,6 +262,20 @@ class RobberyManagerTest {
     }
 
     @Test
+    void acceptanceRechecksTheGuildCooldownSoPendingRequestsCannotBypassIt() {
+        request();
+        guilds.when(() -> GuildAccessCooldown.isOnCooldown(targetData.getRobberyAccessMap(), robber, 3)).thenReturn(true);
+        assertFalse(manager.acceptRobbery(victim));
+        verify(victim).sendMessage(contains("request has expired"));
+        verify(robber).sendMessage(contains("robbed them too recently"));
+        assertTrue(sessions.isEmpty());
+        assertFalse(manager.isVictimRestrained(victim.getUniqueId()));
+        assertTrue(openedSessions.isEmpty());
+        guilds.verify(() -> GuildAccessCooldown.recordAccess(any(), any(), any()), never());
+        verify(targets.constructed().getFirst(), never()).save(any());
+    }
+
+    @Test
     void pendingTimerExpiresOnlyAfterDeadlineAndNotifiesBothOnlineParticipants() {
         RobberySession session = request();
         timers.getFirst().run();

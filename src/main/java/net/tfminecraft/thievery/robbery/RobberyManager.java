@@ -95,6 +95,15 @@ public class RobberyManager implements Listener {
         }
 
         PlayerTargetData targetData = targetDataManager.load(victim.getUniqueId());
+        // A guildmate's robbery may have been accepted while this request was pending.
+        if (GuildAccessCooldown.isOnCooldown(targetData.getRobberyAccessMap(), robber,
+                RobberyLoader.getCooldownDays())) {
+            victim.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR + "That robbery request has expired."));
+            robber.sendMessage(ThieveryTexts.msg(ThieveryTexts.ERROR
+                    + "Your guild robbed them too recently. Your request was cancelled."));
+            endSession(session, false);
+            return false;
+        }
         GuildAccessCooldown.recordAccess(targetData.getRobberyAccessMap(), robber.getUniqueId(),
                 GuildAccessCooldown.today());
         targetDataManager.save(targetData);
