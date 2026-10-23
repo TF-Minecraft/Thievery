@@ -16,6 +16,7 @@ import net.tfminecraft.thievery.command.CommandManager;
 import net.tfminecraft.thievery.command.PickpocketCommand;
 import net.tfminecraft.thievery.command.RobberyCommand;
 import net.tfminecraft.thievery.database.Database;
+import net.tfminecraft.thievery.emote.EmoteSkinListener;
 import net.tfminecraft.thievery.door.ContainerManager;
 import net.tfminecraft.thievery.door.DoorManager;
 import net.tfminecraft.thievery.loader.CategoryLoader;
@@ -238,11 +239,20 @@ class ThieveryTest {
         assertTrue(listeners.contains(PlayerManager.class));
         assertTrue(listeners.contains(RobberyCharacterListener.class));
         assertFalse(listeners.contains(FurnitureDisplayListener.class));
+        assertFalse(listeners.contains(EmoteSkinListener.class));
         assertEquals(2, pluginTasks().size());
         assertTrue(Thievery.getPlayerManager().exists(admin));
         assertTrue(Thievery.getPlayerManager().exists(ordinary));
         verify(plugin.getContainerManager()).enableFeedback(admin);
         verify(plugin.getContainerManager(), never()).enableFeedback(ordinary);
+    }
+
+    @Test
+    void itemsAdderRegistersTheEmoteSkinListener() {
+        MockBukkit.createMockPlugin("ItemsAdder");
+        load();
+        assertTrue(HandlerList.getRegisteredListeners(plugin).stream()
+                .anyMatch(listener -> listener.getListener() instanceof EmoteSkinListener));
     }
 
     @Test

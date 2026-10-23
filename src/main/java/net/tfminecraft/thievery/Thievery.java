@@ -15,6 +15,7 @@ import net.tfminecraft.thievery.command.CommandManager;
 import net.tfminecraft.thievery.command.LockAdminCommand;
 import net.tfminecraft.thievery.command.PickpocketCommand;
 import net.tfminecraft.thievery.command.RobberyCommand;
+import net.tfminecraft.thievery.emote.EmoteSkinListener;
 import net.tfminecraft.thievery.loader.CategoryLoader;
 import net.tfminecraft.thievery.loader.ConfigLoader;
 import net.tfminecraft.thievery.clue.ClearCluesManager;
@@ -80,6 +81,9 @@ public class Thievery extends JavaPlugin {
         lockMinigameManager = new LockMinigameManager(lockPickManager);
         robberyManager = new RobberyManager();
         pickpocketManager = new PickpocketManager(lockMinigameManager);
+        if (getServer().getPluginManager().isPluginEnabled("ItemsAdder")) {
+            getServer().getPluginManager().registerEvents(new EmoteSkinListener(this), this);
+        }
         stealGuiUpdater = new StealGuiUpdater(stealManager);
         stealGuiUpdater.start();
         CooldownResetService cooldownResetService = new CooldownResetService(lockPickManager);
