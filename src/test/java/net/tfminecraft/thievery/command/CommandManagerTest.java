@@ -90,7 +90,7 @@ class CommandManagerTest {
             assertTrue(run(player, "loadout"));
             traits.verify(() -> TraitChecker.sendMissingTraitMessage(player));
             verifyNoInteractions(inventories);
-            traits.when(() -> TraitChecker.hasRequiredTraits(player)).thenReturn(true);
+            traits.when(() -> TraitChecker.hasLoadoutTraits(player)).thenReturn(true);
             assertTrue(run(player, "LOADOUT"));
             verify(inventories).openLoadout(player);
         }
