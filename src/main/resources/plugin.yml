@@ -15,6 +15,3 @@ commands:
     description: Robbery commands
   pickpocket:
     description: Pickpocket commands
-  handsup:
-    description: Toggle read-only inventory inspection by other players
-    usage: /handsup

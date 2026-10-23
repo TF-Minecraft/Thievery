@@ -197,7 +197,7 @@ public class CommandManager implements CommandExecutor, TabCompleter {
         }
 
         if (args[0].equalsIgnoreCase("loadout")) {
-            if (!TraitChecker.hasRequiredTraits(player)) {
+            if (!TraitChecker.hasLoadoutTraits(player)) {
                 TraitChecker.sendMissingTraitMessage(player);
                 return true;
             }

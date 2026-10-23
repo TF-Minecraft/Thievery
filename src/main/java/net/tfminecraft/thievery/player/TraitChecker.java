@@ -3,10 +3,14 @@ package net.tfminecraft.thievery.player;
 import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 
 import net.tfminecraft.thievery.cache.Cache;
+import net.tfminecraft.thievery.loader.PickpocketLoader;
+import net.tfminecraft.thievery.loader.RobberyLoader;
 import net.tfminecraft.thievery.utils.ThieveryTexts;
 import net.tfminecraft.tlibs.character.CharacterInfo;
 import net.tfminecraft.tlibs.character.CharacterSession;
@@ -79,8 +83,19 @@ public final class TraitChecker {
         return false;
     }
 
-    public static boolean hasRequiredTraits(Player player) {
-        return hasTraits(player, Cache.traits);
+    /**
+     * The loadout's categories feed lockpicking, robbery and pickpocketing, so a trait for any of them opens it.
+     * An activity with no configured traits is open to everyone, and so is the loadout then.
+     */
+    public static boolean hasLoadoutTraits(Player player) {
+        LinkedHashSet<String> traits = new LinkedHashSet<>();
+        for (List<String> gate : Arrays.asList(Cache.traits, RobberyLoader.getTraits(), PickpocketLoader.getTraits())) {
+            if (gate == null || gate.isEmpty()) {
+                return true;
+            }
+            traits.addAll(gate);
+        }
+        return hasTraits(player, List.copyOf(traits));
     }
 
     public static void sendMissingTraitMessage(Player player, String context) {

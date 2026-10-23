@@ -5,6 +5,8 @@ import static org.mockito.Mockito.*;
 
 import java.util.*;
 import net.tfminecraft.thievery.cache.*;
+import net.tfminecraft.thievery.loader.PickpocketLoader;
+import net.tfminecraft.thievery.loader.RobberyLoader;
 import net.tfminecraft.thievery.player.*;
 import net.tfminecraft.tlibs.character.*;
 import net.tfminecraft.simplefactions.guild.Guild;
@@ -12,6 +14,7 @@ import net.tfminecraft.simplefactions.identity.Members;
 import net.tfminecraft.simplefactions.managers.FactionManager;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -36,7 +39,7 @@ class AccessUtilitiesTest {
             characters.ready(UUID.randomUUID(), 3, "scholar", "thief");
             assertFalse(TraitChecker.hasTraits(player, List.of("THIEF")));
             Cache.traits = List.of("thief", "assassin");
-            assertTrue(TraitChecker.hasRequiredTraits(player));
+            assertTrue(TraitChecker.hasLoadoutTraits(player));
             assertTrue(TraitChecker.hasLockpickingTraits(player));
             verify(player, never()).sendMessage(anyString());
             TraitChecker.sendMissingTraitMessage(player);
@@ -86,19 +89,19 @@ class AccessUtilitiesTest {
             Cache.traits = List.of("thief");
             UUID alice = UUID.randomUUID(), bob = UUID.randomUUID();
             characters.ready(alice, 1, "thief");
-            assertTrue(TraitChecker.hasRequiredTraits(characters.player));
+            assertTrue(TraitChecker.hasTraits(characters.player, Cache.traits));
             characters.ready(bob, 2, "scholar");
-            assertFalse(TraitChecker.hasRequiredTraits(characters.player));
+            assertFalse(TraitChecker.hasTraits(characters.player, Cache.traits));
             characters.ready(alice, 3, "scholar");
-            assertFalse(TraitChecker.hasRequiredTraits(characters.player));
+            assertFalse(TraitChecker.hasTraits(characters.player, Cache.traits));
             characters.snapshots.put(alice, characters.info(characters.session.ref(), CharacterStatus.ALIVE, "thief"));
-            assertTrue(TraitChecker.hasRequiredTraits(characters.player));
+            assertTrue(TraitChecker.hasTraits(characters.player, Cache.traits));
             characters.unregister();
-            assertFalse(TraitChecker.hasRequiredTraits(characters.player));
+            assertFalse(TraitChecker.hasTraits(characters.player, Cache.traits));
             Cache.traits = null;
             assertTrue(TraitChecker.hasLockpickingTraits(characters.player));
             Cache.traits = List.of();
-            assertTrue(TraitChecker.hasRequiredTraits(characters.player));
+            assertTrue(TraitChecker.hasTraits(characters.player, Cache.traits));
             assertTrue(TraitChecker.hasLockpickingTraits(characters.player));
             verify(characters.player, never()).sendMessage(anyString());
         } finally { Cache.traits = saved; }
@@ -114,7 +117,7 @@ class AccessUtilitiesTest {
                 assertFalse(TraitChecker.characterApiAvailable());
                 Cache.traits = List.of("thief");
                 assertNull(TraitChecker.currentSession(characters.player));
-                assertFalse(TraitChecker.hasRequiredTraits(characters.player));
+                assertFalse(TraitChecker.hasTraits(characters.player, Cache.traits));
                 assertFalse(TraitChecker.hasLockpickingTraits(characters.player));
                 Cache.traits = List.of();
                 assertTrue(TraitChecker.hasLockpickingTraits(characters.player));
@@ -127,6 +130,43 @@ class AccessUtilitiesTest {
         } finally {
             Cache.traits = saved;
             try (var current = mockStatic(Characters.class)) { TraitChecker.detectCharacterApi(); }
+        }
+    }
+
+    @Test void loadoutOpensForAnyLockpickingRobberyOrPickpocketTraitWhileLocksStayLockpickersOnly() {
+        var saved = Cache.traits;
+        var config = new YamlConfiguration();
+        config.set("robbery.traits", List.of("bandit"));
+        config.set("pickpocket.traits", List.of("cutpurse"));
+        RobberyLoader.load(config);
+        PickpocketLoader.load(config);
+        try (CharacterFixture characters = new CharacterFixture()) {
+            Cache.traits = List.of("thief");
+            characters.ready(UUID.randomUUID(), 1, "bandit");
+            assertTrue(TraitChecker.hasLoadoutTraits(characters.player));
+            assertFalse(TraitChecker.hasLockpickingTraits(characters.player));
+            characters.ready(UUID.randomUUID(), 2, "cutpurse");
+            assertTrue(TraitChecker.hasLoadoutTraits(characters.player));
+            assertFalse(TraitChecker.hasLockpickingTraits(characters.player));
+            characters.ready(UUID.randomUUID(), 3, "thief");
+            assertTrue(TraitChecker.hasLoadoutTraits(characters.player));
+            assertTrue(TraitChecker.hasLockpickingTraits(characters.player));
+            characters.ready(UUID.randomUUID(), 4, "scholar");
+            assertFalse(TraitChecker.hasLoadoutTraits(characters.player));
+            // Only the two lockpicking checks explain themselves; the loadout check is silent.
+            verify(characters.player, times(2)).sendMessage("§cYou lack the training to pick locks!");
+            // An activity open to everyone opens the loadout to everyone too.
+            Cache.traits = null;
+            assertTrue(TraitChecker.hasLoadoutTraits(characters.player));
+            Cache.traits = List.of();
+            assertTrue(TraitChecker.hasLoadoutTraits(characters.player));
+            Cache.traits = List.of("thief");
+            RobberyLoader.load(new YamlConfiguration());
+            assertTrue(TraitChecker.hasLoadoutTraits(characters.player));
+        } finally {
+            Cache.traits = saved;
+            RobberyLoader.load(new YamlConfiguration());
+            PickpocketLoader.load(new YamlConfiguration());
         }
     }
 

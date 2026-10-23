@@ -15,11 +15,8 @@ import net.tfminecraft.thievery.cache.Cache;
 import net.tfminecraft.thievery.command.CommandManager;
 import net.tfminecraft.thievery.command.PickpocketCommand;
 import net.tfminecraft.thievery.command.RobberyCommand;
-import net.tfminecraft.thievery.inspection.HandsUpCharacterListener;
-import net.tfminecraft.thievery.inspection.HandsUpManager;
-import net.tfminecraft.thievery.inspection.ItemsAdderHandsUpAnimation;
-import dev.lone.itemsadder.api.CustomPlayer;
 import net.tfminecraft.thievery.database.Database;
+import net.tfminecraft.thievery.emote.EmoteSkinListener;
 import net.tfminecraft.thievery.door.ContainerManager;
 import net.tfminecraft.thievery.door.DoorManager;
 import net.tfminecraft.thievery.loader.CategoryLoader;
@@ -145,7 +142,6 @@ class ThieveryTest {
             assertTrue(listeners.contains(DoorManager.class));
             assertTrue(listeners.contains(RobberyManager.class));
             assertFalse(listeners.contains(RobberyCharacterListener.class));
-            assertFalse(listeners.contains(HandsUpCharacterListener.class));
             assertEquals(1, containers.constructed().size());
         } finally {
             java.util.logging.Logger.getLogger("").removeHandler(capture);
@@ -235,19 +231,15 @@ class ThieveryTest {
         assertInstanceOf(RobberyCommand.class, plugin.getCommand("robbery").getTabCompleter());
         assertInstanceOf(PickpocketCommand.class, plugin.getCommand("pickpocket").getExecutor());
         assertInstanceOf(PickpocketCommand.class, plugin.getCommand("pickpocket").getTabCompleter());
-        assertInstanceOf(HandsUpManager.class, plugin.getCommand("handsup").getExecutor());
-        assertSame(plugin.getCommand("handsup").getExecutor(), plugin.getCommand("handsup").getTabCompleter());
-        assertTrue(server.dispatchCommand(ordinary, "handsup"));
-        assertTrue(ordinary.nextMessage().contains("inspection is still off"));
+        assertNull(plugin.getCommand("handsup"));
         Set<Class<?>> listeners = new HashSet<>();
         HandlerList.getRegisteredListeners(plugin).forEach(listener -> listeners.add(listener.getListener().getClass()));
         assertTrue(listeners.contains(GraveStealListener.class));
         assertTrue(listeners.contains(DoorManager.class));
         assertTrue(listeners.contains(PlayerManager.class));
         assertTrue(listeners.contains(RobberyCharacterListener.class));
-        assertTrue(listeners.contains(HandsUpManager.class));
-        assertTrue(listeners.contains(HandsUpCharacterListener.class));
         assertFalse(listeners.contains(FurnitureDisplayListener.class));
+        assertFalse(listeners.contains(EmoteSkinListener.class));
         assertEquals(2, pluginTasks().size());
         assertTrue(Thievery.getPlayerManager().exists(admin));
         assertTrue(Thievery.getPlayerManager().exists(ordinary));
@@ -256,22 +248,11 @@ class ThieveryTest {
     }
 
     @Test
-    void itemsAdderIntegrationStartsAndStopsHandsUpThroughTheCommand() {
+    void itemsAdderRegistersTheEmoteSkinListener() {
         MockBukkit.createMockPlugin("ItemsAdder");
-        PlayerMock player = server.addPlayer();
-        CustomPlayer animated = mock(CustomPlayer.class);
-        when(animated.isPlayingAnimation(ItemsAdderHandsUpAnimation.EMOTE)).thenReturn(true);
-        try (var api = mockStatic(CustomPlayer.class)) {
-            api.when(() -> CustomPlayer.byAlreadySpawned(player)).thenReturn(animated);
-            load();
-            assertTrue(HandlerList.getRegisteredListeners(plugin).stream()
-                    .anyMatch(listener -> listener.getListener() instanceof ItemsAdderHandsUpAnimation));
-            assertTrue(server.dispatchCommand(player, "handsup"));
-            assertTrue(player.nextMessage().contains("Hands up!"));
-            api.verify(() -> CustomPlayer.playEmote(player, ItemsAdderHandsUpAnimation.EMOTE));
-            assertTrue(server.dispatchCommand(player, "handsup"));
-            api.verify(() -> CustomPlayer.stopEmote(player));
-        }
+        load();
+        assertTrue(HandlerList.getRegisteredListeners(plugin).stream()
+                .anyMatch(listener -> listener.getListener() instanceof EmoteSkinListener));
     }
 
     @Test

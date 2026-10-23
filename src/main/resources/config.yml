@@ -103,7 +103,7 @@ clues:
 lockpicking:
   require-owner-online: false
   # Display lockpick testing only; use /thievery testpick for containers.
-  debug-allow-own-chest: true
+  debug-allow-own-chest: false
   debug-clue-preview: true
   door-max-distance: 3
   lockpick-max-reduction: 0.5
