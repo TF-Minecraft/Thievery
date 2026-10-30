@@ -156,16 +156,20 @@ public class Thievery extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        if (lockMinigameManager != null) {
-            lockMinigameManager.cancelAll();
+        try {
+            if (lockMinigameManager != null) {
+                lockMinigameManager.cancelAll();
+            }
+            if (stealGuiUpdater != null) {
+                stealGuiUpdater.stop();
+            }
+            playerManager.unloadAll();
+            playerManager.stop();
+        } finally {
+            // Every queued lock write is on disk before the server goes on, even when a step above failed, and a
+            // re-enable starts a fresh writer.
+            LockFileWriter.stop();
         }
-        if (stealGuiUpdater != null) {
-            stealGuiUpdater.stop();
-        }
-        playerManager.unloadAll();
-        playerManager.stop();
-        // Every queued lock write is on disk before the server goes on.
-        LockFileWriter.stop();
         if (lockKinds != null) {
             lockKinds.saveNow();
         }

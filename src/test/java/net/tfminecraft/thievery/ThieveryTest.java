@@ -237,6 +237,29 @@ class ThieveryTest {
     }
 
     @Test
+    void disableDrainsTheLockWriterEvenWhenAnEarlierStepFails() throws Exception {
+        load();
+        var disk = net.tfminecraft.thievery.owner.HeldLockDisk.install();
+        disk.release();
+        Field minigames = field(Thievery.class, "lockMinigameManager");
+        Object real = minigames.get(plugin);
+        var failing = mock(net.tfminecraft.thievery.door.LockMinigameManager.class);
+        doThrow(new IllegalStateException("cancel failed")).when(failing).cancelAll();
+        minigames.set(plugin, failing);
+        try {
+            java.nio.file.Path file = plugin.getDataFolder().toPath().resolve("disable-check.json");
+            net.tfminecraft.thievery.owner.LockFileWriter.write(file, new byte[] {1}, false, "Failed: ", null);
+            assertThrows(IllegalStateException.class, plugin::onDisable);
+            assertTrue(Files.exists(file), "queued before disable, on disk after it");
+            net.tfminecraft.thievery.owner.LockFileWriter.write(file, new byte[] {2}, false, "Failed: ", null);
+            assertEquals(Thread.currentThread().getName(), disk.threads.getLast(), "the writer was stopped");
+        } finally {
+            minigames.set(plugin, real);
+            net.tfminecraft.thievery.owner.HeldLockDisk.uninstall(disk);
+        }
+    }
+
+    @Test
     void configurationFailureCanDisableBeforeServicesAreCreated() throws Exception {
         configs.close();
         configs = mockConstruction(ConfigLoader.class, (loader, context) ->

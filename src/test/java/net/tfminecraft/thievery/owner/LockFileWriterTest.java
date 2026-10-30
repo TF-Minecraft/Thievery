@@ -235,6 +235,126 @@ class LockFileWriterTest {
     }
 
     @Test
+    void anErrorFromTheDiskStillSettlesTheWriteOnEitherThread() throws Exception {
+        Path a = temp.resolve("a.json");
+        startHeld();
+        disk.release();
+        disk.crash("a.json");
+        List<String> ran = new ArrayList<>();
+        LockFileWriter.write(a, bytes("a1"), true, "Failed a1: ", () -> ran.add("a1"));
+        LockFileWriter.flush();
+        verify(log).warning("Failed a1: disk crashed a.json");
+        assertFalse(LockFileWriter.exists(a), "the entry left the queue");
+        assertEquals(1, main.size());
+        main.getFirst().run();
+        assertEquals(List.of("a1"), ran);
+        disk.heal("a.json");
+        LockFileWriter.write(a, bytes("a2"), false, "Failed a2: ", null);
+        LockFileWriter.flush();
+        assertEquals("a2", Files.readString(a), "the writer carries on after the Error");
+        LockFileWriter.stop();
+
+        disk.crash("a.json");
+        try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
+            bukkit.when(Bukkit::getLogger).thenReturn(log);
+            assertThrows(InternalError.class, () -> LockFileWriter.write(a, bytes("a3"), false, "Failed a3: ", null));
+        }
+        verify(log).warning("Failed a3: disk crashed a.json");
+        assertEquals("a2", read(a), "on the calling thread the Error reaches the caller once the entry is gone");
+    }
+
+    @Test
+    void aWriterThatRejectsTasksLeavesTheWriteToTheCallingThread() throws Exception {
+        Path a = temp.resolve("a.json");
+        startHeld();
+        disk.release();
+        java.lang.reflect.Field field = LockFileWriter.class.getDeclaredField("worker");
+        field.setAccessible(true);
+        ((java.util.concurrent.ExecutorService) field.get(null)).shutdown();
+        LockFileWriter.write(a, bytes("a"), false, "A: ", null);
+        assertEquals("a", Files.readString(a));
+        assertEquals(Thread.currentThread().getName(), disk.threads.getLast());
+        LockFileWriter.stop();
+    }
+
+    @Test
+    void stopDropsAndLogsAWriteThatLostItsTaskInsteadOfWaitingForever() throws Exception {
+        Path a = temp.resolve("a.json");
+        Files.writeString(a, "disk");
+        startHeld();
+        disk.release();
+        Class<?> pending = Class.forName(LockFileWriter.class.getName() + "$Pending");
+        var make = pending.getDeclaredConstructor(Path.class);
+        make.setAccessible(true);
+        Object orphan = make.newInstance(a);
+        java.lang.reflect.Field failure = pending.getDeclaredField("failure");
+        failure.setAccessible(true);
+        failure.set(orphan, "Failed to save a: ");
+        java.lang.reflect.Field content = pending.getDeclaredField("bytes");
+        content.setAccessible(true);
+        content.set(orphan, bytes("never"));
+        java.lang.reflect.Field map = LockFileWriter.class.getDeclaredField("PENDING");
+        map.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        java.util.Map<Path, Object> queued = (java.util.Map<Path, Object>) map.get(null);
+        synchronized (lock()) {
+            queued.put(a.toAbsolutePath().normalize(), orphan);
+        }
+        assertEquals("never", read(a));
+        Thread stopping = new Thread(LockFileWriter::stop);
+        stopping.start();
+        stopping.join(10_000);
+        assertFalse(stopping.isAlive(), "stop returns");
+        verify(log).warning("Failed to save a: the write never ran");
+        assertEquals("disk", read(a));
+    }
+
+    @Test
+    void stopKeepsWaitingForWritesQueuedDuringItAndForOnesStillBeingWritten() throws Exception {
+        Path x = temp.resolve("x.json");
+        Path y = temp.resolve("y.json");
+        Path z = temp.resolve("z.json");
+        Path w = temp.resolve("w.json");
+        startHeld();
+        LockFileWriter.write(x, bytes("x"), false, "X: ", null);
+        disk.awaitHolding();
+        // w bypasses the full queue and is still being written on its own thread when stop starts.
+        LockFileWriter.maxQueued = 0;
+        disk.block("w.json");
+        Thread bypass = new Thread(() -> LockFileWriter.write(w, bytes("w"), false, "W: ", null));
+        bypass.start();
+        while (!LockFileWriter.exists(w)) {
+            Thread.onSpinWait();
+        }
+        LockFileWriter.maxQueued = 1024;
+        Thread stopping = new Thread(LockFileWriter::stop);
+        stopping.start();
+        stopping.join(200);
+        // Queued behind stop's first drain: z is held on the writer, y waits behind it.
+        disk.block("z.json");
+        LockFileWriter.write(z, bytes("z"), false, "Z: ", null);
+        LockFileWriter.write(y, bytes("y"), false, "Y: ", null);
+        disk.release();
+        stopping.join(300);
+        assertTrue(stopping.isAlive(), "stop waits for w, z and y rather than dropping them");
+        disk.unblock("z.json");
+        disk.unblock("w.json");
+        stopping.join(10_000);
+        bypass.join(10_000);
+        assertFalse(stopping.isAlive());
+        assertEquals("w", Files.readString(w));
+        assertEquals("y", Files.readString(y));
+        assertEquals("z", Files.readString(z));
+        verifyNoInteractions(log);
+    }
+
+    private static Object lock() throws Exception {
+        java.lang.reflect.Field field = LockFileWriter.class.getDeclaredField("LOCK");
+        field.setAccessible(true);
+        return field.get(null);
+    }
+
+    @Test
     void writesQueuedWhileStopWaitsReachTheDiskBeforeItReturns() throws Exception {
         Path a = temp.resolve("a.json");
         Path b = temp.resolve("b.json");

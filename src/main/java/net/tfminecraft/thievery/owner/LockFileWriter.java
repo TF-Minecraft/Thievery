@@ -4,12 +4,16 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.logging.Logger;
 
 import org.bukkit.Bukkit;
@@ -106,11 +110,13 @@ public final class LockFileWriter {
     /**
      * Waits until everything queued is on disk, then writes on the calling thread again. Writes queued while it waits
      * are drained too: the switch happens only once no write is waiting or running, so a write on the calling thread
-     * never races the writer for a file.
+     * never races the writer for a file. A write still listed after a drain that it was queued before, and not
+     * running, can never run; it is dropped and logged rather than waited for.
      */
     public static void stop() {
         ExecutorService target;
         while (true) {
+            Set<Pending> before = Collections.newSetFromMap(new IdentityHashMap<>());
             synchronized (LOCK) {
                 target = worker;
                 if (target == null || PENDING.isEmpty()) {
@@ -120,11 +126,28 @@ public final class LockFileWriter {
                     FAILED.clear();
                     break;
                 }
+                before.addAll(PENDING.values());
             }
             drain(target);
+            dropOrphans(before);
         }
         if (target != null) {
             target.shutdown();
+        }
+    }
+
+    // Every task queued before the drain has run by now, and each run removes its entry; one left that is not being
+    // written lost its task, so reads would keep returning bytes that never reach the disk.
+    private static void dropOrphans(Set<Pending> before) {
+        synchronized (LOCK) {
+            PENDING.values().removeIf(task -> {
+                if (!before.contains(task) || task.running) {
+                    return false;
+                }
+                // Only reached while started, so the writer's logger is set.
+                log.warning(task.failure + "the write never ran");
+                return true;
+            });
         }
     }
 
@@ -195,10 +218,16 @@ public final class LockFileWriter {
             // A file being written queues behind itself even when the queue is full, so the calling thread never writes
             // a file the writer is writing; that adds at most the one running file to the cap.
             if (worker != null && (current != null || PENDING.size() <= maxQueued)) {
-                // Under the lock, so stop() never shuts the writer down between this check and the submission.
-                worker.execute(() -> apply(task));
-                return new Queued(stamp, true);
+                try {
+                    // Under the lock, so stop() never shuts the writer down between this check and the submission.
+                    worker.execute(() -> apply(task));
+                    return new Queued(stamp, true);
+                } catch (RejectedExecutionException gone) {
+                    // A writer that no longer takes tasks: the calling thread writes the file instead.
+                }
             }
+            // Marked before the lock is released, so stop() never takes it for a write that lost its task.
+            task.running = true;
         }
         return new Queued(stamp, apply(task));
     }
@@ -218,14 +247,16 @@ public final class LockFileWriter {
             bytes = task.bytes;
             sync = task.sync;
         }
-        Exception error = null;
+        Throwable error = null;
         try {
             if (bytes == null) {
                 disk.delete(task.path);
             } else {
                 disk.write(task.path, bytes, sync);
             }
-        } catch (IOException | RuntimeException e) {
+        } catch (IOException | RuntimeException | Error e) {
+            // An Error too: the entry must leave the queue, or reads would keep returning bytes never written. It is
+            // rethrown once the write has been settled.
             error = e;
         }
         Runnable failed = null;
@@ -259,6 +290,9 @@ public final class LockFileWriter {
             Runnable cleanup = failed;
             long at = failedAt;
             main.execute(() -> runIfLatest(key, at, cleanup));
+        }
+        if (error instanceof Error fatal) {
+            throw fatal;
         }
         return false;
     }
