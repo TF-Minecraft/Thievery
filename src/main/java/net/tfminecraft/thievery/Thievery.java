@@ -40,6 +40,7 @@ import net.tfminecraft.thievery.steal.StealGuiUpdater;
 import net.tfminecraft.thievery.steal.StealManager;
 import net.tfminecraft.thievery.estate.EstateBridge;
 import net.tfminecraft.thievery.estate.LockBlocks;
+import net.tfminecraft.thievery.owner.LockFileWriter;
 import net.tfminecraft.thievery.owner.LockGuard;
 import net.tfminecraft.thievery.owner.LockKindFile;
 import net.tfminecraft.thievery.owner.LockStartup;
@@ -66,6 +67,8 @@ public class Thievery extends JavaPlugin {
     public void onEnable() {
         // Listeners below check this flag on every event; locks stay frozen until the gates at the end pass.
         LockGuard.enter("starting up");
+        // Lock saves are fsynced on a writer thread; a failed write's cache cleanup comes back to the main thread.
+        LockFileWriter.start(Bukkit.getLogger(), this::onMainThread);
         if (!TraitChecker.detectCharacterApi()) {
             getLogger().warning("TLibs is older than 2.3.0, so lockpicking, robbery and pickpocketing that need"
                     + " character traits are denied. Locks and doors stay protected. Update TLibs and restart.");
@@ -153,16 +156,29 @@ public class Thievery extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        if (lockMinigameManager != null) {
-            lockMinigameManager.cancelAll();
+        try {
+            if (lockMinigameManager != null) {
+                lockMinigameManager.cancelAll();
+            }
+            if (stealGuiUpdater != null) {
+                stealGuiUpdater.stop();
+            }
+            playerManager.unloadAll();
+            playerManager.stop();
+        } finally {
+            // Every queued lock write is on disk before the server goes on, even when a step above failed, and a
+            // re-enable starts a fresh writer.
+            LockFileWriter.stop();
         }
-        if (stealGuiUpdater != null) {
-            stealGuiUpdater.stop();
-        }
-        playerManager.unloadAll();
-        playerManager.stop();
         if (lockKinds != null) {
             lockKinds.saveNow();
+        }
+    }
+
+    // A write that fails while the plugin is disabling has nothing left to clean up: its caches go with the plugin.
+    void onMainThread(Runnable task) {
+        if (isEnabled()) {
+            Bukkit.getScheduler().runTask(this, task);
         }
     }
 

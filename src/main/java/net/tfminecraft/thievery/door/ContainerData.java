@@ -8,6 +8,7 @@ import org.bukkit.Location;
 import org.bukkit.entity.Player;
 
 import net.tfminecraft.thievery.owner.LockOwner;
+import net.tfminecraft.thievery.owner.LockRecords;
 
 public class ContainerData {
 
@@ -19,6 +20,9 @@ public class ContainerData {
     private boolean unreadable;
     // A classification made while identity was unavailable; it must not be cached or acted on as final.
     private boolean provisional;
+    // The record as last read or saved (null for no file) and the writer stamp then; a negative stamp means unknown.
+    private LockRecords.Container stored;
+    private long storedAt = -1;
 
     public ContainerData(Location location) {
         this.location = location;
@@ -69,6 +73,19 @@ public class ContainerData {
 
     void setProvisional(boolean provisional) {
         this.provisional = provisional;
+    }
+
+    void remember(LockRecords.Container stored, long storedAt) {
+        this.stored = stored;
+        this.storedAt = storedAt;
+    }
+
+    LockRecords.Container stored() {
+        return stored;
+    }
+
+    long storedAt() {
+        return storedAt;
     }
 
     public LockState getLockState() {

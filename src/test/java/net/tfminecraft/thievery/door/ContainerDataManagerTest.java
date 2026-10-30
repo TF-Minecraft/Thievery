@@ -113,7 +113,10 @@ class ContainerDataManagerTest {
             durable.clearInvocations();
             // A file that cannot be read is replaced, and forced, when staff set a new record.
             write("garbage");
-            manager.saveContainerData(data);
+            ContainerData repaired = manager.loadContainerData(location);
+            assertTrue(repaired.isUnreadable());
+            repaired.setOwner(data.getOwner());
+            manager.saveContainerData(repaired);
             durable.verify(() -> DurableFiles.write(eq(file), any(), eq(true)));
         }
         assertFalse(Files.list(file.getParent()).anyMatch(path -> path.toString().endsWith(".tmp")));

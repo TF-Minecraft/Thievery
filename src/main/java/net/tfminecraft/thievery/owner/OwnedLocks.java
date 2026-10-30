@@ -1,7 +1,6 @@
 package net.tfminecraft.thievery.owner;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -86,13 +85,14 @@ public final class OwnedLocks {
     }
 
     /**
-     * Indexes a file as it stands on disk after a save or delete, so a write or deletion that took effect before its
-     * directory sync failed is still reflected, and a no-op save repairs a stale entry. A missing or unreadable file
-     * is dropped, as it holds no character's lock.
+     * Indexes a file as the write queue leaves it after a save or delete ({@link LockFileWriter#read}), and again as
+     * it stands on disk after a queued write fails, so a write or deletion that took effect before its directory sync
+     * failed is still reflected, and a no-op save repairs a stale entry. A missing or unreadable file is dropped, as
+     * it holds no character's lock.
      */
     public static void refresh(LockStores.Store store, Path path, String world) {
         try {
-            LockMigration.Decoded record = LockMigration.decode(store, Files.readAllBytes(path));
+            LockMigration.Decoded record = LockMigration.decode(store, LockFileWriter.read(path));
             put(store, path, record.owner(), record.state(), world);
         } catch (IOException | IllegalArgumentException e) {
             remove(path);
@@ -101,7 +101,7 @@ public final class OwnedLocks {
 
     /** Drops a file the guard tried to delete, once it is gone, whether or not its directory sync failed. */
     public static void forgetIfGone(Path path) {
-        if (!Files.exists(path)) {
+        if (!LockFileWriter.exists(path)) {
             remove(path);
         }
     }

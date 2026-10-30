@@ -197,6 +197,69 @@ class ThieveryTest {
     }
 
     @Test
+    void lockWritesRunOnTheWriterThreadWhileEnabledAndFailureCleanupComesBackToTheMainThread() throws Exception {
+        load();
+        var disk = net.tfminecraft.thievery.owner.HeldLockDisk.install();
+        disk.release();
+        try {
+            java.nio.file.Path file = plugin.getDataFolder().toPath().resolve("writer-check.json");
+            net.tfminecraft.thievery.owner.LockFileWriter.write(file, new byte[] {1}, false, "Failed: ", null);
+            net.tfminecraft.thievery.owner.LockFileWriter.flush();
+            assertEquals("Thievery lock writer", disk.threads.getLast());
+
+            // A failed write logs on the writer thread and hands its cleanup to the main thread.
+            List<String> ran = new ArrayList<>();
+            java.nio.file.Path failing = plugin.getDataFolder().toPath().resolve("writer-fail.json");
+            disk.fail("writer-fail.json");
+            net.tfminecraft.thievery.owner.LockFileWriter.write(failing, new byte[] {1}, true, "Failed: ",
+                    () -> ran.add("cleanup on " + Thread.currentThread().getName()));
+            net.tfminecraft.thievery.owner.LockFileWriter.flush();
+            assertTrue(ran.isEmpty(), "the cleanup waits for the main thread");
+            server.getScheduler().performOneTick();
+            assertEquals(List.of("cleanup on " + Thread.currentThread().getName()), ran);
+            assertTrue(disk.done.contains("failed write writer-fail.json \u0001 true"), disk.done.toString());
+            ran.clear();
+
+            plugin.onMainThread(() -> ran.add("enabled"));
+            assertTrue(ran.isEmpty(), "scheduled, not run on the calling thread");
+            server.getScheduler().performOneTick();
+            assertEquals(List.of("enabled"), ran);
+
+            server.getPluginManager().disablePlugin(plugin);
+            plugin.onMainThread(() -> ran.add("disabled"));
+            server.getScheduler().performOneTick();
+            assertEquals(List.of("enabled"), ran, "nothing is scheduled once disabled");
+            net.tfminecraft.thievery.owner.LockFileWriter.write(file, new byte[] {2}, false, "Failed: ", null);
+            assertEquals(Thread.currentThread().getName(), disk.threads.getLast(), "disable stopped the writer");
+        } finally {
+            net.tfminecraft.thievery.owner.HeldLockDisk.uninstall(disk);
+        }
+    }
+
+    @Test
+    void disableDrainsTheLockWriterEvenWhenAnEarlierStepFails() throws Exception {
+        load();
+        var disk = net.tfminecraft.thievery.owner.HeldLockDisk.install();
+        disk.release();
+        Field minigames = field(Thievery.class, "lockMinigameManager");
+        Object real = minigames.get(plugin);
+        var failing = mock(net.tfminecraft.thievery.door.LockMinigameManager.class);
+        doThrow(new IllegalStateException("cancel failed")).when(failing).cancelAll();
+        minigames.set(plugin, failing);
+        try {
+            java.nio.file.Path file = plugin.getDataFolder().toPath().resolve("disable-check.json");
+            net.tfminecraft.thievery.owner.LockFileWriter.write(file, new byte[] {1}, false, "Failed: ", null);
+            assertThrows(IllegalStateException.class, plugin::onDisable);
+            assertTrue(Files.exists(file), "queued before disable, on disk after it");
+            net.tfminecraft.thievery.owner.LockFileWriter.write(file, new byte[] {2}, false, "Failed: ", null);
+            assertEquals(Thread.currentThread().getName(), disk.threads.getLast(), "the writer was stopped");
+        } finally {
+            minigames.set(plugin, real);
+            net.tfminecraft.thievery.owner.HeldLockDisk.uninstall(disk);
+        }
+    }
+
+    @Test
     void configurationFailureCanDisableBeforeServicesAreCreated() throws Exception {
         configs.close();
         configs = mockConstruction(ConfigLoader.class, (loader, context) ->
