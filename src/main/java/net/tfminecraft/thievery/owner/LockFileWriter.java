@@ -25,8 +25,9 @@ import org.bukkit.Bukkit;
  * dropped unless a newer one for the file is waiting; reads then see the disk again, and the caller's {@code failed}
  * task runs on the main thread to drop what it cached from the lost write.
  *
- * <p>Until {@link #start} and after {@link #stop}, writes run on the calling thread. {@link #stop} returns only once
- * everything queued is on disk.
+ * <p>Until {@link #start} and after {@link #stop}, writes run on the calling thread, as does a new write while
+ * {@link #maxQueued} files are already waiting, so a stalled disk never grows the queue without limit.
+ * {@link #stop} returns only once everything queued, including writes queued while it waits, is on disk.
  */
 public final class LockFileWriter {
 
@@ -65,7 +66,13 @@ public final class LockFileWriter {
 
     static volatile Disk disk = DURABLE;
 
+    /** Files waiting for the writer beyond which a new write runs on the calling thread instead. */
+    static volatile int maxQueued = 1024;
+
     private static final Object LOCK = new Object();
+    // Files whose latest write failed, by the change that recorded the failure. A newer write of the file removes the
+    // entry, so a failure task that would run after that newer write is skipped.
+    private static final Map<Path, Long> FAILED = new HashMap<>();
     // How many recent changes a stamp can be checked against.
     private static final int RECENT = 64;
     // The newest write of each file not yet on disk, by normalised path.
@@ -96,19 +103,28 @@ public final class LockFileWriter {
         }
     }
 
-    /** Waits until everything queued is on disk, then writes on the calling thread again. */
+    /**
+     * Waits until everything queued is on disk, then writes on the calling thread again. Writes queued while it waits
+     * are drained too: the switch happens only once no write is waiting or running, so a write on the calling thread
+     * never races the writer for a file.
+     */
     public static void stop() {
         ExecutorService target;
-        synchronized (LOCK) {
-            target = worker;
+        while (true) {
+            synchronized (LOCK) {
+                target = worker;
+                if (target == null || PENDING.isEmpty()) {
+                    worker = null;
+                    mainThread = Runnable::run;
+                    log = null;
+                    FAILED.clear();
+                    break;
+                }
+            }
+            drain(target);
         }
         if (target != null) {
-            drain(target, true);
-        }
-        synchronized (LOCK) {
-            worker = null;
-            mainThread = Runnable::run;
-            log = null;
+            target.shutdown();
         }
     }
 
@@ -119,18 +135,15 @@ public final class LockFileWriter {
             target = worker;
         }
         if (target != null) {
-            drain(target, false);
+            drain(target);
         }
     }
 
     // The writer runs its queue in order, so a marker behind it runs once the queue before it is done. Interrupts are
     // held until then, as returning early could lose writes at shutdown.
-    private static void drain(ExecutorService target, boolean shutdown) {
+    private static void drain(ExecutorService target) {
         CountDownLatch done = new CountDownLatch(1);
         target.execute(done::countDown);
-        if (shutdown) {
-            target.shutdown();
-        }
         boolean interrupted = false;
         while (true) {
             try {
@@ -147,8 +160,8 @@ public final class LockFileWriter {
 
     /**
      * Queues {@code bytes} for {@code path}, forced to disk when {@code sync}. A failure is logged as {@code failure}
-     * followed by the error, and {@code failed} (may be null) then runs on the main thread. Returns the stamp at which
-     * the file holds these bytes, for {@link #unchangedSince}.
+     * followed by the error, and {@code failed} (may be null) then runs on the main thread, unless a newer write of the
+     * file has been queued by then. Returns the stamp at which the file holds these bytes, for {@link #unchangedSince}.
      */
     public static long write(Path path, byte[] bytes, boolean sync, String failure, Runnable failed) {
         return queue(path, bytes.clone(), sync, failure, failed).stamp;
@@ -166,11 +179,11 @@ public final class LockFileWriter {
 
     private static Queued queue(Path path, byte[] bytes, boolean sync, String failure, Runnable failed) {
         Pending task;
-        ExecutorService target;
         long stamp;
         synchronized (LOCK) {
             Path key = key(path);
             stamp = changed(key);
+            FAILED.remove(key);
             Pending current = PENDING.get(key);
             if (current != null && !current.running) {
                 fill(current, bytes, sync || current.sync, failure, failed);
@@ -179,13 +192,15 @@ public final class LockFileWriter {
             task = new Pending(path);
             fill(task, bytes, sync, failure, failed);
             PENDING.put(key, task);
-            target = worker;
+            // A file being written queues behind itself even when the queue is full, so the calling thread never writes
+            // a file the writer is writing; that adds at most the one running file to the cap.
+            if (worker != null && (current != null || PENDING.size() <= maxQueued)) {
+                // Under the lock, so stop() never shuts the writer down between this check and the submission.
+                worker.execute(() -> apply(task));
+                return new Queued(stamp, true);
+            }
         }
-        if (target == null) {
-            return new Queued(stamp, apply(task));
-        }
-        target.execute(() -> apply(task));
-        return new Queued(stamp, true);
+        return new Queued(stamp, apply(task));
     }
 
     private static void fill(Pending task, byte[] bytes, boolean sync, String failure, Runnable failed) {
@@ -216,10 +231,11 @@ public final class LockFileWriter {
         Runnable failed = null;
         Logger logger;
         Executor main;
+        Path key = key(task.path);
+        long failedAt = 0;
         synchronized (LOCK) {
             logger = log;
             main = mainThread;
-            Path key = key(task.path);
             Pending latest = PENDING.get(key);
             if (latest == task) {
                 PENDING.remove(key);
@@ -229,7 +245,10 @@ public final class LockFileWriter {
                 latest.sync |= sync;
             }
             if (error != null) {
-                changed(key);
+                failedAt = changed(key);
+                if (failed != null) {
+                    FAILED.put(key, failedAt);
+                }
             }
         }
         if (error == null) {
@@ -237,9 +256,23 @@ public final class LockFileWriter {
         }
         (logger == null ? Bukkit.getLogger() : logger).warning(task.failure + error.getMessage());
         if (failed != null) {
-            main.execute(failed);
+            Runnable cleanup = failed;
+            long at = failedAt;
+            main.execute(() -> runIfLatest(key, at, cleanup));
         }
         return false;
+    }
+
+    // A failure task runs only while no newer write of its file has been queued. That write has already brought the
+    // caches up to date with itself, and the older task would bind them to the failed write's world again.
+    private static void runIfLatest(Path key, long failedAt, Runnable failed) {
+        boolean latest;
+        synchronized (LOCK) {
+            latest = FAILED.remove(key, failedAt);
+        }
+        if (latest) {
+            failed.run();
+        }
     }
 
     /** The file as the queue will leave it; a deletion still queued reads as a missing file. */
@@ -254,6 +287,18 @@ public final class LockFileWriter {
             }
         }
         return Files.readAllBytes(path);
+    }
+
+    /**
+     * Like {@link #read}, but null when the file is or will be gone, including one whose only queued write failed
+     * since the caller last looked.
+     */
+    public static byte[] readIfExists(Path path) throws IOException {
+        try {
+            return read(path);
+        } catch (NoSuchFileException gone) {
+            return null;
+        }
     }
 
     /** Whether the file exists once the queue is written. */

@@ -34,6 +34,7 @@ class LockFileWriterTest {
 
     @AfterEach
     void tearDown() {
+        LockFileWriter.maxQueued = 1024;
         HeldLockDisk.uninstall(disk);
     }
 
@@ -180,6 +181,83 @@ class LockFileWriterTest {
         main.getFirst().run();
         assertEquals(List.of("a2", "delete"), ran);
         assertTrue(LockFileWriter.exists(a));
+    }
+
+    @Test
+    void aFailureTaskIsSkippedOnceANewerWriteOfItsFileWasQueued() throws Exception {
+        Path a = temp.resolve("a.json");
+        startHeld();
+        disk.release();
+        disk.fail("a.json");
+        List<String> ran = new ArrayList<>();
+        LockFileWriter.write(a, bytes("a1"), true, "Failed a1: ", () -> ran.add("a1"));
+        LockFileWriter.flush();
+        assertEquals(1, main.size());
+        disk.heal("a.json");
+        LockFileWriter.write(a, bytes("a2"), false, "Failed a2: ", () -> ran.add("a2"));
+        LockFileWriter.flush();
+        main.getFirst().run();
+        assertEquals(List.of(), ran, "the newer write already set the caches; the stale cleanup is dropped");
+        assertEquals("a2", read(a));
+
+        // A cleanup still pending when the writer stops is dropped with it.
+        main.clear();
+        disk.fail("a.json");
+        LockFileWriter.write(a, bytes("a3"), false, "Failed a3: ", () -> ran.add("a3"));
+        LockFileWriter.flush();
+        LockFileWriter.stop();
+        main.getFirst().run();
+        assertEquals(List.of(), ran);
+    }
+
+    @Test
+    void aFullQueueWritesNewFilesOnTheCallingThreadButNeverAFileTheWriterIsWriting() throws Exception {
+        LockFileWriter.maxQueued = 2;
+        Path a = temp.resolve("a.json");
+        Path b = temp.resolve("b.json");
+        Path c = temp.resolve("c.json");
+        startHeld();
+        LockFileWriter.write(a, bytes("a1"), false, "A: ", null);
+        disk.awaitHolding();
+        LockFileWriter.write(b, bytes("b1"), false, "B: ", null);
+        LockFileWriter.write(c, bytes("c1"), false, "C: ", null);
+        assertEquals("c1", Files.readString(c), "over the cap: written before write returns");
+        assertEquals(Thread.currentThread().getName(), disk.threads.getLast());
+        LockFileWriter.write(a, bytes("a2"), false, "A: ", null);
+        assertEquals("a2", read(a));
+        assertFalse(Files.exists(a), "a is being written, so its next write waits behind it");
+        LockFileWriter.write(b, bytes("b2"), false, "B: ", null);
+        assertFalse(Files.exists(b), "a waiting file takes the newer bytes without growing the queue");
+        disk.release();
+        LockFileWriter.flush();
+        assertEquals(List.of("write c.json c1 false", "write a.json a1 false", "write b.json b2 false",
+                "write a.json a2 false"), disk.done);
+    }
+
+    @Test
+    void writesQueuedWhileStopWaitsReachTheDiskBeforeItReturns() throws Exception {
+        Path a = temp.resolve("a.json");
+        Path b = temp.resolve("b.json");
+        startHeld();
+        LockFileWriter.write(a, bytes("a"), true, "A: ", null);
+        disk.awaitHolding();
+        Thread stopping = new Thread(LockFileWriter::stop);
+        stopping.start();
+        stopping.join(200);
+        assertTrue(stopping.isAlive());
+        Thread writing = new Thread(() -> LockFileWriter.write(b, bytes("b"), true, "B: ", null));
+        writing.start();
+        writing.join(10_000);
+        assertFalse(writing.isAlive(), "a write during stop never waits for it");
+        assertEquals("b", read(b), "and is read back at once");
+        assertTrue(stopping.isAlive(), "stop waits for it too");
+        disk.release();
+        stopping.join(10_000);
+        assertFalse(stopping.isAlive());
+        assertEquals(List.of("write a.json a true", "write b.json b true"), disk.done);
+        assertEquals("b", Files.readString(b));
+        assertTrue(disk.threads.stream().allMatch("Thievery lock writer"::equals), disk.threads.toString());
+        verifyNoInteractions(log);
     }
 
     @Test

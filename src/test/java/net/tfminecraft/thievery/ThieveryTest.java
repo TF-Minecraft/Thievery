@@ -207,7 +207,19 @@ class ThieveryTest {
             net.tfminecraft.thievery.owner.LockFileWriter.flush();
             assertEquals("Thievery lock writer", disk.threads.getLast());
 
+            // A failed write logs on the writer thread and hands its cleanup to the main thread.
             List<String> ran = new ArrayList<>();
+            java.nio.file.Path failing = plugin.getDataFolder().toPath().resolve("writer-fail.json");
+            disk.fail("writer-fail.json");
+            net.tfminecraft.thievery.owner.LockFileWriter.write(failing, new byte[] {1}, true, "Failed: ",
+                    () -> ran.add("cleanup on " + Thread.currentThread().getName()));
+            net.tfminecraft.thievery.owner.LockFileWriter.flush();
+            assertTrue(ran.isEmpty(), "the cleanup waits for the main thread");
+            server.getScheduler().performOneTick();
+            assertEquals(List.of("cleanup on " + Thread.currentThread().getName()), ran);
+            assertTrue(disk.done.contains("failed write writer-fail.json \u0001 true"), disk.done.toString());
+            ran.clear();
+
             plugin.onMainThread(() -> ran.add("enabled"));
             assertTrue(ran.isEmpty(), "scheduled, not run on the calling thread");
             server.getScheduler().performOneTick();

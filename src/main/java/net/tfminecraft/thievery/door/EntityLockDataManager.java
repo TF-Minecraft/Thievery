@@ -32,11 +32,12 @@ public class EntityLockDataManager {
             return new EntityLockData(null);
         }
         File file = getFile(entityId);
-        if (!LockFileWriter.exists(file.toPath())) {
-            return new EntityLockData(entityId);
-        }
         try {
-            LockRecords.Entity record = LockRecords.decodeEntity(LockFileWriter.read(file.toPath()));
+            byte[] bytes = LockFileWriter.readIfExists(file.toPath());
+            if (bytes == null) {
+                return new EntityLockData(entityId);
+            }
+            LockRecords.Entity record = LockRecords.decodeEntity(bytes);
             EntityLockData data = new EntityLockData(entityId, OwnerCodec.resolve(record.owner()).owner());
             data.setLockState(record.state());
             return data;
@@ -55,7 +56,8 @@ public class EntityLockDataManager {
         Path path = getFile(data.getEntityId()).toPath();
         LockRecords.Entity next = new LockRecords.Entity(OwnerCodec.store(data.getOwner()), data.getLockState());
         try {
-            if (LockFileWriter.exists(path) && next.equals(decodeOrNull(LockFileWriter.read(path)))) {
+            byte[] bytes = LockFileWriter.readIfExists(path);
+            if (bytes != null && next.equals(decodeOrNull(bytes))) {
                 return;
             }
             LockFileWriter.write(path, LockRecords.encodeEntity(next), true,

@@ -33,16 +33,15 @@ public class DoorDataManager {
      */
     public DoorData loadDoorData(Location location) {
         File file = getFileForLocation(location);
-        if (!LockFileWriter.exists(file.toPath())) return null;
-
         byte[] bytes;
         try {
-            bytes = LockFileWriter.read(file.toPath());
+            bytes = LockFileWriter.readIfExists(file.toPath());
         } catch (IOException e) {
             Bukkit.getLogger().warning("Unreadable door lock " + file + ": " + e.getMessage());
             LockQuarantine.noteUnreadable(file.toPath());
             return DoorData.unreadable(location, null, null);
         }
+        if (bytes == null) return null;
         try {
             LockRecords.Door record = LockRecords.decodeDoor(bytes);
             DoorData data = new DoorData(location, record.key(), record.strength(),
@@ -100,11 +99,12 @@ public class DoorDataManager {
     }
 
     private static LockRecords.Door readExisting(Path path) throws IOException {
-        if (!LockFileWriter.exists(path)) {
+        byte[] bytes = LockFileWriter.readIfExists(path);
+        if (bytes == null) {
             return null;
         }
         try {
-            return LockRecords.decodeDoor(LockFileWriter.read(path));
+            return LockRecords.decodeDoor(bytes);
         } catch (IllegalArgumentException e) {
             return null;
         }

@@ -99,16 +99,16 @@ public class ContainerDataManager {
         // Taken before the read, so a write or failure after it makes the save read the file again. A guard-mode
         // read is never trusted, as the boot pass may still rewrite the file.
         long stamp = LockGuard.guarded() ? -1 : LockFileWriter.stamp();
-        if (!LockFileWriter.exists(file.toPath())) {
+        byte[] bytes;
+        try {
+            bytes = LockFileWriter.readIfExists(file.toPath());
+        } catch (IOException e) {
+            return unreadable(location, file, e, new byte[0]);
+        }
+        if (bytes == null) {
             ContainerData fresh = new ContainerData(location);
             fresh.remember(null, stamp);
             return fresh;
-        }
-        byte[] bytes;
-        try {
-            bytes = LockFileWriter.read(file.toPath());
-        } catch (IOException e) {
-            return unreadable(location, file, e, new byte[0]);
         }
         LockRecords.Container record;
         try {
@@ -185,11 +185,12 @@ public class ContainerDataManager {
 
     // The current record, or null when the file is missing or unreadable.
     private static LockRecords.Container readExisting(Path path) throws IOException {
-        if (!LockFileWriter.exists(path)) {
+        byte[] bytes = LockFileWriter.readIfExists(path);
+        if (bytes == null) {
             return null;
         }
         try {
-            return LockRecords.decodeContainer(LockFileWriter.read(path));
+            return LockRecords.decodeContainer(bytes);
         } catch (IllegalArgumentException e) {
             return null;
         }

@@ -221,6 +221,44 @@ class QueuedLockWritesTest {
     }
 
     @Test
+    void aStaleFailureNeverRebindsTheIndexToTheWorldOfTheFailedWrite() throws Exception {
+        disk.release();
+        UUID owner = UUID.randomUUID();
+        org.bukkit.World overworld = mock(org.bukkit.World.class);
+        when(overworld.getName()).thenReturn("world");
+        org.bukkit.World nether = mock(org.bukkit.World.class);
+        when(nether.getName()).thenReturn("world_nether");
+        Location here = ContainerDataManagerTest.location(12345, 64, -6789);
+        when(here.getWorld()).thenReturn(overworld);
+        Location there = ContainerDataManagerTest.location(12345, 64, -6789);
+        when(there.getWorld()).thenReturn(nether);
+        startWriter();
+        disk.fail(file.getFileName().toString());
+        containers.saveContainerData(new ContainerData(here, LockOwner.character(owner)));
+        LockFileWriter.flush();
+        assertEquals(1, main.size(), "the failure's cleanup waits for the main thread");
+        disk.heal(file.getFileName().toString());
+        containers.saveContainerData(new ContainerData(there, LockOwner.character(owner)));
+        LockFileWriter.flush();
+        runMainTasks();
+        assertEquals("world_nether", OwnedLocks.of(owner).getFirst().world());
+        assertEquals(LockOwner.character(owner), containers.getOwner(there));
+    }
+
+    @Test
+    void aFirstWriteThatFailedLoadsAsNoLockRatherThanAnUnreadableOne() throws Exception {
+        startWriter();
+        disk.release();
+        disk.fail(file.getFileName().toString());
+        containers.saveContainerData(new ContainerData(location, LockOwner.character(UUID.randomUUID())));
+        LockFileWriter.flush();
+        ContainerData loaded = containers.loadContainerData(location);
+        assertFalse(loaded.isUnreadable());
+        assertFalse(loaded.isOwned());
+        assertTrue(net.tfminecraft.thievery.owner.LockQuarantine.snapshot().unreadable().isEmpty());
+    }
+
+    @Test
     void cooldownResetsWaitForTheQueueSoTheyReachFilesStillBeingCreated() throws Exception {
         UUID thief = UUID.randomUUID();
         startWriter();
