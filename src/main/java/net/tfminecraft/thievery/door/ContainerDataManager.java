@@ -2,7 +2,6 @@ package net.tfminecraft.thievery.door;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
@@ -15,7 +14,7 @@ import java.util.function.Predicate;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 
-import net.tfminecraft.thievery.owner.DurableFiles;
+import net.tfminecraft.thievery.owner.LockFileWriter;
 import net.tfminecraft.thievery.owner.LockGuard;
 import net.tfminecraft.thievery.owner.LockOwner;
 import net.tfminecraft.thievery.owner.LockQuarantine;
@@ -78,25 +77,36 @@ public class ContainerDataManager {
             LockGuard.queueDeletion(file.toPath());
             return false;
         }
-        OWNER_CACHE.remove(BlockKey.of(location));
-        try {
-            return DurableFiles.delete(file.toPath());
-        } catch (IOException e) {
-            Bukkit.getLogger().warning("Failed to delete container data for " + location + ": " + e.getMessage());
-            return false;
-        } finally {
-            OwnedLocks.refresh(LockStores.Store.CONTAINERS, file.toPath(), OwnedLocks.world(location));
-        }
+        Path path = file.toPath();
+        String world = OwnedLocks.world(location);
+        BlockKey key = BlockKey.of(location);
+        OWNER_CACHE.remove(key);
+        boolean deleted = LockFileWriter.delete(path, "Failed to delete container data for " + location + ": ",
+                () -> forget(key, path, world));
+        OwnedLocks.refresh(LockStores.Store.CONTAINERS, path, world);
+        return deleted;
     }
 
+    // After a write that failed: what is cached of the block goes, and the index follows the file as it stands.
+    private static void forget(BlockKey key, Path path, String world) {
+        OWNER_CACHE.remove(key);
+        OwnedLocks.refresh(LockStores.Store.CONTAINERS, path, world);
+    }
+
+    /** Reads the record as the write queue leaves it, so a save still queued is already visible. */
     public ContainerData loadContainerData(Location location) {
         File file = getFileForLocation(location);
-        if (!file.exists()) {
-            return new ContainerData(location); // fresh
+        // Taken before the read, so a write or failure after it makes the save read the file again. A guard-mode
+        // read is never trusted, as the boot pass may still rewrite the file.
+        long stamp = LockGuard.guarded() ? -1 : LockFileWriter.stamp();
+        if (!LockFileWriter.exists(file.toPath())) {
+            ContainerData fresh = new ContainerData(location);
+            fresh.remember(null, stamp);
+            return fresh;
         }
         byte[] bytes;
         try {
-            bytes = Files.readAllBytes(file.toPath());
+            bytes = LockFileWriter.read(file.toPath());
         } catch (IOException e) {
             return unreadable(location, file, e, new byte[0]);
         }
@@ -111,6 +121,7 @@ public class ContainerDataManager {
         data.setProvisional(!owner.definitive());
         data.setAccessMap(record.accessMap());
         data.setLockState(record.state());
+        data.remember(copy(record), stamp);
         return data;
     }
 
@@ -126,42 +137,59 @@ public class ContainerDataManager {
     /**
      * Writes the record when it has changed. Owner and state changes are forced to disk; cooldown-only changes are
      * not. Nothing is written in guard mode or for an unreadable record.
+     *
+     * <p>The write is queued ({@link LockFileWriter}): the cache, the owner index and every later load see it at
+     * once, and the disk a moment later. A failed write is logged, and the cache and index return to the disk.
      */
     public void saveContainerData(ContainerData data) {
         if (LockGuard.guarded() || data.isUnreadable()) {
             return;
         }
-        File file = getFileForLocation(data.getLocation());
+        Location location = data.getLocation();
+        Path path = getFileForLocation(location).toPath();
+        String world = OwnedLocks.world(location);
+        BlockKey key = BlockKey.of(location);
         LockRecords.Container next = new LockRecords.Container(OwnerCodec.store(data.getOwner()),
                 data.getLockState(), data.getAccessMap());
         try {
-            LockRecords.Container previous = readExisting(file.toPath());
+            // The record this data was read or saved as, unless anything has touched the file since.
+            LockRecords.Container previous = LockFileWriter.unchangedSince(path, data.storedAt()) ? data.stored()
+                    : readExisting(path);
             if (next.equals(previous)) {
                 return;
             }
             boolean ownership = previous == null || !Objects.equals(previous.owner(), next.owner())
                     || previous.state() != next.state();
-            DurableFiles.write(file.toPath(), LockRecords.encodeContainer(next), ownership);
+            byte[] bytes = LockRecords.encodeContainer(next);
+            // Cached before the write is queued, so a write failing on the calling thread drops it again.
             if (data.isProvisional()) {
-                OWNER_CACHE.remove(BlockKey.of(data.getLocation()));
+                OWNER_CACHE.remove(key);
             } else {
-                OWNER_CACHE.put(BlockKey.of(data.getLocation()), new CachedLock(data.getOwner(), data.getLockState()));
+                OWNER_CACHE.put(key, new CachedLock(data.getOwner(), data.getLockState()));
             }
+            long stamp = LockFileWriter.write(path, bytes, ownership,
+                    "Failed to save container data for " + location + ": ", () -> forget(key, path, world));
+            data.remember(copy(next), stamp);
         } catch (IOException e) {
-            OWNER_CACHE.remove(BlockKey.of(data.getLocation()));
-            Bukkit.getLogger().warning("Failed to save container data for " + data.getLocation() + ": " + e.getMessage());
+            OWNER_CACHE.remove(key);
+            Bukkit.getLogger().warning("Failed to save container data for " + location + ": " + e.getMessage());
         } finally {
-            OwnedLocks.refresh(LockStores.Store.CONTAINERS, file.toPath(), OwnedLocks.world(data.getLocation()));
+            OwnedLocks.refresh(LockStores.Store.CONTAINERS, path, world);
         }
+    }
+
+    // What a data remembers of its record; the access map is copied, as the data keeps changing its own.
+    private static LockRecords.Container copy(LockRecords.Container record) {
+        return new LockRecords.Container(record.owner(), record.state(), new HashMap<>(record.accessMap()));
     }
 
     // The current record, or null when the file is missing or unreadable.
     private static LockRecords.Container readExisting(Path path) throws IOException {
-        if (!Files.exists(path)) {
+        if (!LockFileWriter.exists(path)) {
             return null;
         }
         try {
-            return LockRecords.decodeContainer(Files.readAllBytes(path));
+            return LockRecords.decodeContainer(LockFileWriter.read(path));
         } catch (IllegalArgumentException e) {
             return null;
         }
@@ -190,10 +218,12 @@ public class ContainerDataManager {
         }));
     }
 
+    // Waits for the write queue first, so the listing holds exactly the files the queue leaves. Staff commands only.
     private void forEachContainerFile(Consumer<File> action) {
         if (LockGuard.guarded() || !dataFolder.exists()) {
             return;
         }
+        LockFileWriter.flush();
         File[] chunkDirs = dataFolder.listFiles(File::isDirectory);
         if (chunkDirs == null) {
             return;
@@ -212,13 +242,14 @@ public class ContainerDataManager {
     // Cooldown-only rewrites keep the owner exactly as stored and are not forced to disk.
     private void updateAccessMap(File file, Predicate<Map<UUID, String>> mutation) {
         try {
-            LockRecords.Container record = LockRecords.decodeContainer(Files.readAllBytes(file.toPath()));
+            LockRecords.Container record = LockRecords.decodeContainer(LockFileWriter.read(file.toPath()));
             Map<UUID, String> accessMap = new HashMap<>(record.accessMap());
             if (!mutation.test(accessMap)) {
                 return;
             }
-            DurableFiles.write(file.toPath(), LockRecords.encodeContainer(
-                    new LockRecords.Container(record.owner(), record.state(), accessMap)), false);
+            LockFileWriter.write(file.toPath(), LockRecords.encodeContainer(
+                    new LockRecords.Container(record.owner(), record.state(), accessMap)), false,
+                    "Failed to update container cooldown data for " + file + ": ", null);
         } catch (IOException | IllegalArgumentException e) {
             Bukkit.getLogger().warning("Failed to update container cooldown data for " + file + ": " + e.getMessage());
         }

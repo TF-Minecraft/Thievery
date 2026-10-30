@@ -2,14 +2,13 @@ package net.tfminecraft.thievery.door;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Objects;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 
-import net.tfminecraft.thievery.owner.DurableFiles;
+import net.tfminecraft.thievery.owner.LockFileWriter;
 import net.tfminecraft.thievery.owner.LockGuard;
 import net.tfminecraft.thievery.owner.LockQuarantine;
 import net.tfminecraft.thievery.owner.LockRecords;
@@ -28,14 +27,17 @@ public class DoorDataManager {
         }
     }
 
-    /** The door's lock, null when it is unlocked. An unreadable record stays locked. */
+    /**
+     * The door's lock, null when it is unlocked. An unreadable record stays locked. Reads the record as the write
+     * queue leaves it.
+     */
     public DoorData loadDoorData(Location location) {
         File file = getFileForLocation(location);
-        if (!file.exists()) return null;
+        if (!LockFileWriter.exists(file.toPath())) return null;
 
         byte[] bytes;
         try {
-            bytes = Files.readAllBytes(file.toPath());
+            bytes = LockFileWriter.read(file.toPath());
         } catch (IOException e) {
             Bukkit.getLogger().warning("Unreadable door lock " + file + ": " + e.getMessage());
             LockQuarantine.noteUnreadable(file.toPath());
@@ -55,12 +57,16 @@ public class DoorDataManager {
         }
     }
 
-    /** Writes the record when it has changed; owner changes are forced to disk. Frozen in guard mode. */
+    /**
+     * Queues the record ({@link LockFileWriter}) when it has changed; owner changes are forced to disk. Frozen in
+     * guard mode.
+     */
     public void saveDoorData(DoorData data) {
         if (LockGuard.guarded() || data.isUnreadable()) {
             return;
         }
         Path path = getFileForLocation(data.getLocation()).toPath();
+        String world = OwnedLocks.world(data.getLocation());
         LockRecords.Door next = new LockRecords.Door(data.getKey(), data.getStrength(),
                 OwnerCodec.store(data.getOwner()), data.getUnlockExpiryMs());
         try {
@@ -70,11 +76,13 @@ public class DoorDataManager {
             }
             boolean ownership = previous == null || !Objects.equals(previous.owner(), next.owner())
                     || !Objects.equals(previous.key(), next.key());
-            DurableFiles.write(path, LockRecords.encodeDoor(next), ownership);
+            LockFileWriter.write(path, LockRecords.encodeDoor(next), ownership,
+                    "Failed to save door data for " + data.getLocation() + ": ",
+                    () -> OwnedLocks.refresh(LockStores.Store.DOORS, path, world));
         } catch (IOException e) {
             Bukkit.getLogger().warning("Failed to save door data for " + data.getLocation() + ": " + e.getMessage());
         } finally {
-            OwnedLocks.refresh(LockStores.Store.DOORS, path, OwnedLocks.world(data.getLocation()));
+            OwnedLocks.refresh(LockStores.Store.DOORS, path, world);
         }
     }
 
@@ -84,22 +92,19 @@ public class DoorDataManager {
             LockGuard.queueDeletion(path);
             return false;
         }
-        try {
-            return DurableFiles.delete(path);
-        } catch (IOException e) {
-            Bukkit.getLogger().warning("Failed to delete door data for " + location + ": " + e.getMessage());
-            return false;
-        } finally {
-            OwnedLocks.refresh(LockStores.Store.DOORS, path, OwnedLocks.world(location));
-        }
+        String world = OwnedLocks.world(location);
+        boolean deleted = LockFileWriter.delete(path, "Failed to delete door data for " + location + ": ",
+                () -> OwnedLocks.refresh(LockStores.Store.DOORS, path, world));
+        OwnedLocks.refresh(LockStores.Store.DOORS, path, world);
+        return deleted;
     }
 
     private static LockRecords.Door readExisting(Path path) throws IOException {
-        if (!Files.exists(path)) {
+        if (!LockFileWriter.exists(path)) {
             return null;
         }
         try {
-            return LockRecords.decodeDoor(Files.readAllBytes(path));
+            return LockRecords.decodeDoor(LockFileWriter.read(path));
         } catch (IllegalArgumentException e) {
             return null;
         }
