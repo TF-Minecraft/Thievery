@@ -233,9 +233,9 @@ public final class LockAdminCommand {
     private void setContainerOwner(Player player, Container container, LockOwner owner) {
         List<Location> halves = new ArrayList<>();
         if (container.getInventory() instanceof DoubleChestInventory inventory) {
-            DoubleChest doubleChest = (DoubleChest) inventory.getHolder();
-            halves.add(((Chest) doubleChest.getLeftSide()).getLocation());
-            halves.add(((Chest) doubleChest.getRightSide()).getLocation());
+            DoubleChest doubleChest = (DoubleChest) inventory.getHolder(false);
+            halves.add(((Chest) doubleChest.getLeftSide(false)).getLocation());
+            halves.add(((Chest) doubleChest.getRightSide(false)).getLocation());
             LockQuarantine.resolved(where(halves.get(0)) + " / " + where(halves.get(1)),
                     containers.getFileForLocation(halves.get(0)).toPath());
         } else {

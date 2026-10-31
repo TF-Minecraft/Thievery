@@ -128,11 +128,8 @@ public final class ClearCluesResolver {
         if (!(block.getState() instanceof Container container)) {
             return 0;
         }
+        // Half of a double chest already returns the whole double inventory.
         Inventory inv = container.getInventory();
-        if (inv instanceof DoubleChestInventory doubleInv) {
-            DoubleChest holder = (DoubleChest) doubleInv.getHolder();
-            inv = holder.getInventory();
-        }
         int removed = 0;
         for (int slot = 0; slot < inv.getSize(); slot++) {
             if (ClueGiver.isClueItem(inv.getItem(slot))) {
@@ -147,11 +144,11 @@ public final class ClearCluesResolver {
     private static ClearCluesTarget containerTarget(Container container) {
         Inventory inv = container.getInventory();
         if (inv instanceof DoubleChestInventory doubleInv) {
-            DoubleChest dc = (DoubleChest) doubleInv.getHolder();
+            DoubleChest dc = (DoubleChest) doubleInv.getHolder(false);
             ContainerData left = containerDataManager.loadContainerData(
-                    ((org.bukkit.block.Chest) dc.getLeftSide()).getLocation());
+                    ((org.bukkit.block.Chest) dc.getLeftSide(false)).getLocation());
             ContainerData right = containerDataManager.loadContainerData(
-                    ((org.bukkit.block.Chest) dc.getRightSide()).getLocation());
+                    ((org.bukkit.block.Chest) dc.getRightSide(false)).getLocation());
             ChestOwners owners = ChestOwners.of(left, right);
             LockState state = left.getLockState().ordinal() < right.getLockState().ordinal()
                     ? left.getLockState() : right.getLockState();

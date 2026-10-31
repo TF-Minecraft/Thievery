@@ -2,6 +2,7 @@ package net.tfminecraft.thievery;
 
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mockingDetails;
 import static org.mockito.Mockito.spy;
 
 import org.bukkit.inventory.Inventory;
@@ -12,8 +13,11 @@ public final class TestInventories {
     private TestInventories() {
     }
 
-    /** A spy of {@code inventory} whose getHolder(boolean) answers with the wrapped inventory's holder. */
+    /** A spy of {@code inventory} whose getHolder(boolean) answers with the wrapped inventory's holder; mocks and spies pass through. */
     public static Inventory withHolderLookup(Inventory inventory) {
+        if (mockingDetails(inventory).isMock()) {
+            return inventory;
+        }
         Inventory spied = spy(inventory);
         doAnswer(call -> inventory.getHolder()).when(spied).getHolder(anyBoolean());
         return spied;
