@@ -128,11 +128,8 @@ public final class ClearCluesResolver {
         if (!(block.getState() instanceof Container container)) {
             return 0;
         }
+        // Half of a double chest already returns the whole double inventory.
         Inventory inv = container.getInventory();
-        if (inv instanceof DoubleChestInventory doubleInv) {
-            DoubleChest holder = (DoubleChest) doubleInv.getHolder(false);
-            inv = holder.getInventory();
-        }
         int removed = 0;
         for (int slot = 0; slot < inv.getSize(); slot++) {
             if (ClueGiver.isClueItem(inv.getItem(slot))) {

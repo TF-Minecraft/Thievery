@@ -122,7 +122,10 @@ class ClearCluesResolverTest {
         when(leftBlock.getLocation()).thenReturn(leftLocation);when(rightBlock.getLocation()).thenReturn(rightLocation);
         when(left.getLocation()).thenReturn(leftLocation);when(right.getLocation()).thenReturn(rightLocation);
         when(left.getInventory()).thenReturn(inventory);when(right.getInventory()).thenReturn(inventory);
-        when(inventory.getHolder(false)).thenReturn(holder);when(holder.getLeftSide(false)).thenReturn(left);when(holder.getRightSide(false)).thenReturn(right);when(holder.getInventory()).thenReturn(full);
+        when(inventory.getHolder(false)).thenReturn(holder);when(holder.getLeftSide(false)).thenReturn(left);when(holder.getRightSide(false)).thenReturn(right);
+        // Like Paper, each half's inventory is the whole double inventory.
+        when(inventory.getSize()).thenAnswer(call->full.getSize()); when(inventory.getItem(anyInt())).thenAnswer(call->full.getItem((int)call.getArgument(0)));
+        doAnswer(call->{full.setItem((int)call.getArgument(0),call.getArgument(1));return null;}).when(inventory).setItem(anyInt(),any());
         return new DoubleFixture(leftBlock,rightBlock,leftLocation,rightLocation,full);
     }
 
