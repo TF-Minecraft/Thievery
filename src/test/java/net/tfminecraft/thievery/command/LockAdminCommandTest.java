@@ -307,9 +307,9 @@ class LockAdminCommandTest {
         when(left.getInventory()).thenReturn(inventory);
         when(left.getLocation()).thenReturn(at);
         when(rightChest.getLocation()).thenReturn(right);
-        when(inventory.getHolder()).thenReturn(holder);
-        when(holder.getLeftSide()).thenReturn(left);
-        when(holder.getRightSide()).thenReturn(rightChest);
+        when(inventory.getHolder(false)).thenReturn(holder);
+        when(holder.getLeftSide(false)).thenReturn(left);
+        when(holder.getRightSide(false)).thenReturn(rightChest);
         when(staff.getTargetBlockExact(5)).thenReturn(block);
 
         command.handle(staff, new String[] { "setowner", "server" });

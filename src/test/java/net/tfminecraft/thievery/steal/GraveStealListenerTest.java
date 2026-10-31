@@ -188,7 +188,7 @@ class GraveStealListenerTest {
         verifyNoInteractions(graves);
         permissions.when(() -> GraveLootRules.canSteal(player, grave)).thenReturn(false);
         Inventory heldByBlock = mock(Inventory.class);
-        when(heldByBlock.getHolder()).thenReturn((org.bukkit.block.Chest) block.getState());
+        when(heldByBlock.getHolder(false)).thenReturn((org.bukkit.block.Chest) block.getState());
         open(player, heldByBlock);
         verify(graves).getAt(block);
         Block otherBlock = block.getWorld().getBlockAt(4, 64, 1);

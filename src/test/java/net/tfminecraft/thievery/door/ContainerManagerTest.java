@@ -58,7 +58,7 @@ class ContainerManagerTest {
         when(player.hasPermission("thievery.admin")).thenReturn(true); manager.onPlayerJoin(event); assertTrue(manager.getFeedbackState(player.getUniqueId())); manager.setFeedbackState(player.getUniqueId(),false); assertFalse(manager.getFeedbackState(player.getUniqueId())); manager.enableFeedback(player); assertTrue(manager.getFeedbackState(player.getUniqueId()));
     }
     @Test void openingUnclaimedContainerClaimsItButPrivateLocksRequireAccessOrStaff() {
-        var block=block(0,Material.BARREL); var inventory=((Container)block.getState()).getInventory(); var event=open(inventory); manager.onInventoryOpen(event); assertEquals(co(player.getUniqueId()),data.get(block.getLocation()).getOwner()); verify(event,never()).setCancelled(true);
+        var block=block(0,Material.BARREL); var inventory=TestInventories.withHolderLookup(((Container)block.getState()).getInventory()); var event=open(inventory); manager.onInventoryOpen(event); assertEquals(co(player.getUniqueId()),data.get(block.getLocation()).getOwner()); verify(event,never()).setCancelled(true);
         var privateData=lock(block,UUID.randomUUID()); clearInvocations(storage); manager.onInventoryOpen(event); verify(event).setCancelled(true); verify(storage,never()).saveContainerData(any());
         when(player.hasPermission("thievery.admin")).thenReturn(true); clearInvocations(event); manager.onInventoryOpen(event); verify(event,never()).setCancelled(true); verify(player).sendMessage("§cBypassing lock due to staff"); assertNotEquals(co(player.getUniqueId()),privateData.getOwner());
         var unrelated=open(mock(Inventory.class)); manager.onInventoryOpen(unrelated); verify(unrelated,never()).setCancelled(true);
@@ -231,7 +231,7 @@ class ContainerManagerTest {
         manager.onInventoryOpen(open(reversed.inventory())); assertEquals(owned.getOwner(),empty.getOwner()); assertEquals(LockState.FACTION,empty.getLockState());
         data.clear(); stage5Factions.plays(player,null); clearInvocations(storage);
         manager.onInventoryOpen(event); assertNull(data.get(chest.left().getLocation()).getOwner()); verify(storage,never()).saveContainerData(any());
-        var barrel=block(0,Material.BARREL); manager.onInventoryOpen(open(((Container)barrel.getState()).getInventory())); assertNull(data.get(barrel.getLocation()).getOwner()); verify(storage,never()).saveContainerData(any());
+        var barrel=block(0,Material.BARREL); manager.onInventoryOpen(open(TestInventories.withHolderLookup(((Container)barrel.getState()).getInventory()))); assertNull(data.get(barrel.getLocation()).getOwner()); verify(storage,never()).saveContainerData(any());
     }
     @Test void doubleChestAccessBreakAndLockChangesRespectBothHalves() {
         var chest=doubleChest(); var left=new ContainerData(chest.left().getLocation(),co(UUID.randomUUID())); left.setLockState(LockState.PRIVATE); data.put(left.getLocation(),left);
@@ -245,7 +245,7 @@ class ContainerManagerTest {
         left.setOwner(co(UUID.randomUUID())); right.setOwner(left.getOwner()); clearInvocations(storage); manager.onShiftLeftClickContainer(toggle); verify(storage,never()).saveContainerData(any());
     }
     @Test void deniedPlayersHearHowTheLockBarsThemAndOnlyPickableChestsHintAtPicking() {
-        var barrel=block(0,Material.BARREL); var locked=lock(barrel,UUID.randomUUID()); var inventory=((Container)barrel.getState()).getInventory();
+        var barrel=block(0,Material.BARREL); var locked=lock(barrel,UUID.randomUUID()); var inventory=TestInventories.withHolderLookup(((Container)barrel.getState()).getInventory());
         manager.onContainerRightClickAccessCheck(interact(barrel,Action.RIGHT_CLICK_BLOCK));
         verify(player).sendMessage("§cIt's locked. Only its owner holds the key, though a steady hand and a pick might manage.");
         locked.setLockState(LockState.GUILD); manager.onInventoryOpen(open(inventory));
@@ -517,7 +517,7 @@ class ContainerManagerTest {
         assertSame(odd,ContainerManager.lockBlock(odd));
         var leftless=mock(Inventory.class); var notChest=mock(org.bukkit.inventory.InventoryHolder.class);
         when(leftless.getHolder()).thenReturn(notChest); when(leftless.getHolder(false)).thenReturn(notChest);
-        when(oddInventory.getLeftSide()).thenReturn(leftless); when(oddInventory.getHolder()).thenReturn(new DoubleChest(oddInventory));
+        when(oddInventory.getLeftSide()).thenReturn(leftless); when(oddInventory.getHolder(false)).thenReturn(new DoubleChest(oddInventory));
         assertSame(odd,ContainerManager.lockBlock(odd));
     }
     @Test void aThiefAlreadyWorkingALockCannotStartAnother() {
@@ -805,7 +805,7 @@ class ContainerManagerTest {
     }
     @Test void guardModeKeepsPlayersOutOfLockedContainersOpensPublicOnesWithoutClaimingAndShowsStaffAReadOnlyCopy() {
         net.tfminecraft.thievery.owner.LockGuard.enter("test");
-        var barrel=block(0,Material.BARREL); var inventory=((Container)barrel.getState()).getInventory(); inventory.setItem(3,new ItemStack(Material.DIAMOND,2));
+        var barrel=block(0,Material.BARREL); var inventory=TestInventories.withHolderLookup(((Container)barrel.getState()).getInventory()); inventory.setItem(3,new ItemStack(Material.DIAMOND,2));
         var unowned=open(inventory); manager.onInventoryOpen(unowned); verify(unowned,never()).setCancelled(true); assertNull(data.get(barrel.getLocation()).getOwner());
         var check=interact(barrel,Action.RIGHT_CLICK_BLOCK); manager.onContainerRightClickAccessCheck(check); verify(check,never()).setCancelled(true);
         var locked=lock(barrel,UUID.randomUUID()); locked.setLockState(LockState.PUBLIC);
@@ -905,7 +905,7 @@ class ContainerManagerTest {
         verify(player).sendTitle("§6Lock State","§ePrivate",5,30,10);
     }
     @Test void serverContainersOpenOnlyForStaffAndOnlyStaffRotateThem() {
-        var barrel=block(0,Material.BARREL); var server=lock(barrel,player.getUniqueId()); server.setOwner(LockOwner.server()); var inventory=((Container)barrel.getState()).getInventory();
+        var barrel=block(0,Material.BARREL); var server=lock(barrel,player.getUniqueId()); server.setOwner(LockOwner.server()); var inventory=TestInventories.withHolderLookup(((Container)barrel.getState()).getInventory());
         var denied=open(inventory); manager.onInventoryOpen(denied); verify(denied).setCancelled(true);
         when(player.isSneaking()).thenReturn(true); manager.onShiftLeftClickContainer(interact(barrel,Action.LEFT_CLICK_BLOCK)); assertEquals(LockState.PRIVATE,server.getLockState());
         when(player.hasPermission("thievery.admin")).thenReturn(true);
@@ -941,7 +941,7 @@ class ContainerManagerTest {
         verify(storage,never()).saveContainerData(any()); assertEquals(LockState.PRIVATE,left.getLockState());
     }
     @Test void anErrorWhileCheckingALockCancelsTheEvent() {
-        var barrel=block(0,Material.BARREL); var inventory=((Container)barrel.getState()).getInventory();
+        var barrel=block(0,Material.BARREL); var inventory=TestInventories.withHolderLookup(((Container)barrel.getState()).getInventory());
         when(storage.loadContainerData(any())).thenThrow(new IllegalStateException("disk gone"));
         var event=open(inventory); manager.onInventoryOpen(event); verify(event).setCancelled(true);
         var breaking=new BlockBreakEvent(barrel,player); manager.onBlockBreak(breaking); assertTrue(breaking.isCancelled());

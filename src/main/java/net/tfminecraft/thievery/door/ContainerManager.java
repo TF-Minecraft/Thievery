@@ -245,9 +245,9 @@ public class ContainerManager implements Listener {
         if (block.getState() instanceof Chest chest) {
             Inventory inventory = chest.getInventory();
             if (inventory instanceof DoubleChestInventory doubleChestInventory) {
-                DoubleChest doubleChest = (DoubleChest) doubleChestInventory.getHolder();
-                Chest leftChest = (Chest) doubleChest.getLeftSide();
-                Chest rightChest = (Chest) doubleChest.getRightSide();
+                DoubleChest doubleChest = (DoubleChest) doubleChestInventory.getHolder(false);
+                Chest leftChest = (Chest) doubleChest.getLeftSide(false);
+                Chest rightChest = (Chest) doubleChest.getRightSide(false);
 
                 ContainerData leftData = containerDataManager.loadContainerData(leftChest.getLocation());
                 ContainerData rightData = containerDataManager.loadContainerData(rightChest.getLocation());
@@ -432,11 +432,11 @@ public class ContainerManager implements Listener {
     private void handleInventoryOpen(InventoryOpenEvent event) {
         if (!(event.getPlayer() instanceof Player player)) return;
 
-        InventoryHolder holder = event.getInventory().getHolder();
+        InventoryHolder holder = event.getInventory().getHolder(false);
 
         if (holder instanceof DoubleChest doubleChest) {
-            Container left = (Container) doubleChest.getLeftSide();
-            Container right = (Container) doubleChest.getRightSide();
+            Container left = (Container) doubleChest.getLeftSide(false);
+            Container right = (Container) doubleChest.getRightSide(false);
 
             Location mainLoc = left.getBlock().getLocation();
             ContainerData mainData = containerDataManager.loadContainerData(mainLoc);
@@ -621,10 +621,10 @@ public class ContainerManager implements Listener {
         Inventory inventory = container.getInventory();
 
         if (inventory instanceof DoubleChestInventory doubleChestInventory) {
-            DoubleChest doubleChest = (DoubleChest) doubleChestInventory.getHolder();
+            DoubleChest doubleChest = (DoubleChest) doubleChestInventory.getHolder(false);
 
-            Location leftLoc = ((Chest) doubleChest.getLeftSide()).getLocation();
-            Location rightLoc = ((Chest) doubleChest.getRightSide()).getLocation();
+            Location leftLoc = ((Chest) doubleChest.getLeftSide(false)).getLocation();
+            Location rightLoc = ((Chest) doubleChest.getRightSide(false)).getLocation();
 
             ContainerData leftData = containerDataManager.loadContainerData(leftLoc);
             ContainerData rightData = containerDataManager.loadContainerData(rightLoc);
@@ -712,10 +712,10 @@ public class ContainerManager implements Listener {
 
         Inventory inventory = container.getInventory();
         if (inventory instanceof DoubleChestInventory doubleChestInventory) {
-            DoubleChest doubleChest = (DoubleChest) doubleChestInventory.getHolder();
+            DoubleChest doubleChest = (DoubleChest) doubleChestInventory.getHolder(false);
 
-            Location leftLoc = ((Chest) doubleChest.getLeftSide()).getLocation();
-            Location rightLoc = ((Chest) doubleChest.getRightSide()).getLocation();
+            Location leftLoc = ((Chest) doubleChest.getLeftSide(false)).getLocation();
+            Location rightLoc = ((Chest) doubleChest.getRightSide(false)).getLocation();
             ContainerData leftData = containerDataManager.loadContainerData(leftLoc);
             ContainerData rightData = containerDataManager.loadContainerData(rightLoc);
 
@@ -833,10 +833,10 @@ public class ContainerManager implements Listener {
 
                     // Handle double chest
                     if (inv instanceof DoubleChestInventory doubleInv) {
-                        DoubleChest doubleChest = (DoubleChest) doubleInv.getHolder();
+                        DoubleChest doubleChest = (DoubleChest) doubleInv.getHolder(false);
 
-                        Location leftLoc = ((Chest) doubleChest.getLeftSide()).getLocation();
-                        Location rightLoc = ((Chest) doubleChest.getRightSide()).getLocation();
+                        Location leftLoc = ((Chest) doubleChest.getLeftSide(false)).getLocation();
+                        Location rightLoc = ((Chest) doubleChest.getRightSide(false)).getLocation();
 
                         // Mark both locations as pinged
                         alreadyPinged.add(leftLoc);
@@ -896,9 +896,9 @@ public class ContainerManager implements Listener {
         Block clickedBlock = event.getClickedBlock();
         Inventory blockInv = container.getInventory();
         if (blockInv instanceof DoubleChestInventory doubleInv) {
-            DoubleChest doubleChest = (DoubleChest) doubleInv.getHolder();
-            Location leftLoc = ((Chest) doubleChest.getLeftSide()).getLocation();
-            Location rightLoc = ((Chest) doubleChest.getRightSide()).getLocation();
+            DoubleChest doubleChest = (DoubleChest) doubleInv.getHolder(false);
+            Location leftLoc = ((Chest) doubleChest.getLeftSide(false)).getLocation();
+            Location rightLoc = ((Chest) doubleChest.getRightSide(false)).getLocation();
             ContainerData leftData = containerDataManager.loadContainerData(leftLoc);
             ContainerData rightData = containerDataManager.loadContainerData(rightLoc);
             if (canAccessLockedDoubleChest(player, leftData, rightData, false)) {
@@ -981,8 +981,8 @@ public class ContainerManager implements Listener {
     static Block lockBlock(Block block) {
         if (block.getState() instanceof Container container
                 && container.getInventory() instanceof DoubleChestInventory inventory
-                && inventory.getHolder() instanceof DoubleChest doubleChest
-                && doubleChest.getLeftSide() instanceof Chest left) {
+                && inventory.getHolder(false) instanceof DoubleChest doubleChest
+                && doubleChest.getLeftSide(false) instanceof Chest left) {
             return left.getBlock();
         }
         return block;
@@ -1061,9 +1061,9 @@ public class ContainerManager implements Listener {
     private void recordContainerAccess(Player player, Container container, ContainerData data, UUID playerId, String today) {
         Inventory inventory = container.getInventory();
         if (inventory instanceof DoubleChestInventory doubleChestInventory) {
-            DoubleChest doubleChest = (DoubleChest) doubleChestInventory.getHolder();
-            Chest leftChest = (Chest) doubleChest.getLeftSide();
-            Chest rightChest = (Chest) doubleChest.getRightSide();
+            DoubleChest doubleChest = (DoubleChest) doubleChestInventory.getHolder(false);
+            Chest leftChest = (Chest) doubleChest.getLeftSide(false);
+            Chest rightChest = (Chest) doubleChest.getRightSide(false);
 
             ContainerData leftData = containerDataManager.loadContainerData(leftChest.getLocation());
             ContainerData rightData = containerDataManager.loadContainerData(rightChest.getLocation());

@@ -185,7 +185,7 @@ public final class GraveStealListener implements Listener {
 	}
 
 	private static Block inventoryBlock(Inventory inventory) {
-		InventoryHolder holder = inventory.getHolder();
+		InventoryHolder holder = inventory.getHolder(false);
 		if (holder instanceof BlockState state) {
 			return state.getBlock();
 		}

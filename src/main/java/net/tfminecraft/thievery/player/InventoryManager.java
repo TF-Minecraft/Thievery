@@ -63,7 +63,7 @@ public class InventoryManager implements Listener {
                     buildTitle(session)
             );
         } else {
-            LoadoutHolder holder = (LoadoutHolder) player.getOpenInventory().getTopInventory().getHolder();
+            LoadoutHolder holder = (LoadoutHolder) player.getOpenInventory().getTopInventory().getHolder(false);
             holder.setPage(safePage);
             inv = player.getOpenInventory().getTopInventory();
             inv.clear();

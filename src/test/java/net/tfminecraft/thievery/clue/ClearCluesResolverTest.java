@@ -122,7 +122,7 @@ class ClearCluesResolverTest {
         when(leftBlock.getLocation()).thenReturn(leftLocation);when(rightBlock.getLocation()).thenReturn(rightLocation);
         when(left.getLocation()).thenReturn(leftLocation);when(right.getLocation()).thenReturn(rightLocation);
         when(left.getInventory()).thenReturn(inventory);when(right.getInventory()).thenReturn(inventory);
-        when(inventory.getHolder()).thenReturn(holder);when(holder.getLeftSide()).thenReturn(left);when(holder.getRightSide()).thenReturn(right);when(holder.getInventory()).thenReturn(full);
+        when(inventory.getHolder(false)).thenReturn(holder);when(holder.getLeftSide(false)).thenReturn(left);when(holder.getRightSide(false)).thenReturn(right);when(holder.getInventory()).thenReturn(full);
         return new DoubleFixture(leftBlock,rightBlock,leftLocation,rightLocation,full);
     }
 

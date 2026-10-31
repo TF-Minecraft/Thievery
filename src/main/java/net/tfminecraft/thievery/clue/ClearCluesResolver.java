@@ -130,7 +130,7 @@ public final class ClearCluesResolver {
         }
         Inventory inv = container.getInventory();
         if (inv instanceof DoubleChestInventory doubleInv) {
-            DoubleChest holder = (DoubleChest) doubleInv.getHolder();
+            DoubleChest holder = (DoubleChest) doubleInv.getHolder(false);
             inv = holder.getInventory();
         }
         int removed = 0;
@@ -147,11 +147,11 @@ public final class ClearCluesResolver {
     private static ClearCluesTarget containerTarget(Container container) {
         Inventory inv = container.getInventory();
         if (inv instanceof DoubleChestInventory doubleInv) {
-            DoubleChest dc = (DoubleChest) doubleInv.getHolder();
+            DoubleChest dc = (DoubleChest) doubleInv.getHolder(false);
             ContainerData left = containerDataManager.loadContainerData(
-                    ((org.bukkit.block.Chest) dc.getLeftSide()).getLocation());
+                    ((org.bukkit.block.Chest) dc.getLeftSide(false)).getLocation());
             ContainerData right = containerDataManager.loadContainerData(
-                    ((org.bukkit.block.Chest) dc.getRightSide()).getLocation());
+                    ((org.bukkit.block.Chest) dc.getRightSide(false)).getLocation());
             ChestOwners owners = ChestOwners.of(left, right);
             LockState state = left.getLockState().ordinal() < right.getLockState().ordinal()
                     ? left.getLockState() : right.getLockState();
