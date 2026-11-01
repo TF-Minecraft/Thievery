@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
 
+import org.bukkit.plugin.Plugin;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -46,14 +47,14 @@ class WornAccessorySlotsTest {
 
     @AfterEach
     void reset() {
-        WornAccessorySlots.load(plugins.resolve("none").toFile(), logger);
+        WornAccessorySlots.load(null, logger);
     }
 
     @Test
     void loadsTheLiveVanillaLayoutAndLogsTheSlotsInOrder() throws Exception {
         write("tfmc_inventory.yml", TFMC_INVENTORY);
 
-        WornAccessorySlots.load(plugins.toFile(), logger);
+        WornAccessorySlots.load(mmoInventory(true), logger);
 
         for (int slot : new int[] {9, 10, 11, 12}) {
             assertTrue(WornAccessorySlots.isWorn(slot), "slot " + slot);
@@ -106,9 +107,13 @@ class WornAccessorySlotsTest {
                   ARMOUR_ROW:
                     type: accessory
                     slot: 36
+                  TYPELESS:
+                    slot: 30
                   HOTBAR:
+                    type: accessory
                     slot: 0
                   LAST:
+                    type: elytra
                     slot: 35
                 """);
         write("notes.txt", "type: vanilla\nslots:\n  RING:\n    slot: 30\n");
@@ -126,23 +131,43 @@ class WornAccessorySlotsTest {
     }
 
     @Test
-    void noMmoInventoryFolderMeansNothingIsProtectedAndNothingIsLogged() throws Exception {
+    void missingOrDisabledMmoInventoryProtectsNothingEvenWithItsFilesLeftBehind() throws Exception {
         write("tfmc_inventory.yml", TFMC_INVENTORY);
-        WornAccessorySlots.load(plugins.toFile(), logger);
+        WornAccessorySlots.load(mmoInventory(true), logger);
         assertTrue(WornAccessorySlots.isWorn(9));
         clearInvocations(logger);
 
-        WornAccessorySlots.load(plugins.resolve("elsewhere").toFile(), logger);
-
+        Plugin disabled = mmoInventory(false);
+        WornAccessorySlots.load(disabled, logger);
         assertFalse(WornAccessorySlots.isWorn(9));
-        verifyNoInteractions(logger);
+        verify(disabled, never()).getDataFolder();
+
+        WornAccessorySlots.load(mmoInventory(true), logger);
+        WornAccessorySlots.load(null, logger);
+        assertFalse(WornAccessorySlots.isWorn(9));
+    }
+
+    @Test
+    void aMissingFolderIsSilentButAnUnlistableOneIsReported() throws Exception {
         assertTrue(WornAccessorySlots.read(new File(plugins.toFile(), "missing"), logger).isEmpty());
+        verifyNoInteractions(logger);
+
+        File notAFolder = Files.writeString(plugins.resolve("inventory"), "not a folder").toFile();
+        assertTrue(WornAccessorySlots.read(notAFolder, logger).isEmpty());
+        verify(logger).warning(startsWith("Could not list the MMOInventory inventory folder"));
     }
 
     @Test
     void readResultCannotBeChanged() throws Exception {
         write("tfmc_inventory.yml", TFMC_INVENTORY);
         assertThrows(UnsupportedOperationException.class, () -> read().add(1));
+    }
+
+    private Plugin mmoInventory(boolean enabled) {
+        Plugin plugin = mock(Plugin.class);
+        when(plugin.isEnabled()).thenReturn(enabled);
+        when(plugin.getDataFolder()).thenReturn(plugins.resolve("MMOInventory").toFile());
+        return plugin;
     }
 
     private Set<Integer> read() {

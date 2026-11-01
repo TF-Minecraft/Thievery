@@ -11,6 +11,7 @@ import java.util.logging.Logger;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.plugin.Plugin;
 
 /**
  * Player inventory slots that MMOInventory uses for worn accessories (rings, amulets, artifacts).
@@ -21,15 +22,18 @@ import org.bukkit.configuration.file.YamlConfiguration;
  */
 public final class WornAccessorySlots {
 
-    private static final String INVENTORY_FOLDER = "MMOInventory/inventory";
-
     private static volatile Set<Integer> slots = Set.of();
 
     private WornAccessorySlots() {}
 
-    /** Reads the worn slots from {@code <pluginsFolder>/MMOInventory/inventory/*.yml}. */
-    public static void load(File pluginsFolder, Logger logger) {
-        slots = read(new File(pluginsFolder, INVENTORY_FOLDER), logger);
+    /**
+     * Reads the worn slots from MMOInventory's {@code inventory/*.yml}. Nothing is protected while
+     * MMOInventory is missing or disabled, since no slot is worn then.
+     */
+    public static void load(Plugin mmoInventory, Logger logger) {
+        slots = mmoInventory == null || !mmoInventory.isEnabled()
+                ? Set.of()
+                : read(new File(mmoInventory.getDataFolder(), "inventory"), logger);
         if (!slots.isEmpty()) {
             logger.info("Pickpocketing skips the worn MMOInventory slots " + slots + ".");
         }
@@ -43,6 +47,10 @@ public final class WornAccessorySlots {
         File[] files = inventoryFolder.listFiles(
                 (dir, name) -> name.toLowerCase(Locale.ROOT).endsWith(".yml"));
         if (files == null) {
+            if (inventoryFolder.exists()) {
+                logger.warning("Could not list the MMOInventory inventory folder " + inventoryFolder
+                        + "; worn slots stay pickpocketable.");
+            }
             return Set.of();
         }
         Set<Integer> found = new TreeSet<>();
@@ -72,7 +80,9 @@ public final class WornAccessorySlots {
         }
         for (String key : section.getKeys(false)) {
             ConfigurationSection slot = section.getConfigurationSection(key);
-            if (slot == null || "fill".equalsIgnoreCase(slot.getString("type"))) {
+            // MMOInventory needs a type on every slot; fill is the background, not a slot.
+            String type = slot == null ? null : slot.getString("type");
+            if (type == null || "fill".equalsIgnoreCase(type)) {
                 continue;
             }
             int index = slot.getInt("slot", -1);

@@ -239,7 +239,7 @@ public class Thievery extends JavaPlugin {
     public void loadConfigs() {
         configLoader.loadConfig(new File(getDataFolder(), "config.yml"));
         categoryLoader.load(new File(getDataFolder(), "categories.yml"));
-        WornAccessorySlots.load(getDataFolder().getParentFile(), getLogger());
+        WornAccessorySlots.load(getServer().getPluginManager().getPlugin("MMOInventory"), getLogger());
     }
 
     public void setPlugins() {
