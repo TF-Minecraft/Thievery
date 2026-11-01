@@ -66,7 +66,7 @@ public class PickpocketReference extends HiddenStealReference {
 
     @Override
     protected int resolveTakeSlot(int logicalSlot) {
-        return PlayerSlotMap.toPlayerSlot(logicalSlot);
+        return PlayerSlotMap.toPickpocketTakeSlot(logicalSlot);
     }
 
     @Override

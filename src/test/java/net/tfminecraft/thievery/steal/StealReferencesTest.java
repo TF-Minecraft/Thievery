@@ -217,6 +217,21 @@ class StealReferencesTest {
         assertFalse(ref.onBeforeReveal(thief, inv, slot)); assertNull(ref.getSource(thief)); ref.refreshGui(thief, inv);
     }
 
+    @Test void pickpocketNeverShowsOrTakesWornAccessories() {
+        PickpocketSession session = pickSession(); var ref = new PickpocketReference(session, () -> {});
+        Inventory inv = inventory(ref); int slot = session.getLayout().getGuiSlotForLogical(0);
+        ItemStack ring = new ItemStack(Material.GOLD_NUGGET); victim.getInventory().setItem(9, ring);
+        try (MockedStatic<WornAccessorySlots> worn = mockStatic(WornAccessorySlots.class)) {
+            worn.when(() -> WornAccessorySlots.isWorn(9)).thenReturn(true);
+            assertEquals(-1, ref.resolveTakeSlot(0)); assertEquals(10, ref.resolveTakeSlot(1));
+            ref.revealSlot(thief, inv, slot);
+            assertTrue(session.isRevealed(slot));
+            gui.verify(() -> StealGui.placeRevealedSlot(inv, slot, null, session.getBudget(), data));
+            ref.handleStealClick(click(inv, slot, new ItemStack(Material.PAPER), ClickType.SHIFT_LEFT), thief);
+            assertEquals(ring, victim.getInventory().getItem(9)); assertEquals(50.0, session.getBudget().getRemaining());
+        }
+    }
+
     @Test void pickpocketDistanceWatchEndsDistantTargetsAndCancelsAfterSessionEnds() {
         var ref = new PickpocketReference(pickSession(), () -> {}); Inventory inv = inventory(ref);
         when(manager.hasSession(thief.getUniqueId())).thenReturn(true);

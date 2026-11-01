@@ -54,10 +54,22 @@ public final class PlayerSlotMap {
         return playerSlot - MAIN_INV_START;
     }
 
+    /** The player slot a pickpocket may take from, or -1 outside the main inventory or on a worn accessory. */
+    public static int toPickpocketTakeSlot(int pickpocketLogical) {
+        int playerSlot = toPlayerSlot(pickpocketLogical);
+        if (playerSlot < 0 || WornAccessorySlots.isWorn(playerSlot)) {
+            return -1;
+        }
+        return playerSlot;
+    }
+
     public static List<Integer> listPickpocketSlots(Player player) {
         List<Integer> slots = new ArrayList<>();
         for (int pickpocketLogical = 0; pickpocketLogical < MAIN_INV_SLOT_COUNT; pickpocketLogical++) {
-            int playerSlot = toPlayerSlot(pickpocketLogical);
+            int playerSlot = toPickpocketTakeSlot(pickpocketLogical);
+            if (playerSlot < 0) {
+                continue;
+            }
             ItemStack item = getItem(player, playerSlot);
             if (item == null || item.getType().isAir()) {
                 continue;
@@ -70,8 +82,9 @@ public final class PlayerSlotMap {
         return slots;
     }
 
+    /** Returns what a pickpocket finds there; worn accessory slots always look empty. */
     public static ItemStack getPickpocketItem(Player player, int pickpocketLogical) {
-        int playerSlot = toPlayerSlot(pickpocketLogical);
+        int playerSlot = toPickpocketTakeSlot(pickpocketLogical);
         if (playerSlot < 0) {
             return null;
         }
