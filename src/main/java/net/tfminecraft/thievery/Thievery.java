@@ -38,6 +38,7 @@ import net.tfminecraft.thievery.steal.FurnitureDisplayListener;
 import net.tfminecraft.thievery.steal.GraveStealListener;
 import net.tfminecraft.thievery.steal.StealGuiUpdater;
 import net.tfminecraft.thievery.steal.StealManager;
+import net.tfminecraft.thievery.steal.WornAccessorySlots;
 import net.tfminecraft.thievery.estate.EstateBridge;
 import net.tfminecraft.thievery.estate.LockBlocks;
 import net.tfminecraft.thievery.owner.LockFileWriter;
@@ -238,6 +239,7 @@ public class Thievery extends JavaPlugin {
     public void loadConfigs() {
         configLoader.loadConfig(new File(getDataFolder(), "config.yml"));
         categoryLoader.load(new File(getDataFolder(), "categories.yml"));
+        WornAccessorySlots.load(getDataFolder().getParentFile(), getLogger());
     }
 
     public void setPlugins() {

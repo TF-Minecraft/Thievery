@@ -163,6 +163,29 @@ class PlayerSlotMapTest {
     }
 
     @Test
+    void pickpocketingSkipsWornAccessorySlotsButRobberyStillSeesThem() {
+        ItemStack ring = item(Material.GOLD_NUGGET);
+        ItemStack amulet = item(Material.GOLD_NUGGET);
+        ItemStack loose = item(Material.STONE);
+        storage[9] = ring;
+        storage[10] = amulet;
+        storage[13] = loose;
+        try (MockedStatic<WornAccessorySlots> worn = mockStatic(WornAccessorySlots.class)) {
+            worn.when(() -> WornAccessorySlots.isWorn(9)).thenReturn(true);
+            worn.when(() -> WornAccessorySlots.isWorn(10)).thenReturn(true);
+            assertEquals(List.of(4), PlayerSlotMap.listPickpocketSlots(player));
+            assertEquals(-1, PlayerSlotMap.toPickpocketTakeSlot(0));
+            assertEquals(-1, PlayerSlotMap.toPickpocketTakeSlot(1));
+            assertEquals(13, PlayerSlotMap.toPickpocketTakeSlot(4));
+            assertEquals(-1, PlayerSlotMap.toPickpocketTakeSlot(27));
+            assertNull(PlayerSlotMap.getPickpocketItem(player, 0));
+            assertSame(loose, PlayerSlotMap.getPickpocketItem(player, 4));
+            assertSame(ring, PlayerSlotMap.getItem(player, 9));
+            assertEquals(List.of(9, 10, 13), PlayerSlotMap.listSearchableSlots(player));
+        }
+    }
+
+    @Test
     void droppingClearsAndDropsEligibleItemsWhilePreservingIgnoredAndAir() {
         World world = mock(World.class);
         Location location = new Location(world, 12, 64, 34);

@@ -9,7 +9,7 @@ Thievery gives criminal activity and property protection a shared set of game me
 - **Property locks** — secure supported doors, containers, furniture displays, armour stands, and item frames, with personal, guild, and faction lock rules.
 - **Keys and keychains** — carry several keys together and create key copies through molds or paper copies.
 - **Lockpicking challenges** — use lockpicks in an interactive timing challenge on doors and displays, or, on chests, a floating lockpick ring followed by a seized-pin probe, with tool strength, lock strength, and Dexterity influencing the attempt.
-- **Pickpocketing and robbery** — separate activities provide different targeting, alert, cooldown, and loot-budget rules. A pickpocket first fills a floating ring by mashing jump before the pocket opens.
+- **Pickpocketing and robbery** — separate activities provide different targeting, alert, cooldown, and loot-budget rules. A pickpocket first fills a floating ring by mashing jump before the pocket opens. Pickpockets can't reach the worn ring, amulet and artifact slots that MMOInventory places in the bag; those are read from MMOInventory's `vanilla` inventory files on each config load. Robbery still can, like armour.
 - **Controlled looting** — theft menus account for item categories and value, including equipment quality and magical properties, when determining what can be taken.
 - **Evidence and risk** — theft and lockpicking can leave clues, with accumulated risk affecting the chance of more revealing evidence.
 
