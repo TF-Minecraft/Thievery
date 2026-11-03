@@ -78,7 +78,8 @@ public class Thievery extends JavaPlugin {
         createConfigs();
         loadConfigs();
         setPlugins();
-        containerManager = new ContainerManager();
+        containerManager = new ContainerManager(net.tfminecraft.thievery.door.FeedbackPreferences.load(
+                getDataFolder().toPath().resolve("feedback-off.txt"), getLogger()));
         stealManager = new StealManager();
         lockPickManager = new LockPickManager();
         doorManager = new DoorManager(lockPickManager);

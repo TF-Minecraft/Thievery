@@ -84,9 +84,19 @@ public class ContainerManager implements Listener {
     private final ContainerDataManager containerDataManager = new ContainerDataManager();
 
     private final Map<UUID, Boolean> feedbackMap = new HashMap<>();
+    private final FeedbackPreferences feedbackPreferences;
     private final Map<UUID, Long> lastAlertTimestamps = new HashMap<>();
 
     private final Map<UUID, ChestLockpickSession> lockpickingSessions = new HashMap<>();
+
+    /** Feedback choices kept in memory only. */
+    public ContainerManager() {
+        this(FeedbackPreferences.inMemory());
+    }
+
+    public ContainerManager(FeedbackPreferences feedbackPreferences) {
+        this.feedbackPreferences = feedbackPreferences;
+    }
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
@@ -96,16 +106,20 @@ public class ContainerManager implements Listener {
         }
     }
 
+    /** Turns feedback on for an admin at join, unless they turned it off with {@code /thievery feedback}. */
     public void enableFeedback(Player admin) {
-        feedbackMap.put(admin.getUniqueId(), true);
+        UUID uuid = admin.getUniqueId();
+        feedbackMap.put(uuid, !feedbackPreferences.isMuted(uuid));
     }
 
     public boolean getFeedbackState(UUID uuid) {
         return feedbackMap.getOrDefault(uuid, false);
     }
 
+    /** Sets feedback and remembers the choice across relogs and restarts. */
     public void setFeedbackState(UUID uuid, boolean value) {
         feedbackMap.put(uuid, value);
+        feedbackPreferences.setMuted(uuid, !value);
     }
 
     private void alertAdmins(Player thief, Location loc) {
