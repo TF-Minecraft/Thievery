@@ -59,11 +59,18 @@ class FeedbackPreferencesTest {
         assertFalse(Files.exists(file));
     }
 
-    @Test void unreadableFileStartsEmpty() throws Exception {
+    @Test void unreadableFileStartsEmptyAndIsNeverOverwritten() throws Exception {
         Path file = dir.resolve("feedback-off.txt");
         Files.createDirectory(file);
+        Path inside = file.resolve("keep.txt");
+        Files.writeString(inside, "kept");
         FeedbackPreferences prefs = FeedbackPreferences.load(file, LOG);
-        assertFalse(prefs.isMuted(UUID.randomUUID()));
+        UUID admin = UUID.randomUUID();
+        assertFalse(prefs.isMuted(admin));
+        prefs.setMuted(admin, true);
+        assertTrue(prefs.isMuted(admin), "the choice still holds in memory");
+        assertTrue(Files.isDirectory(file), "the unreadable path is left alone");
+        assertEquals("kept", Files.readString(inside));
     }
 
     @Test void failedWriteKeepsTheChoiceInMemory() throws Exception {
