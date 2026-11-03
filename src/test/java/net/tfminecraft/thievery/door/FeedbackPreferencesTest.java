@@ -73,6 +73,17 @@ class FeedbackPreferencesTest {
         assertEquals("kept", Files.readString(inside));
     }
 
+    @Test void undecodableFileIsKeptAsItIs() throws Exception {
+        Path file = dir.resolve("feedback-off.txt");
+        byte[] notUtf8 = {(byte) 0xFF, (byte) 0xFE, (byte) 0xC3, (byte) 0x0A};
+        Files.write(file, notUtf8);
+        FeedbackPreferences prefs = FeedbackPreferences.load(file, LOG);
+        UUID admin = UUID.randomUUID();
+        prefs.setMuted(admin, true);
+        assertTrue(prefs.isMuted(admin), "the choice still holds in memory");
+        assertArrayEquals(notUtf8, Files.readAllBytes(file), "the unreadable file is not replaced");
+    }
+
     @Test void failedWriteKeepsTheChoiceInMemory() throws Exception {
         Path blocker = dir.resolve("blocker");
         Files.writeString(blocker, "file, not a directory");
