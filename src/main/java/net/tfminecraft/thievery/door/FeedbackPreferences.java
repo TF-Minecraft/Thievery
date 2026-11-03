@@ -38,7 +38,8 @@ public final class FeedbackPreferences {
         if (Files.exists(file)) {
             try {
                 for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
-                    String trimmed = line.trim();
+                    // A BOM from a hand-edited file would hide the first UUID, and the next save would drop it
+                    String trimmed = line.replace("\uFEFF", "").trim();
                     if (trimmed.isEmpty()) {
                         continue;
                     }

@@ -73,6 +73,16 @@ class FeedbackPreferencesTest {
         assertEquals("kept", Files.readString(inside));
     }
 
+    @Test void byteOrderMarkFromAHandEditedFileIsIgnored() throws Exception {
+        Path file = dir.resolve("feedback-off.txt");
+        UUID a = UUID.randomUUID();
+        UUID b = UUID.randomUUID();
+        Files.writeString(file, "\uFEFF" + a + "\r\n" + b + "\r\n", StandardCharsets.UTF_8);
+        FeedbackPreferences prefs = FeedbackPreferences.load(file, LOG);
+        assertTrue(prefs.isMuted(a));
+        assertTrue(prefs.isMuted(b));
+    }
+
     @Test void undecodableFileIsKeptAsItIs() throws Exception {
         Path file = dir.resolve("feedback-off.txt");
         byte[] notUtf8 = {(byte) 0xFF, (byte) 0xFE, (byte) 0xC3, (byte) 0x0A};
