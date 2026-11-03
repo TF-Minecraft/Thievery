@@ -304,9 +304,12 @@ class QueuedLockWritesTest {
 
         doors.saveDoorData(new DoorData(location, "brass", 0.8, LockOwner.character(owner)));
         LockFileWriter.flush();
-        disk.fail(door.getFileName().toString());
+        // Hold the failing write until the index has been read, or the writer thread can fail it first
+        // and the save's own refresh then reads the old owner from disk.
+        disk.fail(door.getFileName().toString()).block(door.getFileName().toString());
         doors.saveDoorData(new DoorData(location, "brass", 0.8, LockOwner.character(heir)));
         assertEquals(1, OwnedLocks.of(heir).size());
+        disk.unblock(door.getFileName().toString());
         LockFileWriter.flush();
         verify(log).warning(startsWith("Failed to save door data for " + location + ": disk refused"));
         runMainTasks();
