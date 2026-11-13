@@ -194,15 +194,17 @@ class LagCompensationTest {
         assertFalse(Files.exists(file));
 
         Parameters.lagDebugLog = true;
-        pings.sample(id, 250);
+        for (int i = 0; i <= PingSampler.BASELINE_SKIP_SAMPLES; i++) {
+            pings.sample(id, 250);
+        }
         LagCompensation.judged(player, "door", rewind, 6, "SUCCESS", () -> "FAIL");
         LagCompensation.judged(player, "ring", new LagCompensation.Rewind(120, 110, 110, false), 2.5, "HIT",
                 () -> "LATE");
         List<String> lines = Files.readAllLines(file);
         assertEquals(2, lines.size());
-        assertTrue(lines.get(0).endsWith(" player=Thief game=door ping=320 estimate=310 lowest=250 baseline=-1"
+        assertTrue(lines.get(0).endsWith(" player=Thief game=door ping=320 estimate=310 lowest=250 baseline=250"
                 + " rewind=300 framesBack=6.0 result=SUCCESS unrewound=FAIL capped=true flagged=true"), lines.get(0));
-        assertTrue(lines.get(1).endsWith("game=ring ping=120 estimate=110 lowest=250 baseline=-1 rewind=110"
+        assertTrue(lines.get(1).endsWith("game=ring ping=120 estimate=110 lowest=250 baseline=250 rewind=110"
                 + " framesBack=2.5 result=HIT unrewound=LATE capped=false flagged=false"), lines.get(1));
     }
 

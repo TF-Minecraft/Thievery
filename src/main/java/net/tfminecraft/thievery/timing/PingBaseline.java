@@ -30,7 +30,10 @@ final class PingBaseline {
         }
     }
 
-    /** The lowest ping sampled in the last ten minutes up to {@code now}, or -1 when none is that recent. */
+    /**
+     * The lowest ping sampled in about the last ten minutes up to {@code now} (the current partial minute plus
+     * nine full ones), or -1 when none is that recent.
+     */
     int lowest(long now) {
         long minute = Math.floorDiv(now, MINUTE_MS);
         int result = -1;

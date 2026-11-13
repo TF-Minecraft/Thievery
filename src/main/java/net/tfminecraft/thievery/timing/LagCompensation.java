@@ -26,7 +26,8 @@ import net.tfminecraft.thievery.cache.Parameters;
  * move the median, and then click up to the cap after seeing a good frame. Clicks judged with a usual ping near
  * the cap, or far above the player's own lowest ping of the last ten minutes, are flagged in the debug log and
  * warned about in the server log at most once per player every ten minutes, relogs included, so staff can review
- * them.
+ * them. A ping held high for over ten minutes, or from joining, is only caught by the near-cap rule (at least
+ * 270 ms at the 300 ms cap).
  */
 public final class LagCompensation {
 
@@ -89,9 +90,9 @@ public final class LagCompensation {
      * Records one judged click. A click judged with a suspicious usual ping (see {@link #flagged}) is warned about
      * in the server log at most once per player every ten minutes. With {@code debug-log} on, appends one line:
      * the player, the game, their ping now, the estimate used, their lowest sample in the median window, their
-     * ten-minute baseline, the rewind, how many frames
-     * (ticks, for the ring) back it reached, the result, the result the newest frame would have given (worked out
-     * only then), whether the cap cut the rewind short and the flag.
+     * ten-minute baseline, the rewind, how many frames (ticks, for the ring) back it reached, the result, the
+     * result the newest frame would have given (worked out only then), whether the cap cut the rewind short and
+     * the flag. A baseline not known yet is written as "unknown".
      */
     public static void judged(Player player, String game, Rewind rewind, double framesBack, String result,
             Supplier<String> unrewound) {
@@ -100,19 +101,19 @@ public final class LagCompensation {
         boolean flagged = flagged(rewind, baseline);
         if (flagged && sampler.mayWarn(player.getUniqueId(), now)) {
             logger.warning(String.format(Locale.ROOT, "Lockpick timing: %s was judged on a usual ping of %d ms"
-                    + " (lowest in 10 minutes %d ms, rewind %d ms). Possible ping inflation; turn on"
+                    + " (lowest in 10 minutes %s, rewind %d ms). Possible ping inflation; turn on"
                     + " lockpicking.lag-compensation.debug-log to review.", player.getName(), rewind.estimate(),
-                    baseline, rewind.millis()));
+                    baseline < 0 ? "unknown" : baseline + " ms", rewind.millis()));
         }
         if (!Parameters.lagDebugLog || logFile == null) {
             return;
         }
         String line = String.format(Locale.ROOT,
-                "%s player=%s game=%s ping=%d estimate=%d lowest=%d baseline=%d rewind=%d framesBack=%.1f"
+                "%s player=%s game=%s ping=%d estimate=%d lowest=%d baseline=%s rewind=%d framesBack=%.1f"
                         + " result=%s unrewound=%s capped=%b flagged=%b",
                 Instant.now(), player.getName(), game, rewind.ping(), rewind.estimate(),
-                sampler.lowest(player.getUniqueId()), baseline, rewind.millis(), framesBack, result, unrewound.get(),
-                rewind.capped(), flagged);
+                sampler.lowest(player.getUniqueId()), baseline < 0 ? "unknown" : String.valueOf(baseline),
+                rewind.millis(), framesBack, result, unrewound.get(), rewind.capped(), flagged);
         try {
             Files.writeString(logFile, line + System.lineSeparator(), StandardCharsets.UTF_8,
                     StandardOpenOption.CREATE, StandardOpenOption.APPEND);
