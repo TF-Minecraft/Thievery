@@ -428,6 +428,15 @@ class ConfigLoaderTest {
                       dial: {max-lag-ticks: 4}
                 """);
         assertEquals(200L, Parameters.lagMaxRewindMs);
+
+        // ...but never above the 300 ms cap.
+        load("""
+                lockpicking:
+                  chest:
+                    minigame:
+                      dial: {max-lag-ticks: 10}
+                """);
+        assertEquals(300L, Parameters.lagMaxRewindMs);
     }
 
     @Test

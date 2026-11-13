@@ -151,17 +151,19 @@ public class ConfigLoader {
     }
 
     static final long MAX_REWIND_MS = 1000L;
+    static final long DEFAULT_MAX_REWIND_MS = 300L;
     static final int MAX_PING_WINDOW_SECONDS = 300;
 
     /**
      * Thievery never adds new keys to an existing config.yml, so every default here is the shipped behaviour. An
-     * absent max-rewind-ms keeps the ring's old cap, dial.max-lag-ticks ticks of 50 ms.
+     * absent max-rewind-ms keeps the ring's old cap, dial.max-lag-ticks ticks of 50 ms, but never above 300 ms.
      */
     private static void loadLagCompensation(FileConfiguration config) {
         String path = "lockpicking.lag-compensation.";
         Parameters.lagCompensationEnabled = config.getBoolean(path + "enabled", true);
         Parameters.lagMaxRewindMs = Math.max(0L, Math.min(MAX_REWIND_MS,
-                config.getLong(path + "max-rewind-ms", Parameters.chestDialMaxLagTicks * 50L)));
+                config.getLong(path + "max-rewind-ms",
+                        Math.min(DEFAULT_MAX_REWIND_MS, Parameters.chestDialMaxLagTicks * 50L))));
         Parameters.lagPingWindowSeconds = Math.max(1, Math.min(MAX_PING_WINDOW_SECONDS,
                 config.getInt(path + "ping-window-seconds", 30)));
         Parameters.lagClientInputDelayMs = Math.max(0L, Math.min(MAX_REWIND_MS,

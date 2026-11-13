@@ -132,8 +132,8 @@ public class Thievery extends JavaPlugin {
 
         playerManager.start();
         // Lockpick clicks are judged on each thief's usual ping, sampled once a second.
-        LagCompensation.configureLog(getDataFolder().toPath().resolve("logs").resolve("minigame-timing.log"),
-                getLogger());
+        LagCompensation.configure(pingSampler,
+                getDataFolder().toPath().resolve("logs").resolve("minigame-timing.log"), getLogger());
         getServer().getPluginManager().registerEvents(pingSampler, this);
         pingSampler.start(this);
 

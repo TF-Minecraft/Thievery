@@ -194,7 +194,7 @@ final class RingDialGame extends LockMinigame {
         double seen = seenTicks(player, rewind);
         if (Double.isNaN(seen)) {
             // Pressed before this pass could have been seen, during the pause, as a press then would be at 0 ping.
-            LagCompensation.log(player, "ring", rewind, -1, "NOT_READY", sweep.judge(turnTicks).name());
+            LagCompensation.judged(player, "ring", rewind, -1, "NOT_READY", () -> sweep.judge(turnTicks).name());
             return;
         }
         if (count > 1) {
@@ -215,7 +215,8 @@ final class RingDialGame extends LockMinigame {
             return;
         }
         Sweep.Result result = sweep.judge(seen);
-        LagCompensation.log(player, "ring", rewind, turnTicks - seen, result.name(), sweep.judge(turnTicks).name());
+        LagCompensation.judged(player, "ring", rewind, turnTicks - seen, result.name(),
+                () -> sweep.judge(turnTicks).name());
         if (result != Sweep.Result.HIT) {
             slip(player, result == Sweep.Result.EARLY ? "Too soon" : "Too late");
             return;

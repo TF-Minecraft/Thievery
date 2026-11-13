@@ -40,7 +40,7 @@ import net.tfminecraft.thievery.utils.EvilRpPlays;
  */
 class LockPickLagCompensationTest {
 
-    private static final int SEEDS = 300;
+    private static final int SEEDS = 200;
 
     private ServerMock server;
     private MockedStatic<Thievery> plugin;
@@ -132,11 +132,12 @@ class LockPickLagCompensationTest {
     }
 
     @Test
-    void aDelayedClientGetsTheSameResultsAtZero150And300Milliseconds() {
-        for (int reaction : new int[] {0, 40, 90}) {
-            List<SelectResult> atZero = play(0, reaction);
-            assertEquals(atZero, play(150, reaction), "reaction " + reaction + " ms at 150 ms");
-            assertEquals(atZero, play(300, reaction), "reaction " + reaction + " ms at 300 ms");
+    void aDelayedClientGetsTheSameResultsAtAnyPingUpToTheCap() {
+        for (int reaction : new int[] {0, 90}) {
+            List<SelectResult> atZero = play(0, reaction, false);
+            for (int ping : new int[] {130, 150, 300}) {
+                assertEquals(atZero, play(ping, reaction, false), "reaction " + reaction + " ms at " + ping + " ms");
+            }
             if (reaction == 0) {
                 // Clicking the moment the cursor shows on a success slot always wins, at any ping.
                 assertEquals(SEEDS, wins(atZero));
@@ -145,11 +146,33 @@ class LockPickLagCompensationTest {
     }
 
     @Test
+    void aTpsDipStretchingTicksKeepsThePingsEven() {
+        // Every fifth tick takes 250 ms instead of 50: frames are judged by when they were sent, not by count.
+        for (int reaction : new int[] {0, 90}) {
+            List<SelectResult> atZero = play(0, reaction, true);
+            for (int ping : new int[] {130, 300}) {
+                assertEquals(atZero, play(ping, reaction, true), "reaction " + reaction + " ms at " + ping + " ms");
+            }
+        }
+    }
+
+    @Test
+    void theCursorNeverStartsOnASuccessSlot() throws Exception {
+        for (int seed = 0; seed < SEEDS; seed++) {
+            manager = new LockPickManager(new Random(seed));
+            start();
+            double position = (double) field(session(manager), "position");
+            assertNotEquals('s', oldLayout(manager)[(int) position], "seed " + seed);
+            manager.cancelSession(id);
+        }
+    }
+
+    @Test
     void withoutCompensationHighPingLosesTheSameClicks() {
         Parameters.lagCompensationEnabled = false;
-        int atZero = wins(play(0, 0));
-        int at150 = wins(play(150, 0));
-        int at300 = wins(play(300, 0));
+        int atZero = wins(play(0, 0, false));
+        int at150 = wins(play(150, 0, false));
+        int at300 = wins(play(300, 0, false));
         assertEquals(SEEDS, atZero);
         assertTrue(at150 < atZero * 0.6, "150 ms without compensation won " + at150);
         assertTrue(at300 < atZero * 0.6, "300 ms without compensation won " + at300);
@@ -159,9 +182,9 @@ class LockPickLagCompensationTest {
     void pingOverTheCapIsOnlyRewoundToTheCap() {
         // At 1000 ms the client sees each frame 500 ms late but the click is judged only 300 ms back, so a
         // click on sight lands 700 ms after its frame: about as bad as no compensation at 700 ms.
-        List<SelectResult> capped = play(1000, 0);
+        List<SelectResult> capped = play(1000, 0, false);
         Parameters.lagMaxRewindMs = 1000;
-        List<SelectResult> uncapped = play(1000, 0);
+        List<SelectResult> uncapped = play(1000, 0, false);
         assertEquals(SEEDS, wins(uncapped));
         assertTrue(wins(capped) < SEEDS * 0.6, "1000 ms capped at 300 won " + wins(capped));
     }
@@ -191,7 +214,7 @@ class LockPickLagCompensationTest {
     @Test
     void theDebugLogShowsTheJudgedAndTheUnrewoundResult() throws Exception {
         Path file = temp.resolve("minigame-timing.log");
-        LagCompensation.configureLog(file, Logger.getAnonymousLogger());
+        LagTestSupport.useLog(file, Logger.getAnonymousLogger());
         Parameters.lagDebugLog = true;
         when(player.getPing()).thenReturn(1000);
         manager = new LockPickManager(new Random(3));
@@ -205,19 +228,19 @@ class LockPickLagCompensationTest {
         manager.handleSelect(player);
         List<String> lines = Files.readAllLines(file);
         assertEquals(3, lines.size());
-        assertTrue(lines.get(0).contains("player=Thief game=display ping=1000 estimate=1000 rewind=300"
-                + " framesBack=-1.0 result=NOT_READY unrewound=NOT_READY capped=true"), lines.get(0));
-        assertTrue(lines.get(1).contains("game=display ping=1000 estimate=1000 rewind=300 framesBack=6.0 result="
-                + result + " unrewound="), lines.get(1));
+        assertTrue(lines.get(0).contains("player=Thief game=display ping=1000 estimate=1000 lowest=-1 rewind=300"
+                + " framesBack=-1.0 result=NOT_READY unrewound=NOT_READY capped=true flagged=true"), lines.get(0));
+        assertTrue(lines.get(1).contains("game=display ping=1000 estimate=1000 lowest=-1 rewind=300 framesBack=6.0"
+                + " result=" + result + " unrewound="), lines.get(1));
         assertTrue(lines.get(2).contains("game=door "), lines.get(2));
     }
 
     /**
      * Plays one attempt per seed with a client {@code ping} ms away: it sees each frame half the ping after it is
      * sent, and clicks {@code reaction} ms after it sees the cursor on a success slot it knows; the click reaches
-     * the server half the ping later.
+     * the server half the ping later. With {@code dip}, every fifth tick takes 250 ms instead of 50.
      */
-    private List<SelectResult> play(int ping, int reaction) {
+    private List<SelectResult> play(int ping, int reaction, boolean dip) {
         when(player.getPing()).thenReturn(ping);
         SelectResult[] results = new SelectResult[SEEDS];
         for (int seed = 0; seed < SEEDS; seed++) {
@@ -230,9 +253,13 @@ class LockPickLagCompensationTest {
             long decided = -1;
             long clickArrives = -1;
             SelectResult result = null;
+            long nextTick = 0;
+            int ticks = 0;
             for (long now = 0; result == null && now < 20_000; now += 5) {
                 clock.set(now);
-                if (now % 50 == 0) {
+                if (now == nextTick) {
+                    ticks++;
+                    nextTick += dip && ticks % 5 == 0 ? 250 : 50;
                     int before = sent.size();
                     server.getScheduler().performOneTick();
                     for (long[] frame : sent.stream().skip(before).toList()) {

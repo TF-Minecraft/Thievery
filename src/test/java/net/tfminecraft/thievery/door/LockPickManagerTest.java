@@ -92,7 +92,7 @@ class LockPickManagerTest {
         assertEquals(LockPickManager.SessionKind.DISPLAY, manager.getSessionKind(id));
         assertEquals("target", manager.getSessionTargetId(id));
         plays.verify(() -> EvilRpPlays.record(player));
-        // The cursor starts on a success slot but nothing has been drawn yet: a double click used to win here.
+        // Nothing has been drawn yet. The cursor used to start on a success slot here, so a double click won.
         assertEquals(LockPickManager.SelectResult.NOT_READY, manager.handleSelect(player));
         assertEquals(LockPickManager.SelectResult.NOT_READY, manager.handleSelect(player));
         assertTrue(manager.isInSession(id));

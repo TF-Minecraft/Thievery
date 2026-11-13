@@ -128,14 +128,16 @@ public class LockPickManager {
             layout[i] = layoutList.get(i);
         }
 
-        List<Integer> successIndices = new ArrayList<>();
+        // The cursor starts off the success slots, so a click on the first frame (or a macro's second click a
+        // tick later, before a slow cursor has left its slot) is no free win.
+        List<Integer> startIndices = new ArrayList<>();
         for (int i = 0; i < barLength; i++) {
-            if (layout[i] == 's') {
-                successIndices.add(i);
+            if (layout[i] != 's') {
+                startIndices.add(i);
             }
         }
-        double startPosition = successIndices.isEmpty() ? 0
-                : successIndices.get(random.nextInt(successIndices.size()));
+        double startPosition = startIndices.isEmpty() ? 0
+                : startIndices.get(random.nextInt(startIndices.size()));
 
         double speed = Math.max(Parameters.minBarSpeed,
                 Parameters.baseBarSpeed * (1.0 - dexterity * Parameters.dexSpeedReductionPerLevel));
@@ -223,14 +225,13 @@ public class LockPickManager {
         }
 
         // Judge the frame the thief was looking at when they clicked: the latest one sent their ping ago.
-        // Before the first frame the cursor sits on a success slot no one has seen yet, so a click then is
-        // NOT_READY, whatever the ping.
+        // Before the first frame nothing has been seen, so a click then is NOT_READY, whatever the ping.
         LagCompensation.Rewind rewind = LagCompensation.rewind(player);
         long now = LagCompensation.now();
         int back = session.frames.framesBack(now - rewind.millis());
         SelectResult result = result(session, back);
-        LagCompensation.log(player, gameName(session), rewind, back, result.name(),
-                result(session, session.frames.framesBack(now)).name());
+        LagCompensation.judged(player, gameName(session), rewind, back, result.name(),
+                () -> result(session, session.frames.framesBack(now)).name());
         if (result == SelectResult.NOT_READY) {
             return result;
         }

@@ -7,8 +7,8 @@ package net.tfminecraft.thievery.timing;
  */
 public final class FrameHistory {
 
-    /** Twenty-four ticks cover 1.2 s, past the largest max-rewind-ms of 1 s (the default cap is 300 ms). */
-    public static final int DEFAULT_CAPACITY = 24;
+    /** Forty ticks cover 2 s, twice the largest max-rewind-ms of 1 s (the default cap is 300 ms). */
+    public static final int DEFAULT_CAPACITY = 40;
 
     private final long[] times;
     private final double[] values;
