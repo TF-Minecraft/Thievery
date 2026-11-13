@@ -16,6 +16,8 @@ import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 
 import net.tfminecraft.thievery.cache.Parameters;
+import net.tfminecraft.thievery.timing.FrameHistory;
+import net.tfminecraft.thievery.timing.LagCompensation;
 import net.tfminecraft.thievery.utils.ThieveryTexts;
 
 /**
@@ -60,6 +62,8 @@ final class RingDialGame extends LockMinigame {
     int set;
     int slips;
     boolean[] held = new boolean[5];
+    /** Ticks into the pass at each tick of it, so a press is judged where the needle looked to the thief. */
+    final FrameHistory frames = new FrameHistory();
 
     RingDialGame(LockMinigameManager manager, UUID playerId, Block target, String targetId, Random random,
             int dexterity, RingViews views, IntConsumer onSolved) {
@@ -107,8 +111,9 @@ final class RingDialGame extends LockMinigame {
             return;
         }
         turnTicks++;
+        frames.record(LagCompensation.now(), turnTicks);
         // A laggy thief's press for the end of the zone arrives a few ticks late, so the pass waits for it.
-        if (sweep.isOver(turnTicks - lagTicks(player))) {
+        if (sweep.isOver(seenTicks(player, LagCompensation.rewind(player)))) {
             slip(player, "Too late");
             return;
         }
@@ -126,7 +131,20 @@ final class RingDialGame extends LockMinigame {
         progress(1.0 - progress);
     }
 
-    /** How many ticks behind the server the thief sees the needle, from their ping, up to the configured cap. */
+    /**
+     * How many ticks into the pass the needle looked to the thief at the moment of their press arriving now: the
+     * pass as it was their usual ping ago, gliding between ticks as their client draws it. NaN when that is before
+     * the pass began, so they could not have seen it. With lag compensation off, the old rewind of their ping
+     * rounded to ticks, up to dial.max-lag-ticks.
+     */
+    double seenTicks(Player player, LagCompensation.Rewind rewind) {
+        if (!Parameters.lagCompensationEnabled) {
+            return Math.max(0, turnTicks - lagTicks(player));
+        }
+        return frames.valueAt(LagCompensation.now() - rewind.millis());
+    }
+
+    /** The old rewind: the thief's ping in whole ticks, up to dial.max-lag-ticks. */
     static int lagTicks(Player player) {
         return Math.min(Parameters.chestDialMaxLagTicks, Math.round(player.getPing() / 50.0f));
     }
@@ -140,6 +158,8 @@ final class RingDialGame extends LockMinigame {
         phase = Phase.TURN;
         turnTicks = 0;
         lastNotch = -1;
+        frames.clear();
+        frames.record(LagCompensation.now(), 0);
         view.zone(sweep, RingView.ZONE);
         view.label(Component.keybind(KEYBINDS[sweep.key() - 1], RingView.GOLD).decoration(TextDecoration.BOLD, true),
                 2.2f);
@@ -167,10 +187,20 @@ final class RingDialGame extends LockMinigame {
                 count++;
             }
         }
+        if (count == 0) {
+            return;
+        }
+        LagCompensation.Rewind rewind = LagCompensation.rewind(player);
+        double seen = seenTicks(player, rewind);
+        if (Double.isNaN(seen)) {
+            // Pressed before this pass could have been seen, during the pause, as a press then would be at 0 ping.
+            LagCompensation.log(player, "ring", rewind, -1, "NOT_READY", sweep.judge(turnTicks).name());
+            return;
+        }
         if (count > 1) {
             slip(player, "Fumbled");
-        } else if (count == 1) {
-            press(player, pressed);
+        } else {
+            press(player, pressed, rewind, seen);
         }
     }
 
@@ -179,12 +209,13 @@ final class RingDialGame extends LockMinigame {
         return new boolean[] {input.isForward(), input.isLeft(), input.isBackward(), input.isRight(), input.isSneak()};
     }
 
-    void press(Player player, int key) {
+    void press(Player player, int key, LagCompensation.Rewind rewind, double seen) {
         if (key != sweep.key()) {
             slip(player, "Wrong key");
             return;
         }
-        Sweep.Result result = sweep.judge(turnTicks, lagTicks(player));
+        Sweep.Result result = sweep.judge(seen);
+        LagCompensation.log(player, "ring", rewind, turnTicks - seen, result.name(), sweep.judge(turnTicks).name());
         if (result != Sweep.Result.HIT) {
             slip(player, result == Sweep.Result.EARLY ? "Too soon" : "Too late");
             return;

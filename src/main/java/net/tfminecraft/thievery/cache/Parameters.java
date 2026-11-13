@@ -66,6 +66,17 @@ public final class Parameters {
     /** Reverse the sweep after each set tumbler, like a combination lock. */
     public static boolean chestDialAlternate = true;
     public static int chestDialMaxLagTicks = 6;
+
+    /** Judge lockpick clicks against the frame the thief saw, going back their usual ping. */
+    public static boolean lagCompensationEnabled = true;
+    /** The furthest back a click is judged, whatever the ping. */
+    public static long lagMaxRewindMs = 300L;
+    /** Seconds of once-a-second ping samples whose median is a player's usual ping. */
+    public static int lagPingWindowSeconds = 30;
+    /** Extra rewind for the client's own input delay, added to the ping before the cap. */
+    public static long lagClientInputDelayMs = 0L;
+    /** Write every judged click to logs/minigame-timing.log. */
+    public static boolean lagDebugLog = false;
     /** How far in front of the eyes the ring floats, in blocks. */
     public static double chestDialDistance = 2.4;
 

@@ -136,6 +136,23 @@ lockpicking:
     speed-jitter-fraction: 0.3
     random-flip-chance: 0.03
 
+  # Ping-fair timing for the door/display bar and the chest lockpick ring. A thief sees each frame half
+  # their ping late and their click arrives half their ping late, so a click is judged against the frame
+  # they were looking at: the one sent their usual ping before the click arrived. The usual ping is the
+  # lower of the median of ping-window-seconds of once-a-second samples and their ping right now, so a
+  # spike never adds rewind. The rewind never goes past max-rewind-ms (default 300; when the key is
+  # missing, chest.minigame.dial.max-lag-ticks x 50). client-input-delay-ms is added before the cap.
+  # At 0 ping nothing changes. A click before the first frame of the bar does nothing.
+  # enabled: false goes back to the old timing: the bar judges the newest frame and the ring rewinds
+  # round(ping / 50) ticks up to dial.max-lag-ticks. debug-log writes every judged click to
+  # logs/minigame-timing.log.
+  lag-compensation:
+    enabled: true
+    max-rewind-ms: 300
+    ping-window-seconds: 30
+    client-input-delay-ms: 0
+    debug-log: false
+
   attribute: dexterity
 
   chest:
@@ -151,8 +168,9 @@ lockpicking:
     # middle (each player sees their own binding) while the pointer is in the green zone. Each set
     # tumbler narrows the zone by zone-shrink-per-tumbler and, with alternate-direction, reverses the
     # sweep. A pass takes min-lap-seconds to max-lap-seconds, plus lap-seconds-per-dexterity per
-    # Dexterity level. Presses are judged against where the pointer was up to max-lag-ticks ago, from
-    # the thief's ping. dial.mistakes-to-fail slips fail the ring; sneaking gives up.
+    # Dexterity level. Presses are judged against where the pointer was when the thief pressed, from
+    # their ping (see lag-compensation; max-lag-ticks only applies when that is off or has no
+    # max-rewind-ms). dial.mistakes-to-fail slips fail the ring; sneaking gives up.
     # Failing the ring or giving up applies fail-cooldown-ms to that chest (both halves of a double
     # chest) and may break the lockpick (fail-break-chance).
     minigame:

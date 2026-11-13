@@ -92,6 +92,7 @@ public class ConfigLoader {
         Parameters.chestSeizedPerSlip = Math.max(0, config.getInt("lockpicking.chest.seized-per-slip",
                 config.getInt("lockpicking.chest.seized-per-grid-mistake", 1)));
         loadChestMinigame(config);
+        loadLagCompensation(config);
         loadLockTypeProfiles(config);
         Parameters.maxSuccessChance = config.getDouble("lockpicking.max-success-chance", 0.95);
         if (config.isConfigurationSection("lockpicking.dex-map")) {
@@ -147,6 +148,25 @@ public class ConfigLoader {
         Parameters.chestDialAlternate = config.getBoolean(path + "dial.alternate-direction", true);
         Parameters.chestDialMaxLagTicks = Math.max(0, config.getInt(path + "dial.max-lag-ticks", 6));
         Parameters.chestDialDistance = Math.max(1.0, Math.min(4.0, config.getDouble(path + "dial.distance", 2.4)));
+    }
+
+    static final long MAX_REWIND_MS = 1000L;
+    static final int MAX_PING_WINDOW_SECONDS = 300;
+
+    /**
+     * Thievery never adds new keys to an existing config.yml, so every default here is the shipped behaviour. An
+     * absent max-rewind-ms keeps the ring's old cap, dial.max-lag-ticks ticks of 50 ms.
+     */
+    private static void loadLagCompensation(FileConfiguration config) {
+        String path = "lockpicking.lag-compensation.";
+        Parameters.lagCompensationEnabled = config.getBoolean(path + "enabled", true);
+        Parameters.lagMaxRewindMs = Math.max(0L, Math.min(MAX_REWIND_MS,
+                config.getLong(path + "max-rewind-ms", Parameters.chestDialMaxLagTicks * 50L)));
+        Parameters.lagPingWindowSeconds = Math.max(1, Math.min(MAX_PING_WINDOW_SECONDS,
+                config.getInt(path + "ping-window-seconds", 30)));
+        Parameters.lagClientInputDelayMs = Math.max(0L, Math.min(MAX_REWIND_MS,
+                config.getLong(path + "client-input-delay-ms", 0L)));
+        Parameters.lagDebugLog = config.getBoolean(path + "debug-log", false);
     }
 
     private static void loadLockTypeProfiles(FileConfiguration config) {

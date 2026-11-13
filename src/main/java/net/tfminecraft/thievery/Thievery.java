@@ -46,6 +46,8 @@ import net.tfminecraft.thievery.owner.LockGuard;
 import net.tfminecraft.thievery.owner.LockKindFile;
 import net.tfminecraft.thievery.owner.LockStartup;
 import net.tfminecraft.thievery.owner.LockStores;
+import net.tfminecraft.thievery.timing.LagCompensation;
+import net.tfminecraft.thievery.timing.PingSampler;
 
 public class Thievery extends JavaPlugin {
 
@@ -62,6 +64,7 @@ public class Thievery extends JavaPlugin {
     private final ConfigLoader configLoader = new ConfigLoader();
     private final CategoryLoader categoryLoader = new CategoryLoader();
     private final InventoryManager inventoryManager = new InventoryManager();
+    private final PingSampler pingSampler = new PingSampler();
     private static final PlayerManager playerManager = new PlayerManager();
 
     @Override
@@ -128,6 +131,11 @@ public class Thievery extends JavaPlugin {
         }
 
         playerManager.start();
+        // Lockpick clicks are judged on each thief's usual ping, sampled once a second.
+        LagCompensation.configureLog(getDataFolder().toPath().resolve("logs").resolve("minigame-timing.log"),
+                getLogger());
+        getServer().getPluginManager().registerEvents(pingSampler, this);
+        pingSampler.start(this);
 
         // Every lock listener is registered by now, in guard mode. The gates and the migration run here, on the
         // main thread before anyone can join; a failed gate keeps the guard on until a restart.
@@ -167,6 +175,7 @@ public class Thievery extends JavaPlugin {
             }
             playerManager.unloadAll();
             playerManager.stop();
+            pingSampler.stop();
         } finally {
             // Every queued lock write is on disk before the server goes on, even when a step above failed, and a
             // re-enable starts a fresh writer.

@@ -528,7 +528,7 @@ class DisplayStealManagerTest {
             loot.verify(() -> DisplayLoot.dump(eq(player), eq(slots), budget.capture(), eq(playerData)));
             assertEquals(40, budget.getValue().getCapacity());
         } else loot.verify(() -> DisplayLoot.dump(any(), anyList(), any(), any()), never());
-        if (result != LockPickManager.SelectResult.NOT_IN_SESSION)
+        if (result != LockPickManager.SelectResult.NOT_IN_SESSION && result != LockPickManager.SelectResult.NOT_READY)
             drops.verify(() -> ClueDropper.tryDropDoorClue(player, stand.getLocation(), lock.getOwner(), 15, 0.7));
         else drops.verifyNoInteractions();
     }

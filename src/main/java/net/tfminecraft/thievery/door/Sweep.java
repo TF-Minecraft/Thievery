@@ -66,16 +66,17 @@ public final class Sweep {
         return progress >= zoneFrom && progress < zoneTo;
     }
 
-    public boolean isOver(int ticks) {
-        return ticks >= periodTicks;
+    /** Whether the thief has seen the pass end; NaN, before they have seen it begin, is never over. */
+    public boolean isOver(double seenTicks) {
+        return seenTicks >= periodTicks;
     }
 
     /**
-     * Judges a press made {@code ticks} into the pass against where the pick was {@code lagTicks} earlier, which
-     * is what the thief saw when they pressed.
+     * Judges a press against where the pick was {@code seenTicks} into the pass, which is what the thief saw when
+     * they pressed.
      */
-    public Result judge(int ticks, int lagTicks) {
-        double seen = progress(Math.max(0, ticks - Math.max(0, lagTicks)));
+    public Result judge(double seenTicks) {
+        double seen = progress(seenTicks);
         if (seen < zoneFrom) {
             return Result.EARLY;
         }

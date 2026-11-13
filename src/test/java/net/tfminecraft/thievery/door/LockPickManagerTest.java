@@ -83,7 +83,7 @@ class LockPickManagerTest {
     }
 
     @Test
-    void sessionStartsOnSuccessAndSelectionEndsItWithoutPenalty() {
+    void aSecondClickBeforeTheFirstFrameIsNotReadyAndCostsNothing() {
         assertEquals(LockPickManager.SelectResult.NOT_IN_SESSION, manager.handleSelect(player));
         assertNull(manager.getSessionKind(id));
         assertNull(manager.getSessionTargetId(id));
@@ -92,11 +92,20 @@ class LockPickManagerTest {
         assertEquals(LockPickManager.SessionKind.DISPLAY, manager.getSessionKind(id));
         assertEquals("target", manager.getSessionTargetId(id));
         plays.verify(() -> EvilRpPlays.record(player));
-        assertEquals(LockPickManager.SelectResult.SUCCESS, manager.handleSelect(player));
-        assertFalse(manager.isInSession(id));
+        // The cursor starts on a success slot but nothing has been drawn yet: a double click used to win here.
+        assertEquals(LockPickManager.SelectResult.NOT_READY, manager.handleSelect(player));
+        assertEquals(LockPickManager.SelectResult.NOT_READY, manager.handleSelect(player));
+        assertTrue(manager.isInSession(id));
         assertFalse(manager.isOnCooldown(id, "target"));
-        server.getScheduler().performTicks(2);
+        verify(player, never()).sendTitle(anyString(), anyString(), anyInt(), anyInt(), anyInt());
         verifyNoInteractions(data);
+        // Once the bar is on screen the click is judged as usual.
+        server.getScheduler().performOneTick();
+        var expected = lastBar.get().contains("§a-")
+                ? LockPickManager.SelectResult.FAIL : LockPickManager.SelectResult.SUCCESS;
+        assertEquals(expected, manager.handleSelect(player));
+        assertFalse(manager.isInSession(id));
+        assertEquals(expected == LockPickManager.SelectResult.FAIL, manager.isOnCooldown(id, "target"));
     }
 
     @ParameterizedTest
@@ -325,6 +334,7 @@ class LockPickManagerTest {
                         failFirst ? 0 : invocation.<Integer>getArgument(0) - 1))) {
             manager = new LockPickManager();
             start("target");
+            server.getScheduler().performOneTick();
             result = manager.handleSelect(player);
         }
 
@@ -332,7 +342,7 @@ class LockPickManagerTest {
         assertEquals(failFirst, manager.isOnCooldown(id, "target"));
         assertFalse(manager.isInSession(id));
         server.getScheduler().performTicks(2);
-        verifyNoInteractions(data);
+        verify(data, times(1)).applyRiskDecay(10);
     }
 
     private void start(String target) {

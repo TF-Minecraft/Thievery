@@ -409,7 +409,7 @@ class DoorManagerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = LockPickManager.SelectResult.class, names = {"SUCCESS", "FAIL", "BREAK", "NOT_IN_SESSION"})
+    @EnumSource(value = LockPickManager.SelectResult.class, names = {"SUCCESS", "FAIL", "BREAK", "NOT_IN_SESSION", "NOT_READY"})
     void selectingExistingSessionAppliesOutcomeAndOnlyBreakConsumesTool(LockPickManager.SelectResult outcome) {
         locked();
         held.setAmount(2);
@@ -425,7 +425,7 @@ class DoorManagerTest {
             verify(store).saveDoorData(lock);
         } else assertFalse(((Openable) door.getBlockData()).isOpen());
         assertEquals(outcome == LockPickManager.SelectResult.BREAK ? 1 : 2, held.getAmount());
-        if (outcome != LockPickManager.SelectResult.NOT_IN_SESSION)
+        if (outcome != LockPickManager.SelectResult.NOT_IN_SESSION && outcome != LockPickManager.SelectResult.NOT_READY)
             drops.verify(() -> ClueDropper.tryDropDoorClue(player, door.getLocation(), lock.getOwner(), 12, 0.6));
         else drops.verifyNoInteractions();
     }

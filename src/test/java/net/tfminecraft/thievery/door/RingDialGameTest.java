@@ -14,6 +14,7 @@ import net.kyori.adventure.text.format.TextDecoration;
 import net.tfminecraft.thievery.Thievery;
 import net.tfminecraft.thievery.cache.Parameters;
 import net.tfminecraft.thievery.player.RiskCalculator;
+import net.tfminecraft.thievery.timing.LagTestSupport;
 import org.bukkit.Input;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -49,6 +50,8 @@ class RingDialGameTest {
     @BeforeEach
     void setUp() {
         server = MockBukkit.mock();
+        // Each server tick is 50 ms on the lag compensation clock.
+        LagTestSupport.useClock(() -> server.getScheduler().getCurrentTick() * 50L);
         Thievery instance = mock(Thievery.class);
         when(instance.isEnabled()).thenReturn(true);
         when(instance.getName()).thenReturn("Thievery");
@@ -92,6 +95,7 @@ class RingDialGameTest {
     @AfterEach
     void tearDown() {
         saved.restore();
+        LagTestSupport.reset();
         risk.close();
         plugin.close();
         MockBukkit.unmock();
@@ -376,14 +380,98 @@ class RingDialGameTest {
         turnTo(game, 18);
         tap(1);
         assertEquals(1, game.set);
-        Parameters.chestDialMaxLagTicks = 1;
+        Parameters.lagMaxRewindMs = 50;
         doReturn(500).when(player).getPing();
         ticks(RingDialGame.PAUSE_TICKS);
-        // The second zone is narrower and starts at tick 12 again; at tick 18 a lag of one tick is still late.
+        // The second zone is narrower and starts at tick 12 again; at tick 18 a rewind of one tick is still late.
         turnTo(game, 18);
         tap(1);
         assertEquals(1, game.set);
         assertEquals(1, game.slips);
+    }
+
+    @Test
+    void aRewindBetweenTicksGlidesTheNeedleAsTheClientDraws() {
+        // 225 ms is four and a half ticks: at tick 21 the thief saw the needle half way from tick 16 to 17.
+        doReturn(225).when(player).getPing();
+        RingDialGame game = start();
+        turnTo(game, 21);
+        assertEquals(16.5, game.seenTicks(player, net.tfminecraft.thievery.timing.LagCompensation.rewind(player)),
+                1e-9);
+        tap(1);
+        assertEquals(1, game.set);
+    }
+
+    @Test
+    void aPressBeforeTheThiefCouldSeeThePassDoesNothing() {
+        // At 300 ms the thief is six ticks behind: three ticks into the pass they still see the pause.
+        doReturn(300).when(player).getPing();
+        RingDialGame game = start();
+        turnTo(game, 3);
+        tap(2);
+        send(input(true, true, false, false, false));
+        send(input(false, false, false, false, false));
+        assertEquals(0, game.slips);
+        assertEquals(RingDialGame.Phase.TURN, game.phase);
+        // Six ticks on, the thief sees tick 14 at tick 20: inside the zone.
+        turnTo(game, 20);
+        tap(1);
+        assertEquals(1, game.set);
+        assertEquals(0, game.slips);
+    }
+
+    @Test
+    void aSpikeInPingDoesNotPushThePressFurtherBack() {
+        // The usual ping is 50 ms; a 300 ms spike right now still rewinds only one tick.
+        for (int i = 0; i < 30; i++) {
+            LagTestSupport.sample(player.getUniqueId(), 50);
+        }
+        doReturn(300).when(player).getPing();
+        RingDialGame game = start();
+        turnTo(game, 19);
+        tap(1);
+        // Tick 18 is past the zone (12 to 17); the spike's six ticks would have judged tick 13, a hit.
+        assertEquals(0, game.set);
+        assertEquals(1, game.slips);
+    }
+
+    @Test
+    void withLagCompensationOffTheRingKeepsItsOldTickRewind() {
+        Parameters.lagCompensationEnabled = false;
+        doReturn(200).when(player).getPing();
+        RingDialGame game = start();
+        turnTo(game, 3);
+        // The old rewind clamps to the start of the pass, so an early press is a slip, not ignored.
+        tap(1);
+        assertEquals(1, game.slips);
+        verify(view).label(Component.text("Too soon", RingView.RED), 1.1f);
+        ticks(RingDialGame.PAUSE_TICKS);
+        Parameters.chestDialMaxLagTicks = 2;
+        // round(200 / 50) = 4 ticks, capped at 2: at tick 19 the thief is judged on tick 17, still a hit.
+        turnTo(game, 19);
+        tap(1);
+        assertEquals(1, game.set);
+    }
+
+    @Test
+    void theDebugLogRecordsEachJudgedPress(@org.junit.jupiter.api.io.TempDir java.nio.file.Path folder)
+            throws Exception {
+        java.nio.file.Path log = folder.resolve("logs").resolve("minigame-timing.log");
+        net.tfminecraft.thievery.timing.LagCompensation.configureLog(log, java.util.logging.Logger.getAnonymousLogger());
+        Parameters.lagDebugLog = true;
+        doReturn(300).when(player).getPing();
+        RingDialGame game = start();
+        turnTo(game, 2);
+        tap(1);
+        turnTo(game, 20);
+        tap(1);
+        assertEquals(1, game.set);
+        List<String> lines = java.nio.file.Files.readAllLines(log);
+        assertEquals(2, lines.size());
+        assertTrue(lines.get(0).contains("game=ring ping=300 estimate=300 rewind=300 framesBack=-1.0 result=NOT_READY"
+                + " unrewound=EARLY capped=false"), lines.get(0));
+        assertTrue(lines.get(1).contains("game=ring ping=300 estimate=300 rewind=300 framesBack=6.0 result=HIT"
+                + " unrewound=LATE capped=false"), lines.get(1));
     }
 
     @Test

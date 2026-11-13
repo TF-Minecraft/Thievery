@@ -349,6 +349,10 @@ public class DoorManager implements Listener {
     // Keep the existing legacy text representation, formatting, and exact-string comparisons.
     @SuppressWarnings("deprecation")
     private void handleSelectResult(Player player, LockPickManager.SelectResult result, Location canonical) {
+        if (result == LockPickManager.SelectResult.NOT_READY) {
+            // Clicked before the bar could have been seen: nothing happens and the attempt carries on.
+            return;
+        }
         int dexterity = RiskCalculator.getDexterity(player);
         double lockpickStrength = ToolResolver.getLockpickStrength(player.getInventory().getItemInMainHand());
         DoorData doorData = doorDataManager.loadDoorData(canonical);
