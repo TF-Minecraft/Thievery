@@ -119,7 +119,7 @@ class LagCompensationTest {
         assertTrue(LagCompensation.flagged(new LagCompensation.Rewind(270, 270, 270, false), -1));
         assertTrue(LagCompensation.flagged(new LagCompensation.Rewind(400, 400, 300, true), 380));
         assertFalse(LagCompensation.flagged(new LagCompensation.Rewind(269, 269, 269, false), -1));
-        // More than twice the lowest sample and over 100 ms above it.
+        // More than twice the ten-minute baseline and over 100 ms above it.
         assertTrue(LagCompensation.flagged(new LagCompensation.Rewind(220, 220, 220, false), 60));
         assertFalse(LagCompensation.flagged(new LagCompensation.Rewind(150, 150, 150, false), 60));
         assertFalse(LagCompensation.flagged(new LagCompensation.Rewind(100, 100, 100, false), 40));
@@ -129,29 +129,54 @@ class LagCompensationTest {
     @Test
     void aFlaggedClickIsWarnedAboutOncePerPlayerEveryTenMinutesEvenWithTheDebugLogOff() {
         LagTestSupport.useClock(clock::get);
-        for (int second = 0; second < 30; second++) {
-            pings.sample(id, second < 5 ? 40 : 290);
-        }
+        samples(30, 40);
+        samples(30, 290);
         when(player.getPing()).thenReturn(290);
         LagCompensation.Rewind rewind = LagCompensation.rewind(player);
         @SuppressWarnings("unchecked")
         Supplier<String> unrewound = mock(Supplier.class);
+        long first = clock.get();
         LagCompensation.judged(player, "door", rewind, 5, "SUCCESS", unrewound);
-        clock.set(LagCompensation.WARN_INTERVAL_MS - 1);
+        clock.set(first + LagCompensation.WARN_INTERVAL_MS - 1);
         LagCompensation.judged(player, "door", rewind, 5, "SUCCESS", unrewound);
-        verify(log, times(1)).warning("Lockpick timing: Thief was judged on a usual ping of 290 ms (lowest sample"
-                + " 40 ms, rewind 290 ms). Possible ping inflation; turn on lockpicking.lag-compensation.debug-log"
-                + " to review.");
-        clock.set(LagCompensation.WARN_INTERVAL_MS);
+        verify(log, times(1)).warning("Lockpick timing: Thief was judged on a usual ping of 290 ms (lowest in 10"
+                + " minutes 40 ms, rewind 290 ms). Possible ping inflation; turn on"
+                + " lockpicking.lag-compensation.debug-log to review.");
+        clock.set(first + LagCompensation.WARN_INTERVAL_MS);
         LagCompensation.judged(player, "door", rewind, 5, "SUCCESS", unrewound);
         verify(log, times(2)).warning(startsWith("Lockpick timing: Thief"));
         // The result without rewind is only worked out for the debug log.
         verifyNoInteractions(unrewound);
         // An unflagged click warns nothing.
         when(player.getPing()).thenReturn(30);
-        clock.set(LagCompensation.WARN_INTERVAL_MS * 5);
+        clock.set(first + LagCompensation.WARN_INTERVAL_MS * 5);
         LagCompensation.judged(player, "door", LagCompensation.rewind(player), 0, "FAIL", unrewound);
         verify(log, times(2)).warning(anyString());
+    }
+
+    @Test
+    void aPingHeldJustUnderTheCapLongerThanTheWindowIsStillFlagged() {
+        // 260 ms is under the 270 ms near-cap line, and after a minute the window holds nothing else; the
+        // ten-minute baseline still remembers the honest 40 ms.
+        LagTestSupport.useClock(clock::get);
+        samples(30, 40);
+        samples(60, 260);
+        when(player.getPing()).thenReturn(260);
+        LagCompensation.Rewind rewind = LagCompensation.rewind(player);
+        assertEquals(new LagCompensation.Rewind(260, 260, 260, false), rewind);
+        assertEquals(260, pings.lowest(id));
+        assertEquals(40, pings.baseline(id, clock.get()));
+        assertTrue(LagCompensation.flagged(rewind, pings.baseline(id, clock.get())));
+        LagCompensation.judged(player, "door", rewind, 5, "SUCCESS", () -> "FAIL");
+        verify(log).warning(contains("usual ping of 260 ms (lowest in 10 minutes 40 ms, rewind 260 ms)"));
+    }
+
+    /** One sample a second, as the sampler's task takes them. */
+    private void samples(int count, int ping) {
+        for (int i = 0; i < count; i++) {
+            clock.addAndGet(1000);
+            pings.sample(id, ping);
+        }
     }
 
     @Test
@@ -175,10 +200,10 @@ class LagCompensationTest {
                 () -> "LATE");
         List<String> lines = Files.readAllLines(file);
         assertEquals(2, lines.size());
-        assertTrue(lines.get(0).endsWith(" player=Thief game=door ping=320 estimate=310 lowest=250 rewind=300"
-                + " framesBack=6.0 result=SUCCESS unrewound=FAIL capped=true flagged=true"), lines.get(0));
-        assertTrue(lines.get(1).endsWith("game=ring ping=120 estimate=110 lowest=250 rewind=110 framesBack=2.5"
-                + " result=HIT unrewound=LATE capped=false flagged=false"), lines.get(1));
+        assertTrue(lines.get(0).endsWith(" player=Thief game=door ping=320 estimate=310 lowest=250 baseline=-1"
+                + " rewind=300 framesBack=6.0 result=SUCCESS unrewound=FAIL capped=true flagged=true"), lines.get(0));
+        assertTrue(lines.get(1).endsWith("game=ring ping=120 estimate=110 lowest=250 baseline=-1 rewind=110"
+                + " framesBack=2.5 result=HIT unrewound=LATE capped=false flagged=false"), lines.get(1));
     }
 
     @Test

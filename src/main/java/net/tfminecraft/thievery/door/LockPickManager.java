@@ -128,8 +128,8 @@ public class LockPickManager {
             layout[i] = layoutList.get(i);
         }
 
-        // The cursor starts off the success slots, so a click on the first frame (or a macro's second click a
-        // tick later, before a slow cursor has left its slot) is no free win.
+        // The cursor starts off the success slots, so the first frame (where a macro's quick second click lands)
+        // is on a success slot no more often than chance.
         List<Integer> startIndices = new ArrayList<>();
         for (int i = 0; i < barLength; i++) {
             if (layout[i] != 's') {

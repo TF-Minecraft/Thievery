@@ -525,9 +525,9 @@ class RingDialGameTest {
         assertEquals(1, game.set);
         List<String> lines = java.nio.file.Files.readAllLines(log);
         assertEquals(2, lines.size());
-        assertTrue(lines.get(0).contains("game=ring ping=300 estimate=300 lowest=-1 rewind=300 framesBack=-1.0"
+        assertTrue(lines.get(0).contains("game=ring ping=300 estimate=300 lowest=-1 baseline=-1 rewind=300 framesBack=-1.0"
                 + " result=NOT_READY unrewound=EARLY capped=false flagged=true"), lines.get(0));
-        assertTrue(lines.get(1).contains("game=ring ping=300 estimate=300 lowest=-1 rewind=300 framesBack=6.0"
+        assertTrue(lines.get(1).contains("game=ring ping=300 estimate=300 lowest=-1 baseline=-1 rewind=300 framesBack=6.0"
                 + " result=HIT unrewound=LATE capped=false flagged=true"), lines.get(1));
     }
 

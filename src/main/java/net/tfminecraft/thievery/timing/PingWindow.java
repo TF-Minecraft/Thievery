@@ -21,6 +21,11 @@ final class PingWindow {
         count++;
     }
 
+    /** How many samples were ever added. */
+    int added() {
+        return count;
+    }
+
     /**
      * The median of the samples, the lower middle one of an even count; a window always holds at least one.
      * Paper's ping is already an average over about five seconds (to be confirmed on Dev); the median of half a

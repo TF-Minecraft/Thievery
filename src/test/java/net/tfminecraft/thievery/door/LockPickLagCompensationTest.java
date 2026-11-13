@@ -228,9 +228,9 @@ class LockPickLagCompensationTest {
         manager.handleSelect(player);
         List<String> lines = Files.readAllLines(file);
         assertEquals(3, lines.size());
-        assertTrue(lines.get(0).contains("player=Thief game=display ping=1000 estimate=1000 lowest=-1 rewind=300"
+        assertTrue(lines.get(0).contains("player=Thief game=display ping=1000 estimate=1000 lowest=-1 baseline=-1 rewind=300"
                 + " framesBack=-1.0 result=NOT_READY unrewound=NOT_READY capped=true flagged=true"), lines.get(0));
-        assertTrue(lines.get(1).contains("game=display ping=1000 estimate=1000 lowest=-1 rewind=300 framesBack=6.0"
+        assertTrue(lines.get(1).contains("game=display ping=1000 estimate=1000 lowest=-1 baseline=-1 rewind=300 framesBack=6.0"
                 + " result=" + result + " unrewound="), lines.get(1));
         assertTrue(lines.get(2).contains("game=door "), lines.get(2));
     }

@@ -24,18 +24,19 @@ import net.tfminecraft.thievery.cache.Parameters;
  *
  * <p>Residual risk: a modified client can hold its ping high (by answering keep-alives late) for long enough to
  * move the median, and then click up to the cap after seeing a good frame. Clicks judged with a usual ping near
- * the cap, or far above the player's own lowest sample, are flagged in the debug log and warned about in the
- * server log at most once per player every ten minutes, so staff can review them.
+ * the cap, or far above the player's own lowest ping of the last ten minutes, are flagged in the debug log and
+ * warned about in the server log at most once per player every ten minutes, relogs included, so staff can review
+ * them.
  */
 public final class LagCompensation {
 
     /** Milliseconds from a monotonic clock; tests replace it. */
     static LongSupplier clock = () -> System.nanoTime() / 1_000_000L;
 
-    static final long WARN_INTERVAL_MS = 10L * 60L * 1000L;
+    static final long WARN_INTERVAL_MS = PingSampler.REMEMBER_MS;
     /** A usual ping at or above this share of the cap is flagged. */
     static final double NEAR_CAP_SHARE = 0.9;
-    /** A usual ping more than this many times the lowest sample, and this much above it, is flagged. */
+    /** A usual ping more than this many times the ten-minute baseline, and this much above it, is flagged. */
     static final int INFLATION_FACTOR = 2;
     static final int INFLATION_MARGIN_MS = 100;
 
@@ -87,28 +88,31 @@ public final class LagCompensation {
     /**
      * Records one judged click. A click judged with a suspicious usual ping (see {@link #flagged}) is warned about
      * in the server log at most once per player every ten minutes. With {@code debug-log} on, appends one line:
-     * the player, the game, their ping now, the estimate used, their lowest sample, the rewind, how many frames
+     * the player, the game, their ping now, the estimate used, their lowest sample in the median window, their
+     * ten-minute baseline, the rewind, how many frames
      * (ticks, for the ring) back it reached, the result, the result the newest frame would have given (worked out
      * only then), whether the cap cut the rewind short and the flag.
      */
     public static void judged(Player player, String game, Rewind rewind, double framesBack, String result,
             Supplier<String> unrewound) {
-        int lowest = sampler.lowest(player.getUniqueId());
-        boolean flagged = flagged(rewind, lowest);
-        if (flagged && sampler.mayWarn(player.getUniqueId(), now(), WARN_INTERVAL_MS)) {
+        long now = now();
+        int baseline = sampler.baseline(player.getUniqueId(), now);
+        boolean flagged = flagged(rewind, baseline);
+        if (flagged && sampler.mayWarn(player.getUniqueId(), now)) {
             logger.warning(String.format(Locale.ROOT, "Lockpick timing: %s was judged on a usual ping of %d ms"
-                    + " (lowest sample %d ms, rewind %d ms). Possible ping inflation; turn on"
+                    + " (lowest in 10 minutes %d ms, rewind %d ms). Possible ping inflation; turn on"
                     + " lockpicking.lag-compensation.debug-log to review.", player.getName(), rewind.estimate(),
-                    lowest, rewind.millis()));
+                    baseline, rewind.millis()));
         }
         if (!Parameters.lagDebugLog || logFile == null) {
             return;
         }
         String line = String.format(Locale.ROOT,
-                "%s player=%s game=%s ping=%d estimate=%d lowest=%d rewind=%d framesBack=%.1f result=%s"
-                        + " unrewound=%s capped=%b flagged=%b",
-                Instant.now(), player.getName(), game, rewind.ping(), rewind.estimate(), lowest, rewind.millis(),
-                framesBack, result, unrewound.get(), rewind.capped(), flagged);
+                "%s player=%s game=%s ping=%d estimate=%d lowest=%d baseline=%d rewind=%d framesBack=%.1f"
+                        + " result=%s unrewound=%s capped=%b flagged=%b",
+                Instant.now(), player.getName(), game, rewind.ping(), rewind.estimate(),
+                sampler.lowest(player.getUniqueId()), baseline, rewind.millis(), framesBack, result, unrewound.get(),
+                rewind.capped(), flagged);
         try {
             Files.writeString(logFile, line + System.lineSeparator(), StandardCharsets.UTF_8,
                     StandardOpenOption.CREATE, StandardOpenOption.APPEND);
@@ -119,18 +123,18 @@ public final class LagCompensation {
 
     /**
      * Whether a click was rewound on a usual ping worth a staff look: at or near the cap, or more than twice the
-     * player's lowest sample in the window and over 100 ms above it. A click that was not rewound is never
-     * flagged; there was nothing to gain.
+     * player's {@code baseline} (their lowest ping of the last ten minutes, -1 for none) and over 100 ms above it.
+     * A click that was not rewound is never flagged; there was nothing to gain.
      */
-    static boolean flagged(Rewind rewind, int lowest) {
+    static boolean flagged(Rewind rewind, int baseline) {
         if (rewind.millis() == 0) {
             return false;
         }
         if (rewind.estimate() >= Parameters.lagMaxRewindMs * NEAR_CAP_SHARE) {
             return true;
         }
-        return lowest >= 0 && rewind.estimate() > INFLATION_FACTOR * lowest
-                && rewind.estimate() > lowest + INFLATION_MARGIN_MS;
+        return baseline >= 0 && rewind.estimate() > INFLATION_FACTOR * baseline
+                && rewind.estimate() > baseline + INFLATION_MARGIN_MS;
     }
 
     /** Warns once about a log that cannot be written, until it is configured again. */

@@ -146,8 +146,10 @@ lockpicking:
   # At 0 ping nothing changes. A click before the first frame of the bar does nothing.
   # Residual risk: a modified client can hold its ping high for most of the window and then click up to
   # max-rewind-ms after seeing a good frame, as an honest player at that ping can. Clicks judged on a
-  # usual ping near the cap, or more than twice and 100 ms over the player's lowest sample, are warned
-  # about in the server log at most once per player every 10 minutes, and flagged in the debug log.
+  # usual ping near the cap, or more than twice and 100 ms over the player's lowest ping of the last
+  # 10 minutes (relogs included; the first seconds after joining and 0 ms readings don't count), are
+  # warned about in the server log at most once per player every 10 minutes, and flagged in the debug
+  # log.
   # enabled: false goes back to the old timing: the bar judges the newest frame and the ring rewinds
   # round(ping / 50) ticks up to dial.max-lag-ticks. debug-log writes every judged click to
   # logs/minigame-timing.log.
