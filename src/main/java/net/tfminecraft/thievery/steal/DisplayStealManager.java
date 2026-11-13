@@ -268,6 +268,10 @@ public class DisplayStealManager implements Listener {
     @SuppressWarnings("deprecation")
     private void handleSelectResult(Player player, Entity entity, LockOwner owner, List<DisplayLoot.DisplaySlot> slots,
             LockPickManager.SelectResult result) {
+        if (result == LockPickManager.SelectResult.NOT_READY) {
+            // Clicked before the bar could have been seen: nothing happens and the attempt carries on.
+            return;
+        }
         int dexterity = RiskCalculator.getDexterity(player);
         double lockpickStrength = ToolResolver.getLockpickStrength(player.getInventory().getItemInMainHand());
         org.bukkit.Location loc = entity.getLocation();

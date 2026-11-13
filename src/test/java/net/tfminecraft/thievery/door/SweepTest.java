@@ -68,17 +68,17 @@ class SweepTest {
     }
 
     @Test
-    void pressesAreJudgedWhereThePickLookedAfterLag() {
+    void pressesAreJudgedWhereThePickLookedToTheThief() {
         Sweep sweep = new Sweep(40, 0.4, 0.55, true, 2);
-        assertEquals(Sweep.Result.EARLY, sweep.judge(15, 0));
-        assertEquals(Sweep.Result.HIT, sweep.judge(16, 0));
-        assertEquals(Sweep.Result.HIT, sweep.judge(21, 0));
-        assertEquals(Sweep.Result.LATE, sweep.judge(22, 0));
-        assertEquals(Sweep.Result.HIT, sweep.judge(24, 3));
-        assertEquals(Sweep.Result.EARLY, sweep.judge(18, 4));
-        assertEquals(Sweep.Result.LATE, sweep.judge(22, -5));
-        assertEquals(Sweep.Result.EARLY, sweep.judge(5, 99));
-        assertFalse(sweep.isOver(39));
+        assertEquals(Sweep.Result.EARLY, sweep.judge(15));
+        assertEquals(Sweep.Result.EARLY, sweep.judge(15.99));
+        assertEquals(Sweep.Result.HIT, sweep.judge(16));
+        assertEquals(Sweep.Result.HIT, sweep.judge(21.5));
+        assertEquals(Sweep.Result.LATE, sweep.judge(22));
+        assertEquals(Sweep.Result.EARLY, sweep.judge(-3));
+        assertEquals(Sweep.Result.LATE, sweep.judge(99));
+        assertFalse(sweep.isOver(39.9));
         assertTrue(sweep.isOver(40));
+        assertFalse(sweep.isOver(Double.NaN));
     }
 }

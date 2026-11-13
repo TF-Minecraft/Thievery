@@ -19,6 +19,8 @@ import net.tfminecraft.thievery.player.PlayerData;
 import net.tfminecraft.thievery.door.DoorLockpick.DoorProximityAnchor;
 import net.tfminecraft.thievery.door.DoorLockpick.ProximityAnchor;
 import net.tfminecraft.thievery.player.RiskCalculator;
+import net.tfminecraft.thievery.timing.FrameHistory;
+import net.tfminecraft.thievery.timing.LagCompensation;
 import net.tfminecraft.thievery.utils.EvilRpPlays;
 import net.tfminecraft.thievery.utils.ThieveryTexts;
 
@@ -29,15 +31,19 @@ public class LockPickManager {
         DISPLAY
     }
 
+    /**
+     * NOT_READY: the click was made before the thief could have seen the bar (it arrived before the first frame,
+     * once their ping is taken off). It does nothing and costs nothing; the attempt carries on.
+     */
     public enum SelectResult {
-        SUCCESS, FAIL, BREAK, NOT_IN_SESSION
+        SUCCESS, FAIL, BREAK, NOT_IN_SESSION, NOT_READY
     }
 
     private final String breakBar = ThieveryTexts.ERROR + "-";
     private final String successBar = ThieveryTexts.SUCCESS + "-";
     private final String failBar = ThieveryTexts.WARN + "-";
     private final String currentBar = ThieveryTexts.WHITE + "=";
-    private final Random random = new Random();
+    private final Random random;
 
     private final Map<UUID, LockpickSession> sessions = new HashMap<>();
     private final Map<UUID, Map<String, Long>> cooldownExpiry = new HashMap<>();
@@ -54,6 +60,8 @@ public class LockPickManager {
         final double speed;
         int direction = 1;
         BukkitRunnable task;
+        /** The slot the cursor was drawn on in each title sent. */
+        final FrameHistory frames = new FrameHistory();
 
         LockpickSession(ProximityAnchor anchor, SessionKind kind, String targetId,
                 char[] layout, double speed, double lockpickStrength, int dexterity, Runnable onProximityLost) {
@@ -66,6 +74,14 @@ public class LockPickManager {
             this.dexterity = dexterity;
             this.onProximityLost = onProximityLost;
         }
+    }
+
+    public LockPickManager() {
+        this(new Random());
+    }
+
+    LockPickManager(Random random) {
+        this.random = random;
     }
 
     public void startDoorSession(Player player, Location doorLoc, double effectiveStrength, int dexterity,
@@ -112,14 +128,16 @@ public class LockPickManager {
             layout[i] = layoutList.get(i);
         }
 
-        List<Integer> successIndices = new ArrayList<>();
+        // The cursor starts off the success slots, so the first frame (where a macro's quick second click lands)
+        // is on a success slot no more often than chance.
+        List<Integer> startIndices = new ArrayList<>();
         for (int i = 0; i < barLength; i++) {
-            if (layout[i] == 's') {
-                successIndices.add(i);
+            if (layout[i] != 's') {
+                startIndices.add(i);
             }
         }
-        double startPosition = successIndices.isEmpty() ? 0
-                : successIndices.get(random.nextInt(successIndices.size()));
+        double startPosition = startIndices.isEmpty() ? 0
+                : startIndices.get(random.nextInt(startIndices.size()));
 
         double speed = Math.max(Parameters.minBarSpeed,
                 Parameters.baseBarSpeed * (1.0 - dexterity * Parameters.dexSpeedReductionPerLevel));
@@ -190,6 +208,7 @@ public class LockPickManager {
                 String riskTitle = RiskCalculator.formatRiskTitle(risk, critical);
 
                 player.sendTitle(riskTitle, ThieveryTexts.formatDisplay(bar.toString()), 0, 3, 0);
+                session.frames.record(LagCompensation.now(), currentSlot);
             }
         };
 
@@ -205,18 +224,35 @@ public class LockPickManager {
             return SelectResult.NOT_IN_SESSION;
         }
 
-        // The cursor is bounded by this session's layout, even after a config reload.
-        int slot = (int) Math.round(session.position);
-        char type = session.layout[slot];
+        // Judge the frame the thief was looking at when they clicked: the latest one sent their ping ago.
+        // Before the first frame nothing has been seen, so a click then is NOT_READY, whatever the ping.
+        LagCompensation.Rewind rewind = LagCompensation.rewind(player);
+        long now = LagCompensation.now();
+        int back = session.frames.framesBack(now - rewind.millis());
+        SelectResult result = result(session, back);
+        LagCompensation.judged(player, gameName(session), rewind, back, result.name(),
+                () -> result(session, session.frames.framesBack(now)).name());
+        if (result == SelectResult.NOT_READY) {
+            return result;
+        }
+        cancelSession(uuid, result != SelectResult.SUCCESS);
+        return result;
+    }
 
-        boolean penalize = type != 's';
-        cancelSession(uuid, penalize);
-
-        return switch (type) {
+    /** The result of a click on the frame {@code back} frames before the newest; slots come from this layout. */
+    private static SelectResult result(LockpickSession session, int back) {
+        if (back < 0) {
+            return SelectResult.NOT_READY;
+        }
+        return switch (session.layout[(int) session.frames.value(back)]) {
             case 's' -> SelectResult.SUCCESS;
             case 'b' -> SelectResult.BREAK;
             default -> SelectResult.FAIL;
         };
+    }
+
+    private static String gameName(LockpickSession session) {
+        return session.kind == SessionKind.DOOR ? "door" : "display";
     }
 
     public void cancelSession(UUID uuid) {

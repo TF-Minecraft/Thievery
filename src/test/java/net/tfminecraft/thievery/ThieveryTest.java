@@ -112,9 +112,12 @@ class ThieveryTest {
         Object updater = field(Thievery.class, "stealGuiUpdater").get(plugin);
         BukkitTask guiTask = (BukkitTask) field(StealGuiUpdater.class, "task").get(updater);
         BukkitRunnable pointTask = (BukkitRunnable) field(PlayerManager.class, "pointTask").get(Thievery.getPlayerManager());
+        Object sampler = field(Thievery.class, "pingSampler").get(plugin);
+        BukkitTask pingTask = (BukkitTask) field(net.tfminecraft.thievery.timing.PingSampler.class, "task").get(sampler);
         List<Integer> ids = new ArrayList<>();
         if (guiTask != null) ids.add(guiTask.getTaskId());
         if (pointTask != null) ids.add(pointTask.getTaskId());
+        if (pingTask != null) ids.add(pingTask.getTaskId());
         for (int id : ids) assertTrue(server.getScheduler().isQueued(id));
         return ids;
     }
@@ -303,7 +306,8 @@ class ThieveryTest {
         assertTrue(listeners.contains(RobberyCharacterListener.class));
         assertFalse(listeners.contains(FurnitureDisplayListener.class));
         assertFalse(listeners.contains(EmoteSkinListener.class));
-        assertEquals(2, pluginTasks().size());
+        assertTrue(listeners.contains(net.tfminecraft.thievery.timing.PingSampler.class));
+        assertEquals(3, pluginTasks().size());
         assertTrue(Thievery.getPlayerManager().exists(admin));
         assertTrue(Thievery.getPlayerManager().exists(ordinary));
         verify(plugin.getContainerManager()).enableFeedback(admin);
@@ -343,7 +347,8 @@ class ThieveryTest {
         List<Integer> previousTasks = pluginTasks();
         plugin.reload();
         List<Integer> currentTasks = pluginTasks();
-        assertEquals(1, previousTasks.stream().filter(currentTasks::contains).count());
+        // The point task restarts; the GUI updater and the ping sampler carry on.
+        assertEquals(2, previousTasks.stream().filter(currentTasks::contains).count());
         for (int old : previousTasks) {
             if (!currentTasks.contains(old)) assertFalse(server.getScheduler().isQueued(old));
         }
@@ -351,13 +356,13 @@ class ThieveryTest {
         assertNotSame(original, Thievery.getPlayerManager().get(online));
         verify(configs.constructed().getFirst(), times(2)).loadConfig(any(File.class));
         verify(categories.constructed().getFirst(), times(2)).load(any(File.class));
-        assertEquals(2, pluginTasks().size());
+        assertEquals(3, pluginTasks().size());
         Player sender = mock(Player.class);
         plugin.reloadMessage(sender);
         var ordered = inOrder(sender);
         ordered.verify(sender).sendMessage(contains("Reloading plugin..."));
         ordered.verify(sender).sendMessage(contains("Reloading complete!"));
-        assertEquals(2, pluginTasks().size());
+        assertEquals(3, pluginTasks().size());
     }
 
     @Test

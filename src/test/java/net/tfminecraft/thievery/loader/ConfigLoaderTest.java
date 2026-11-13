@@ -411,6 +411,79 @@ class ConfigLoaderTest {
         assertEquals(0.0, Parameters.chestMinigameFailBreakChance);
     }
 
+    @Test
+    void lagCompensationDefaultsAreSafeForAConfigWithoutTheSection() throws Exception {
+        load("");
+        assertTrue(Parameters.lagCompensationEnabled);
+        assertEquals(300L, Parameters.lagMaxRewindMs);
+        assertEquals(30, Parameters.lagPingWindowSeconds);
+        assertEquals(0L, Parameters.lagClientInputDelayMs);
+        assertFalse(Parameters.lagDebugLog);
+
+        // Without max-rewind-ms the ring's old cap carries over.
+        load("""
+                lockpicking:
+                  chest:
+                    minigame:
+                      dial: {max-lag-ticks: 4}
+                """);
+        assertEquals(200L, Parameters.lagMaxRewindMs);
+
+        // ...but never above the 300 ms cap.
+        load("""
+                lockpicking:
+                  chest:
+                    minigame:
+                      dial: {max-lag-ticks: 10}
+                """);
+        assertEquals(300L, Parameters.lagMaxRewindMs);
+    }
+
+    @Test
+    void lagCompensationSettingsLoadAndClamp() throws Exception {
+        load("""
+                lockpicking:
+                  chest:
+                    minigame:
+                      dial: {max-lag-ticks: 4}
+                  lag-compensation: {enabled: false, max-rewind-ms: 250, ping-window-seconds: 10, client-input-delay-ms: 25, debug-log: true}
+                """);
+        assertFalse(Parameters.lagCompensationEnabled);
+        assertEquals(250L, Parameters.lagMaxRewindMs);
+        assertEquals(10, Parameters.lagPingWindowSeconds);
+        assertEquals(25L, Parameters.lagClientInputDelayMs);
+        assertTrue(Parameters.lagDebugLog);
+
+        load("""
+                lockpicking:
+                  lag-compensation: {max-rewind-ms: 5000, ping-window-seconds: 9999, client-input-delay-ms: 5000}
+                """);
+        assertEquals(1000L, Parameters.lagMaxRewindMs);
+        assertEquals(300, Parameters.lagPingWindowSeconds);
+        assertEquals(1000L, Parameters.lagClientInputDelayMs);
+
+        load("""
+                lockpicking:
+                  lag-compensation: {max-rewind-ms: -5, ping-window-seconds: 0, client-input-delay-ms: -5}
+                """);
+        assertEquals(0L, Parameters.lagMaxRewindMs);
+        assertEquals(1, Parameters.lagPingWindowSeconds);
+        assertEquals(0L, Parameters.lagClientInputDelayMs);
+    }
+
+    @Test
+    void theBundledConfigTurnsLagCompensationOnWithAThreeHundredMillisecondCap() throws Exception {
+        try (var bundled = ConfigLoader.class.getResourceAsStream("/config.yml")) {
+            Files.copy(bundled, temp.resolve("config.yml"), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        }
+        loader.loadConfig(temp.resolve("config.yml").toFile());
+        assertTrue(Parameters.lagCompensationEnabled);
+        assertEquals(300L, Parameters.lagMaxRewindMs);
+        assertEquals(30, Parameters.lagPingWindowSeconds);
+        assertEquals(0L, Parameters.lagClientInputDelayMs);
+        assertFalse(Parameters.lagDebugLog);
+    }
+
     private void load(String yaml) throws Exception {
         Path file = temp.resolve("config.yml");
         Files.writeString(file, yaml);

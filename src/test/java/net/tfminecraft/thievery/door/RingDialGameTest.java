@@ -14,6 +14,7 @@ import net.kyori.adventure.text.format.TextDecoration;
 import net.tfminecraft.thievery.Thievery;
 import net.tfminecraft.thievery.cache.Parameters;
 import net.tfminecraft.thievery.player.RiskCalculator;
+import net.tfminecraft.thievery.timing.LagTestSupport;
 import org.bukkit.Input;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -49,6 +50,8 @@ class RingDialGameTest {
     @BeforeEach
     void setUp() {
         server = MockBukkit.mock();
+        // Each server tick is 50 ms on the lag compensation clock.
+        LagTestSupport.useClock(() -> server.getScheduler().getCurrentTick() * 50L);
         Thievery instance = mock(Thievery.class);
         when(instance.isEnabled()).thenReturn(true);
         when(instance.getName()).thenReturn("Thievery");
@@ -92,6 +95,7 @@ class RingDialGameTest {
     @AfterEach
     void tearDown() {
         saved.restore();
+        LagTestSupport.reset();
         risk.close();
         plugin.close();
         MockBukkit.unmock();
@@ -376,14 +380,155 @@ class RingDialGameTest {
         turnTo(game, 18);
         tap(1);
         assertEquals(1, game.set);
-        Parameters.chestDialMaxLagTicks = 1;
+        Parameters.lagMaxRewindMs = 50;
         doReturn(500).when(player).getPing();
         ticks(RingDialGame.PAUSE_TICKS);
-        // The second zone is narrower and starts at tick 12 again; at tick 18 a lag of one tick is still late.
+        // The second zone is narrower and starts at tick 12 again; at tick 18 a rewind of one tick is still late.
         turnTo(game, 18);
         tap(1);
         assertEquals(1, game.set);
         assertEquals(1, game.slips);
+    }
+
+    /**
+     * End to end: the thief sees tick {@code seen} of the pass {@code ping / 2} ms after it is sent and presses
+     * at once; the press arrives {@code ping / 2} ms later, between server ticks for an odd ping. Whatever the
+     * ping, it gets what a 0 ms press at that tick gets. The zone covers ticks 12 to 17 of the 36-tick pass.
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+            "0, 11, Too soon", "130, 11, Too soon", "150, 11, Too soon", "300, 11, Too soon",
+            "0, 12, Set", "130, 12, Set", "150, 12, Set", "300, 12, Set",
+            "0, 14, Set", "130, 14, Set", "150, 14, Set", "300, 14, Set",
+            "0, 17, Set", "130, 17, Set", "150, 17, Set", "300, 17, Set",
+            "0, 18, Too late", "130, 18, Too late", "150, 18, Too late", "300, 18, Too late"})
+    void aPressAtTheSameSeenTickGetsTheSameResultAtAnyPingUpToTheCap(int ping, int seen, String outcome) {
+        doReturn(ping).when(player).getPing();
+        RingDialGame game = start();
+        pressSeenAt(game, seen, ping);
+        verify(view).label(Component.text(outcome, outcome.equals("Set") ? RingView.GREEN : RingView.RED), 1.1f);
+        assertEquals(outcome.equals("Set") ? 1 : 0, game.set);
+    }
+
+    /**
+     * The pass waits for a late press for its last zone tick: with the zone as late as it goes (ticks 27 to 32)
+     * a press seen at tick 32 is a hit at 0, 130, 150 and 300 ms, though at 300 ms it arrives at tick 38, after the
+     * pass has ended on the server.
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(ints = {0, 130, 150, 300})
+    void aPressForTheLastZoneTickArrivingAfterThePassEndsStillSets(int ping) {
+        when(rolls.nextDouble()).thenReturn(0.999);
+        doReturn(ping).when(player).getPing();
+        RingDialGame game = start();
+        pressSeenAt(game, 32, ping);
+        assertEquals(0, game.slips);
+        assertEquals(1, game.set);
+    }
+
+    /** Beyond the cap the press is judged only 300 ms back, so seen at tick 32 at 1000 ms the pass has run out. */
+    @Test
+    void aPressFromBeyondTheCapIsJudgedOnlyAsFarBackAsTheCap() {
+        when(rolls.nextDouble()).thenReturn(0.999);
+        doReturn(1000).when(player).getPing();
+        RingDialGame game = start();
+        turnTo(game, 36 + 6);
+        assertEquals(1, game.slips);
+        assertEquals(RingDialGame.Phase.PAUSE, game.phase);
+    }
+
+    /** Ticks into the pass until the press seen at tick {@code seen} arrives, {@code ping} ms later, and presses. */
+    private void pressSeenAt(RingDialGame game, int seen, int ping) {
+        long arrives = seen * 50L + ping;
+        turnTo(game, (int) (arrives / 50));
+        long extra = arrives % 50;
+        LagTestSupport.useClock(() -> server.getScheduler().getCurrentTick() * 50L + extra);
+        tap(1);
+        LagTestSupport.useClock(() -> server.getScheduler().getCurrentTick() * 50L);
+    }
+
+    @Test
+    void aRewindBetweenTicksGlidesTheNeedleAsTheClientDraws() {
+        // 225 ms is four and a half ticks: at tick 21 the thief saw the needle half way from tick 16 to 17.
+        doReturn(225).when(player).getPing();
+        RingDialGame game = start();
+        turnTo(game, 21);
+        assertEquals(16.5, game.seenTicks(player, net.tfminecraft.thievery.timing.LagCompensation.rewind(player)),
+                1e-9);
+        tap(1);
+        assertEquals(1, game.set);
+    }
+
+    @Test
+    void aPressBeforeTheThiefCouldSeeThePassDoesNothing() {
+        // At 300 ms the thief is six ticks behind: three ticks into the pass they still see the pause.
+        doReturn(300).when(player).getPing();
+        RingDialGame game = start();
+        turnTo(game, 3);
+        tap(2);
+        send(input(true, true, false, false, false));
+        send(input(false, false, false, false, false));
+        assertEquals(0, game.slips);
+        assertEquals(RingDialGame.Phase.TURN, game.phase);
+        // Six ticks on, the thief sees tick 14 at tick 20: inside the zone.
+        turnTo(game, 20);
+        tap(1);
+        assertEquals(1, game.set);
+        assertEquals(0, game.slips);
+    }
+
+    @Test
+    void aSpikeInPingDoesNotPushThePressFurtherBack() {
+        // The usual ping is 50 ms; a 300 ms spike right now still rewinds only one tick.
+        for (int i = 0; i < 30; i++) {
+            LagTestSupport.sample(player.getUniqueId(), 50);
+        }
+        doReturn(300).when(player).getPing();
+        RingDialGame game = start();
+        turnTo(game, 19);
+        tap(1);
+        // Tick 18 is past the zone (12 to 17); the spike's six ticks would have judged tick 13, a hit.
+        assertEquals(0, game.set);
+        assertEquals(1, game.slips);
+    }
+
+    @Test
+    void withLagCompensationOffTheRingKeepsItsOldTickRewind() {
+        Parameters.lagCompensationEnabled = false;
+        doReturn(200).when(player).getPing();
+        RingDialGame game = start();
+        turnTo(game, 3);
+        // The old rewind clamps to the start of the pass, so an early press is a slip, not ignored.
+        tap(1);
+        assertEquals(1, game.slips);
+        verify(view).label(Component.text("Too soon", RingView.RED), 1.1f);
+        ticks(RingDialGame.PAUSE_TICKS);
+        Parameters.chestDialMaxLagTicks = 2;
+        // round(200 / 50) = 4 ticks, capped at 2: at tick 19 the thief is judged on tick 17, still a hit.
+        turnTo(game, 19);
+        tap(1);
+        assertEquals(1, game.set);
+    }
+
+    @Test
+    void theDebugLogRecordsEachJudgedPress(@org.junit.jupiter.api.io.TempDir java.nio.file.Path folder)
+            throws Exception {
+        java.nio.file.Path log = folder.resolve("logs").resolve("minigame-timing.log");
+        LagTestSupport.useLog(log, java.util.logging.Logger.getAnonymousLogger());
+        Parameters.lagDebugLog = true;
+        doReturn(300).when(player).getPing();
+        RingDialGame game = start();
+        turnTo(game, 2);
+        tap(1);
+        turnTo(game, 20);
+        tap(1);
+        assertEquals(1, game.set);
+        List<String> lines = java.nio.file.Files.readAllLines(log);
+        assertEquals(2, lines.size());
+        assertTrue(lines.get(0).contains("game=ring ping=300 estimate=300 lowest=-1 baseline=unknown rewind=300 framesBack=-1.0"
+                + " result=NOT_READY unrewound=EARLY capped=false flagged=true"), lines.get(0));
+        assertTrue(lines.get(1).contains("game=ring ping=300 estimate=300 lowest=-1 baseline=unknown rewind=300 framesBack=6.0"
+                + " result=HIT unrewound=LATE capped=false flagged=true"), lines.get(1));
     }
 
     @Test
